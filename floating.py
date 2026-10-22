@@ -50,7 +50,7 @@ class CameraBubble(QWidget):
 
     def __init__(self):
         super().__init__(None, Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.WindowDoesNotAcceptFocus)
-        self.setWindowTitle('RecIt · Camera widget')
+        self.setWindowTitle('Untangle · Camera widget')
         self.setAttribute(Qt.WA_NativeWindow)
         self.setAttribute(Qt.WA_PaintOnScreen)
         self.setAttribute(Qt.WA_NoSystemBackground)
@@ -155,7 +155,7 @@ class CameraBubble(QWidget):
 
     def contextMenuEvent(self, event):
         menu = QMenu(self)
-        menu.addAction('Open RecIt', self.open_requested.emit)
+        menu.addAction('Open Untangle', self.open_requested.emit)
         if self.recording:
             menu.addAction('Stop and save · Ctrl+Shift+F9', self.stop_requested.emit)
             menu.addAction('Resume' if self.paused else 'Pause', self.pause_requested.emit)

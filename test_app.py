@@ -1,5 +1,5 @@
 """UI and recovery checks without touching the camera or microphone.
-Run: QT_QPA_PLATFORM=offscreen ~/.local/share/glint/venv/bin/python apps/recit/test_app.py
+Run: QT_QPA_PLATFORM=offscreen ~/.local/share/glint/venv/bin/python test_app.py
 """
 import os
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
@@ -34,6 +34,11 @@ class AppChecks(unittest.TestCase):
         self.window.engine.recording = False
         self.window.engine.errors = []
         self.window.configure()
+
+    def test_visible_identity_uses_untangle_and_bundled_mark(self):
+        self.assertEqual(self.window.windowTitle(), 'Untangle')
+        self.assertEqual(glint.ICON, Path(glint.__file__).resolve().parent / 'assets/untangle-mark.svg')
+        self.assertIn('Untangle', self.window.tray.toolTip())
 
     def tearDown(self):
         self.window.recording = self.window.busy = self.window.counting = False

@@ -1,6 +1,6 @@
 """Explicit, audio-only hardware diagnostic. Discovery never opens a device.
 
-Run with a connected headset and ambient speech/noise, after closing RecIt:
+Run with a connected headset and ambient speech/noise, after closing Untangle and RecIt:
   RECIT_TEST_XVFB=/path/to/Xvfb python test_hardware_audio.py --microphone-hardware
 Optional --source EXACT_PULSE_NAME overrides production Default preparation.
 Samples stay in a private /tmp/recit-hardware-audio-* directory. No playback,
@@ -57,8 +57,9 @@ def preflight():
             args = path.read_bytes().split(b'\0')
         except (OSError, PermissionError):
             continue
-        if any(arg.endswith(b'/recit/app.py') for arg in args):
-            raise RuntimeError('Close RecIt, including its tray process, before testing')
+        if any(arg.endswith((b'/recit/app.py', b'/untangle/app.py'))
+               or arg == os.fsencode(Path(__file__).resolve().with_name('app.py')) for arg in args):
+            raise RuntimeError('Close Untangle and RecIt, including their tray processes, before testing')
     if pulse('source-outputs'):
         raise RuntimeError('An audio capture stream is active; close it before testing')
 
@@ -299,6 +300,18 @@ def worker(directory, selection):
 
 
 class HarnessSafetyTests(unittest.TestCase):
+    def test_running_legacy_or_standalone_app_blocks_before_audio_query(self):
+        app_paths = (b'/checkout/apps/recit/app.py', b'/checkout/untangle/app.py',
+                     os.fsencode(Path(__file__).resolve().with_name('app.py')))
+        for app_path in app_paths:
+            with self.subTest(app_path=app_path):
+                cmdline = unittest.mock.Mock()
+                cmdline.read_bytes.return_value = b'python\0' + app_path + b'\0'
+                with patch.object(Path, 'glob', return_value=[cmdline]), patch(__name__ + '.pulse') as query:
+                    with self.assertRaisesRegex(RuntimeError, 'Close Untangle and RecIt'):
+                        preflight()
+                    query.assert_not_called()
+
     def test_worker_without_private_display_cannot_reach_capture(self):
         with patch.dict(os.environ, {}, clear=True), patch(__name__ + '.preflight') as check:
             with self.assertRaisesRegex(RuntimeError, 'private Xvfb'):

@@ -120,14 +120,14 @@ class AudioDevices:
         pid = os.getpid() if pid is None else pid
         streams = [s for s in self.read('source-outputs')
                    if str(s.get('properties', {}).get('application.process.id')) == str(pid)
-                   and s.get('properties', {}).get('application.name') in ('OBS', 'OBS Studio', 'RecIt')
+                   and s.get('properties', {}).get('application.name') in ('OBS', 'OBS Studio', 'RecIt', 'Untangle')
                    and s.get('properties', {}).get('media.name') == media_name]
         if not streams and stream_index is None:
-            raise AudioStreamPending('Cannot verify RecIt microphone stream. Retry the microphone check.')
+            raise AudioStreamPending('Cannot verify Untangle microphone stream. Retry the microphone check.')
         if len(streams) != 1:
             emit(self, 'route.rejected', level='warning', requested_source=source,
                  reason='missing_or_ambiguous_stream', exception_type='AudioDeviceError')
-            raise AudioDeviceError('Cannot verify RecIt microphone stream. Retry the microphone check.')
+            raise AudioDeviceError('Cannot verify Untangle microphone stream. Retry the microphone check.')
         stream = streams[0]
         actual = next((s for s in self.read('sources')
                        if str(s['index']) == str(stream.get('source'))), None)
@@ -228,7 +228,7 @@ class AudioDevices:
              target_profile=profile, changed=card.get('active_profile') != profile)
         if card.get('active_profile') != profile:
             if self.lease:
-                raise AudioDeviceError('Headset profile changed outside RecIt. Choose a microphone again.')
+                raise AudioDeviceError('Headset profile changed outside Untangle. Choose a microphone again.')
             # Retain ownership even on a timeout: the server may apply it late.
             self.lease = (card['name'], card.get('active_profile'), profile)
             self._lease_trace = self.audio_trace

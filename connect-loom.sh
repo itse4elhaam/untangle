@@ -10,12 +10,12 @@ if [[ ! -x "$cli_path" ]]; then
     read -r -p 'Press Enter to close.'
     exit 1
 fi
-echo 'Connect RecIt to Loom'
-echo 'Review Atlassian consent below. RecIt does not accept it on your behalf.'
+echo 'Connect Untangle to Loom'
+echo 'Review Atlassian consent below. Untangle does not accept it on your behalf.'
 if ! "$cli_path" consent || ! "$cli_path" login; then
     echo 'Connection did not finish. No video was uploaded. Review the error above and try Connect Loom again.'
     read -r -p 'Press Enter to close.'
     exit 1
 fi
-echo 'Connection finished. Return to RecIt to upload your recording.'
+echo 'Connection finished. Return to Untangle to upload your recording.'
 read -r -p 'Press Enter to close.'

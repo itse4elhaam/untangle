@@ -1,6 +1,6 @@
 """Opt-in sample-to-AAC integration, with no hardware capture or playback.
 
-Run: python apps/recit/test_native_audio.py --native-audio
+Run: python test_native_audio.py --native-audio
 Requires OBS 27 plugins, FFmpeg and Xvfb. Set RECIT_TEST_XVFB to an existing
 Xvfb executable when it is not on PATH. Discovery skips this expensive test.
 A private Xvfb and child process isolate libobs from the user's DISPLAY.

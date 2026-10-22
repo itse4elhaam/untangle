@@ -1,14 +1,14 @@
-"""Run safe unit checks with `python -m unittest discover -s apps/recit`.
+"""Run safe unit checks with `python -m unittest discover -s .`.
 
 Opt-in live smoke (captures actual display/audio/camera; deletes recording):
-  QT_QPA_PLATFORM=xcb python apps/recit/test_engine.py --capture
-  QT_QPA_PLATFORM=xcb python apps/recit/test_engine.py --capture --camera /dev/video0
+  QT_QPA_PLATFORM=xcb python test_engine.py --capture
+  QT_QPA_PLATFORM=xcb python test_engine.py --capture --camera /dev/video0
 Camera-free native source renderer smoke:
-  QT_QPA_PLATFORM=xcb python apps/recit/test_engine.py --preview-smoke
+  QT_QPA_PLATFORM=xcb python test_engine.py --preview-smoke
 Camera-free XComposite capture and encoding smoke:
-  QT_QPA_PLATFORM=xcb python apps/recit/test_engine.py --window-smoke
+  QT_QPA_PLATFORM=xcb python test_engine.py --window-smoke
 Qt-free GLX initialization and explicit EGL fallback smoke:
-  python apps/recit/test_engine.py --backend-smoke
+  python test_engine.py --backend-smoke
 Add --platform egl to --preview-smoke to check the fallback renderer.
 """
 import ctypes

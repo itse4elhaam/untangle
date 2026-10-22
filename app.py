@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""RecIt: a small native frontend for the OBS recording engine."""
+"""Untangle: a small native frontend for the OBS recording engine."""
 from __future__ import annotations
 
 import json
@@ -30,7 +30,7 @@ from PySide6.QtWidgets import (
 )
 
 ROOT = Path(__file__).resolve().parent
-ICON = ROOT / 'assets/recit-mark.svg'
+ICON = ROOT / 'assets/untangle-mark.svg'
 VIDEOS = Path.home() / 'Videos/RecIt'
 STATE = Path.home() / '.local/state/glint'
 STYLE = """
@@ -193,7 +193,7 @@ class AudioWorker(QThread):
 class Window(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle('RecIt')
+        self.setWindowTitle('Untangle')
         self.setWindowIcon(QIcon(str(ICON)))
         self.resize(1120, 840)
         self.setMinimumSize(960, 760)
@@ -286,7 +286,7 @@ class Window(QMainWindow):
         header.addWidget(logo)
         title_box = QVBoxLayout()
         title_box.setSpacing(0)
-        title_box.addWidget(label('RecIt', 'title'))
+        title_box.addWidget(label('Untangle', 'title'))
         title_box.addWidget(label('A little less setup. A lot more showing.', 'muted'))
         header.addLayout(title_box)
         header.addStretch()
@@ -513,16 +513,16 @@ class Window(QMainWindow):
 
     def setup_tray(self):
         self.tray = QSystemTrayIcon(QIcon(str(ICON)), self)
-        self.tray.setToolTip('RecIt · Ready to record')
+        self.tray.setToolTip('Untangle · Ready to record')
         menu = QMenu()
-        menu.addAction('Open RecIt', self.reveal)
+        menu.addAction('Open Untangle', self.reveal)
         self.tray_record = menu.addAction('Start recording', self.toggle_record)
         self.tray_pause = menu.addAction('Pause', self.toggle_pause)
         self.tray_pause.setEnabled(False)
         self.tray_zoom = menu.addAction('Zoom to pointer · Ctrl+Shift+F8', self.toggle_zoom)
         self.tray_zoom.setEnabled(False)
         menu.addSeparator()
-        menu.addAction('Quit RecIt', self.close)
+        menu.addAction('Quit Untangle', self.close)
         self.tray.setContextMenu(menu)
         self.tray.activated.connect(lambda reason: self.reveal() if reason in (QSystemTrayIcon.Trigger, QSystemTrayIcon.DoubleClick) else None)
         self.tray.show()
@@ -1021,7 +1021,7 @@ class Window(QMainWindow):
             self.engine_notice('Recording. Ctrl + Shift + F9 stops and saves.\n'
                 + (f'Microphone: {source}' if source else 'Microphone off'))
             if self.mode == 'screen':
-                self.tray.setToolTip('RecIt · Recording\nF9 stop · F10 pause · F8 zoom\nHold Ctrl + Shift with each key')
+                self.tray.setToolTip('Untangle · Recording\nF9 stop · F10 pause · F8 zoom\nHold Ctrl + Shift with each key')
         except Exception as exc:
             emit(self, 'record_start.failed', level='warning', exception_type=type(exc).__name__)
             self.release_audio()
@@ -1071,7 +1071,7 @@ class Window(QMainWindow):
         self.bubble.paused = False
         self.reset_zoom()
         self.tray.setIcon(QIcon(str(ICON)))
-        self.tray.setToolTip('RecIt · Saving recording')
+        self.tray.setToolTip('Untangle · Saving recording')
         self.restore_capture_window()
         self.pause_button.setVisible(False)
         if error:
@@ -1117,7 +1117,7 @@ class Window(QMainWindow):
         self.pause_button.setEnabled(True)
         self.tray_record.setEnabled(True)
         self.tray_record.setText('Start recording')
-        self.tray.setToolTip('RecIt · Ready to record')
+        self.tray.setToolTip('Untangle · Ready to record')
         self.lock_controls(False)
         if path and path.exists():
             self.set_last(path)
@@ -1281,7 +1281,7 @@ class Window(QMainWindow):
                 + (f'Microphone: {self.selected_source}' if self.selected_source else 'Microphone off')
                 + ('\n' + (self.recording_error or warning) if self.recording_error or warning else ''))
             self.record_button.setText(f'■  Stop and save · {duration}')
-            self.tray.setToolTip(f'RecIt · {state} {duration}\nCtrl + Shift + F9 to stop')
+            self.tray.setToolTip(f'Untangle · {state} {duration}\nCtrl + Shift + F9 to stop')
             if elapsed % 10 == 0 and shutil.disk_usage(VIDEOS).free < 256 * 1024 ** 2:
                 self.notice('Storage almost full. Stopping to save your recording.')
                 self.stop()
@@ -1390,7 +1390,7 @@ class Window(QMainWindow):
         if self.busy or self.recording or self.counting:
             return
         dialog = QDialog(self)
-        dialog.setWindowTitle('RecIt · Sharing')
+        dialog.setWindowTitle('Untangle · Sharing')
         dialog.setMinimumWidth(540)
         dialog.resize(580, 740)
         outer = QVBoxLayout(dialog)
@@ -1403,7 +1403,7 @@ class Window(QMainWindow):
         layout.setContentsMargins(24, 24, 24, 24)
         layout.setSpacing(14)
         layout.addWidget(label('LOOM', 'eyebrow'))
-        text = label('RecIt saves locally first. Loom uploads use Atlassian’s official Teamwork Graph CLI and your signed-in account.')
+        text = label('Untangle saves locally first. Loom uploads use Atlassian’s official Teamwork Graph CLI and your signed-in account.')
         text.setWordWrap(True)
         layout.addWidget(text)
         self.cli_status = label('Checking Loom connection…', 'muted')
@@ -1428,7 +1428,7 @@ class Window(QMainWindow):
         docs = QPushButton('Open Loom connection instructions ↗')
         docs.clicked.connect(lambda: QDesktopServices.openUrl(QUrl('https://developer.atlassian.com/cloud/twg-cli/')))
         layout.addWidget(docs)
-        privacy = label('RecIt applies this choice after upload. Your Loom account’s defaults apply while uploading. “Anyone with the link” allows people who receive the link to watch.', 'muted')
+        privacy = label('Untangle applies this choice after upload. Your Loom account’s defaults apply while uploading. “Anyone with the link” allows people who receive the link to watch.', 'muted')
         privacy.setWordWrap(True)
         layout.addWidget(privacy)
         done = QPushButton('Done')
@@ -1641,14 +1641,14 @@ class Window(QMainWindow):
         if self.counting:
             self.cancel_countdown()
         if self.recording:
-            answer = QMessageBox.question(self, 'Save your recording?', 'Stop recording, save the video, and quit RecIt?', QMessageBox.Save | QMessageBox.Cancel, QMessageBox.Cancel)
+            answer = QMessageBox.question(self, 'Save your recording?', 'Stop recording, save the video, and quit Untangle?', QMessageBox.Save | QMessageBox.Cancel, QMessageBox.Cancel)
             event.ignore()
             if answer == QMessageBox.Save:
                 self.quit_after_save = True
                 self.stop()
             return
         if self.busy and not self.preparing_audio:
-            self.notice('Finishing your video. RecIt will stay open until it is safe to close.')
+            self.notice('Finishing your video. Untangle will stay open until it is safe to close.')
             event.ignore()
             return
         self._closing = True
@@ -1688,8 +1688,8 @@ class Window(QMainWindow):
 
 def main():
     app = QApplication(sys.argv)
-    app.setApplicationName('RecIt')
-    app.setDesktopFileName('tech.truedevs.RecIt')
+    app.setApplicationName('Untangle')
+    app.setDesktopFileName('tech.truedevs.Untangle')
     app.setWindowIcon(QIcon(str(ICON)))
     app.setStyle('Fusion')
     app.setStyleSheet(STYLE)
@@ -1713,7 +1713,7 @@ def main():
     QLocalServer.removeServer('truedevs-glint-' + str(os.getuid()))
     server = QLocalServer()
     if not server.listen('truedevs-glint-' + str(os.getuid())):
-        raise RuntimeError('Could not open RecIt’s local activation socket: ' + server.errorString())
+        raise RuntimeError('Could not open Untangle’s local activation socket: ' + server.errorString())
     window = Window()
     def activate():
         client = server.nextPendingConnection()
