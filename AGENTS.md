@@ -1,6 +1,6 @@
 # Untangle contributor instructions
 
-Untangle is a standalone Python Linux recording app, formerly RecIt. App modules, shell entry points, and unittest files live at the repository root. `app.py` owns the Qt UI; `engine.py` wraps OBS; audio helpers own device preparation and restoration; `recordings.py` owns the library and playback.
+Untangle is a standalone Python Linux recording app, formerly RecIt. Production code lives in `src/untangle/`. `app.py` owns the Qt UI; `engine.py` wraps OBS; audio helpers own device preparation and restoration; `recordings.py` owns the library and playback. Tests live in `tests/`, with synthetic device data in `tests/fixtures/`. Maintenance scripts live in `scripts/`, executable launchers in `bin/`, and logo assets stay in root `assets/`. Use relative imports within the package. Run the app through `python -m untangle` with `PYTHONPATH=src`; opening it requires explicit authorization.
 
 ## Conventions
 
@@ -15,9 +15,11 @@ Untangle is a standalone Python Linux recording app, formerly RecIt. App modules
 Run safe checks from this repository root:
 
 ```bash
-env -u DISPLAY QT_QPA_PLATFORM=offscreen .venv/bin/python -m unittest discover -s .
-bash -n install.sh untangle recit connect-loom.sh
+./scripts/test.sh
+bash -n scripts/*.sh bin/*
 ```
+
+The runner uses `.venv/bin/python` when available, otherwise `python3`, sets an absolute `PYTHONPATH` for `src/`, and runs `unittest discover -s tests`. It clears display and hardware opt-in environment switches and accepts no capture flags. It works from any working directory.
 
 Use mocks and synthetic samples. Never run device capture, live desktop tests, microphone checks, camera checks, Bluetooth profile changes, or audible playback without explicit authorization. Hardware tests are opt-in; leave their flags and environment switches unset during ordinary checks. Opening the app can open capture devices, so do not launch it as an incidental verification step.
 
@@ -27,4 +29,4 @@ Never enable screen readers, Orca, speech-dispatcher, accessibility speech, or d
 
 ## Installation and delivery
 
-All new changes go through a pull request. Do not automatically install, deploy, update the installed runtime or launchers, authenticate to Loom, or upload recordings. `./install.sh` is an explicit user action, not a verification command. Keep repository work separate from the installed app and other projects.
+All new changes go through a pull request. Do not automatically install, deploy, update the installed runtime or launchers, authenticate to Loom, or upload recordings. `./scripts/install.sh` is an explicit user action, not a verification command. Keep repository work separate from the installed app and other projects.

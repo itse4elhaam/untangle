@@ -32,14 +32,32 @@ worktree creation. No script automatically installs or launches the recorder.
 ```bash
 uv venv --python /usr/bin/python3 .venv
 uv pip install --python .venv/bin/python -r requirements.txt
-env -u DISPLAY QT_QPA_PLATFORM=offscreen .venv/bin/python -m unittest discover -s .
+./scripts/test.sh
+bash -n scripts/*.sh bin/*
 ```
+
+## Source layout
+
+- `src/untangle/` contains production Python and the `python -m untangle` entry point.
+- `tests/` contains unittest modules; `tests/fixtures/` holds synthetic device data.
+- `scripts/test.sh` runs safe offscreen checks from any working directory, using the local `.venv` when present.
+- `scripts/install.sh` installs only when explicitly invoked; `scripts/connect-loom.sh` handles interactive Loom consent.
+- `bin/untangle` and `bin/recit` resolve the checkout through symlinks and add its `src/` to `PYTHONPATH`.
+- Root `assets/` holds the existing logos used by the app, README, and T3.
+
+Direct unittest discovery from the repository root needs `PYTHONPATH=src`,
+`QT_QPA_PLATFORM=offscreen`, no display, and no hardware opt-in switches.
+Prefer `./scripts/test.sh`, which sets and clears these values for you.
+Manual native diagnostic scripts now live at `tests/test_native_audio.py` and
+`tests/test_hardware_audio.py`. They need `PYTHONPATH=src` when invoked directly;
+their workers resolve the source path and repository working directory themselves.
+Their opt-in flags still require explicit hardware authorization.
 
 ## Installed app cutover
 
 Creating the repository and project does not redirect the installed application.
 The existing launcher can continue to use dotfiles until a reviewed cutover is
-explicitly installed. Do not remove the old app directory before verifying that
+explicitly installed with `./scripts/install.sh`. Do not remove the old app directory before verifying that
 cutover and its rollback.
 
 Keep existing preferences, `~/.local/share/glint/`, `~/.local/state/glint/`,

@@ -1,0 +1,11 @@
+#!/bin/bash
+set -euo pipefail
+app_dir="$(cd -- "$(dirname -- "$(readlink -f -- "$0")")/.." && pwd)"
+export QT_QPA_PLATFORM=xcb
+state_dir="$HOME/.local/state/glint"
+mkdir -p "$state_dir"
+if [[ -f "$state_dir/glint.log" ]] && [[ "$(stat -c %s "$state_dir/glint.log")" -gt 10485760 ]]; then
+    mv -f "$state_dir/glint.log" "$state_dir/glint.previous.log"
+fi
+export PYTHONPATH="$app_dir/src${PYTHONPATH:+:$PYTHONPATH}"
+exec "$HOME/.local/share/glint/venv/bin/python" -m untangle "$@" >> "$state_dir/glint.log" 2>&1
