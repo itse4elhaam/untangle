@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Untangle</title>
+  <desc id="desc">A mint ribbon loosens a small knot into an open U, with a coral recording dot on a dark ink tile.</desc>
+  <defs>
+    <linearGradient id="mark-ribbon" x1="128" y1="154" x2="351" y2="374" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#52C9B3"/>
+      <stop offset="0.58" stop-color="#79E6C5"/>
+      <stop offset="1" stop-color="#A6F5D7"/>
+    </linearGradient>
+  </defs>
+  <g id="mark-tile">
+    <rect width="512" height="512" rx="116" fill="#13272D"/>
+    <path d="M 179,154 C 121,154 113,221 157,235 C 205,250 237,196 209,171 C 183,145 151,166 151,208 L 151,284 C 151,342 191,374 251,374 C 311,374 351,342 351,284 L 351,174" fill="none" stroke="url(#mark-ribbon)" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"/>
+    <!-- The short overpass gives the continuous ribbon its single loose knot. -->
+    <path d="M 151,221 L 151,240" fill="none" stroke="#13272D" stroke-width="46" stroke-linecap="round"/>
+    <path d="M 151,197 L 151,265" fill="none" stroke="url(#mark-ribbon)" stroke-width="34"/>
+    <circle cx="351" cy="119" r="12" fill="#F28F83"/>
+  </g>
+</svg>

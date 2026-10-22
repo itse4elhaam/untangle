@@ -1,0 +1,4 @@
+#!/bin/bash
+set -euo pipefail
+app_dir="$(cd -- "$(dirname -- "$(readlink -f -- "$0")")" && pwd)"
+exec "$app_dir/untangle" "$@"
