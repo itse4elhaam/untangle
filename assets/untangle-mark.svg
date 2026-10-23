@@ -1,7 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title">
-<title id="title">Untangle Companion mark</title>
-<g transform="translate(0 0) scale(16.0)">
-<rect width="32" height="32" rx="8" fill="#2454B8"/>
-<path d="M5 7H20V17H5Z M12 17H27V27H12V22" fill="none" stroke="#FFFFFF" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
-</g>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 32 32" role="img" aria-labelledby="title"><title id="title">Untangle Clearline focus brackets</title><rect width="32" height="32" rx="7" fill="#C33C0A"/><path d="M13 8H7V22H13 M19 10H25V24H19 M12 16H20" fill="none" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="square" stroke-linejoin="miter"/></svg>

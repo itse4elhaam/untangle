@@ -1,4 +1,4 @@
-"""Shared Companion colors, bundled fonts and Qt styling. No device access."""
+"""Shared Clearline colors, bundled fonts and Qt styling. No device access."""
 from pathlib import Path
 
 from PySide6.QtGui import QColor, QFont, QFontDatabase, QPalette
@@ -6,20 +6,20 @@ from PySide6.QtGui import QColor, QFont, QFontDatabase, QPalette
 
 THEMES = {
     'light': dict(
-        canvas='#EDF3FC', panel='#FFFFFF', text='#1B304F', muted='#50617A',
-        action='#2454B8', action_hover='#1B4398', on_action='#FFFFFF',
-        selection='#DFE9FF', border='#B7C8E2', hover='#E7EFFC',
-        disabled='#617189', disabled_bg='#E2E9F3', focus='#2454B8',
-        warning='#754500', warning_bg='#FFF0C2', error='#A02528', error_bg='#FDECEE',
-        success='#236345', recording='#B72D38', meter_track='#D6E1F0',
+        canvas='#F6F7F9', panel='#FFFFFF', text='#202936', muted='#586373',
+        action='#C33C0A', action_hover='#A93208', on_action='#FFFFFF',
+        selection='#FFF0E8', border='#D5DAE1', control_border='#858E9A', hover='#ECEFF3',
+        disabled='#657080', disabled_bg='#E9ECF0', focus='#C33C0A',
+        warning='#805000', warning_bg='#FFF1CF', error='#B42332', error_bg='#FFF0F1',
+        success='#24704B', recording='#B42332', meter_track='#D5DAE1',
     ),
     'dark': dict(
-        canvas='#101C2D', panel='#192A40', text='#EAF1FC', muted='#B0C1D9',
-        action='#A6C5FF', action_hover='#C3D8FF', on_action='#102A50',
-        selection='#29476E', border='#526B8B', hover='#243C59',
-        disabled='#9AAAC1', disabled_bg='#22334B', focus='#A6C5FF',
-        warning='#FFD78B', warning_bg='#483618', error='#FFB3BA', error_bg='#4A2634',
-        success='#91D5B1', recording='#FFB3BA', meter_track='#3B5271',
+        canvas='#191B1F', panel='#23262B', text='#F1F2F4', muted='#B6BDC7',
+        action='#FF995F', action_hover='#FFB080', on_action='#281A12',
+        selection='#473026', border='#41464F', control_border='#78818E', hover='#30343B',
+        disabled='#9DA5B0', disabled_bg='#2D3138', focus='#FF995F',
+        warning='#F6CE80', warning_bg='#42351E', error='#FFA6AE', error_bg='#46262D',
+        success='#8CD4AB', recording='#FFA6AE', meter_track='#41464F',
     ),
 }
 
@@ -47,37 +47,44 @@ def load_fonts(application):
 def stylesheet(name='light'):
     """Style semantic surfaces rather than painting every child widget."""
     c = tokens(name)
+    assets = Path(__file__).resolve().parents[2] / 'assets'
+    variant = 'dark' if name == 'dark' else 'light'
+    for icon in ('chevron', 'check', 'radio'):
+        c[icon] = (assets / f'clearline-{icon}-{variant}.svg').as_posix()
     return """
 QWidget { color: %(text)s; font-family: 'Inter', 'DejaVu Sans'; font-size: 14px; }
 QMainWindow, QDialog, QMessageBox, QFileDialog, QWidget#recordingsPage { background: %(canvas)s; }
-QLabel { background: transparent; font-size: 15px; }
+QLabel { background: transparent; font-size: 14px; }
 QLabel#muted { color: %(muted)s; font-size: 13px; }
-QLabel#eyebrow { color: %(action)s; font-size: 11px; font-weight: 600; letter-spacing: 1px; }
-QLabel#title { font-family: 'Manrope', 'Inter'; font-size: 26px; font-weight: 700; }
+QLabel#eyebrow { color: %(action)s; font-size: 13px; font-weight: 600; }
+QLabel#title { font-family: 'Inter'; font-size: 24px; font-weight: 600; }
 QLabel#section { color: %(muted)s; font-size: 13px; font-weight: 600; }
-QFrame#panel, QWidget#panel { background: %(panel)s; border: 1px solid %(border)s; border-radius: 12px; }
+QFrame#panel, QWidget#panel { background: %(panel)s; border: 1px solid %(border)s; border-radius: 8px; }
 QScrollArea, QScrollArea#sidebar, QStackedWidget { border: none; background: transparent; }
 QScrollArea > QWidget > QWidget { background: transparent; }
-QScrollArea#sidebar { background: %(panel)s; border: 1px solid %(border)s; border-radius: 12px; }
-QScrollArea#sidebar > QWidget, QScrollArea#sidebar > QWidget > QWidget { background: %(panel)s; border: none; }
+QScrollArea#sidebar { background: transparent; border: none; border-right: 1px solid %(border)s; border-radius: 0; }
+QScrollArea#sidebar > QWidget, QScrollArea#sidebar > QWidget > QWidget { background: transparent; border: none; }
+QWidget#setupColumn { background: transparent; border: none; border-right: 1px solid %(border)s; }
 QFrame#setupSection { background: transparent; border: none; border-bottom: 1px solid %(border)s; }
 QWidget#setupDetails { background: transparent; }
-QFrame#libraryBrowser, QFrame#libraryReview { background: %(panel)s; border: 1px solid %(border)s; border-radius: 12px; }
+QFrame#libraryBrowser, QFrame#libraryReview { background: %(panel)s; border: 1px solid %(border)s; border-radius: 8px; }
 QWidget#libraryStage, QLabel#libraryPoster, QLabel#libraryPlaceholder { background: %(canvas)s; color: %(muted)s; border-radius: 8px; }
-QLabel#librarySelectedTitle { font-family: 'Manrope', 'Inter'; font-size: 18px; font-weight: 500; }
+QLabel#librarySelectedTitle { font-family: 'Inter'; font-size: 18px; font-weight: 500; }
 QLabel#libraryMetadata, QLabel#libraryMessage, QLabel#libraryCount { color: %(muted)s; font-size: 13px; }
 QListWidget#recordingFiles { background: %(panel)s; border: none; qproperty-iconSize: 112px 64px; }
 QListWidget#recordingFiles::item { min-height: 76px; padding: 8px; margin: 0 0 2px 0; }
 QSplitter#librarySplitter::handle { background: transparent; }
 QDialog#audioCheck { background: %(panel)s; border: 1px solid %(border)s; border-radius: 10px; }
-QLabel#checkTitle { font-family: 'Manrope', 'Inter'; font-size: 18px; font-weight: 700; }
+QLabel#checkTitle { font-family: 'Inter'; font-size: 18px; font-weight: 700; }
 QLabel#checkStatus { font-size: 13px; color: %(muted)s; }
 QLabel#summaryValue { font-size: 14px; color: %(text)s; }
-QPushButton, QToolButton { background: %(panel)s; border: 1px solid %(border)s; padding: 7px 11px; border-radius: 7px; font-weight: 600; }
+QPushButton, QToolButton { background: %(panel)s; border: 1px solid %(control_border)s; min-height: 22px; padding: 6px 10px; border-radius: 6px; font-weight: 600; }
 QPushButton:hover, QToolButton:hover { background: %(hover)s; border-color: %(action)s; }
-QPushButton:checked, QToolButton:checked { background: %(selection)s; border-color: %(action)s; color: %(text)s; }
+QPushButton:checked, QToolButton:checked { background: %(selection)s; border: 1px solid %(action)s; color: %(action)s; font-weight: 700; }
+QPushButton#mode, QPushButton[mode="true"] { min-height: 28px; }
 QPushButton:pressed, QToolButton:pressed { background: %(selection)s; }
 QPushButton#record, QPushButton#playRecording, QPushButton#primary { background: %(action)s; color: %(on_action)s; border-color: %(action)s; }
+QPushButton#record { min-height: 28px; font-size: 15px; }
 QPushButton#record:hover, QPushButton#playRecording:hover, QPushButton#primary:hover { background: %(action_hover)s; }
 QPushButton#record[stopping="true"] { background: %(error_bg)s; color: %(error)s; border-color: %(error)s; }
 QPushButton#deleteRecording { color: %(error)s; }
@@ -86,19 +93,26 @@ QPushButton#quiet { background: transparent; border-color: transparent; color: %
 QPushButton#setupHeading { text-align: left; background: transparent; color: %(text)s; border: 1px solid transparent; padding: 6px; font-size: 14px; }
 QPushButton#setupHeading:hover, QPushButton#setupHeading:checked { background: %(selection)s; }
 QPushButton#footerNavigation { padding: 6px 8px; font-size: 13px; }
-QComboBox, QLineEdit, QTextEdit, QPlainTextEdit, QSpinBox, QDoubleSpinBox { background: %(panel)s; color: %(text)s; border: 1px solid %(border)s; border-radius: 6px; padding: 6px 8px; selection-background-color: %(selection)s; selection-color: %(text)s; }
+QComboBox, QLineEdit, QTextEdit, QPlainTextEdit, QSpinBox, QDoubleSpinBox { background: %(panel)s; color: %(text)s; border: 1px solid %(control_border)s; border-radius: 6px; min-height: 22px; padding: 6px 8px; selection-background-color: %(selection)s; selection-color: %(text)s; }
 QLineEdit { placeholder-text-color: %(muted)s; }
-QComboBox { padding-right: 26px; }
+QComboBox { padding-right: 30px; }
+QComboBox::drop-down { subcontrol-origin: padding; subcontrol-position: top right; width: 28px; border: none; background: transparent; }
+QComboBox::down-arrow { image: url("%(chevron)s"); width: 12px; height: 12px; }
+QComboBox QAbstractItemView::item { min-height: 30px; padding: 3px 8px; }
 QComboBox QAbstractItemView { background: %(panel)s; color: %(text)s; border: 1px solid %(border)s; selection-background-color: %(selection)s; selection-color: %(text)s; }
 QAbstractItemView { background: %(panel)s; alternate-background-color: %(canvas)s; color: %(text)s; border: 1px solid %(border)s; border-radius: 8px; selection-background-color: %(selection)s; selection-color: %(text)s; }
 QListWidget { background: %(canvas)s; border: none; }
 QListWidget::item { background: %(panel)s; border: 1px solid %(border)s; border-radius: 8px; margin: 0 4px 7px 0; padding: 10px; }
 QListWidget::item:hover { background: %(hover)s; }
 QListWidget::item:selected { background: %(selection)s; color: %(text)s; border-color: %(action)s; }
-QCheckBox, QRadioButton { spacing: 7px; background: transparent; }
-QCheckBox::indicator, QRadioButton::indicator { width: 16px; height: 16px; border: 1px solid %(muted)s; border-radius: 4px; background: %(panel)s; }
-QRadioButton::indicator { border-radius: 8px; }
-QCheckBox::indicator:checked, QRadioButton::indicator:checked { background: %(action)s; border: 3px solid %(panel)s; outline: 1px solid %(action)s; }
+QCheckBox, QRadioButton { spacing: 8px; min-height: 36px; background: transparent; border: 1px solid transparent; border-radius: 3px; }
+QCheckBox::indicator, QRadioButton::indicator { width: 16px; height: 16px; border: 1px solid %(control_border)s; border-radius: 3px; background: %(panel)s; }
+QRadioButton::indicator { border-radius: 9px; }
+QCheckBox::indicator:checked { background: %(action)s; border-color: %(action)s; image: url("%(check)s"); }
+QRadioButton::indicator:checked { background: %(action)s; border-color: %(action)s; image: url("%(radio)s"); }
+QCheckBox::indicator:disabled, QRadioButton::indicator:disabled { background-color: %(disabled_bg)s; border-color: %(disabled)s; }
+QCheckBox::indicator:checked:disabled, QRadioButton::indicator:checked:disabled { background-color: %(disabled)s; }
+QSlider { border: 1px solid transparent; border-radius: 3px; }
 QSlider::groove:horizontal { height: 4px; background: %(border)s; border-radius: 2px; }
 QSlider::sub-page:horizontal { background: %(action)s; border-radius: 2px; }
 QSlider::handle:horizontal { background: %(action)s; border: 1px solid %(panel)s; width: 14px; margin: -6px 0; border-radius: 7px; }
@@ -126,9 +140,11 @@ QLabel#warning, QLabel[status="warning"] { color: %(warning)s; background: %(war
 QLabel#error, QLabel[status="error"] { color: %(error)s; background: %(error_bg)s; padding: 6px; border-radius: 5px; }
 QLabel#success, QLabel[status="success"] { color: %(success)s; }
 QLabel#recording, QLabel[status="recording"] { color: %(recording)s; }
-QPushButton:focus, QToolButton:focus, QComboBox:focus, QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QAbstractSpinBox:focus { border: 2px solid %(focus)s; }
-QListWidget::item:focus { border: 2px solid %(focus)s; }
-QCheckBox:focus, QRadioButton:focus, QSlider:focus, QAbstractItemView:focus { outline: 2px solid %(focus)s; outline-offset: 2px; }
+QPushButton:focus, QToolButton:focus, QComboBox:focus, QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QAbstractSpinBox:focus { border: 1px dashed %(focus)s; }
+QListWidget::item:focus { border: 1px dashed %(focus)s; }
+QPushButton#record:focus, QPushButton#playRecording:focus, QPushButton#primary:focus { border: 1px dashed %(on_action)s; }
+QCheckBox:focus, QRadioButton:focus, QSlider:focus { border: 1px dashed %(focus)s; background: %(selection)s; }
+QAbstractItemView:focus { border: 1px dashed %(focus)s; }
 QWidget:disabled { color: %(disabled)s; }
 QPushButton:disabled, QPushButton#record:disabled, QPushButton#playRecording:disabled, QPushButton#primary:disabled, QToolButton:disabled, QComboBox:disabled, QLineEdit:disabled { background: %(disabled_bg)s; color: %(disabled)s; border-color: %(border)s; }
 QSlider::handle:disabled, QSlider::sub-page:disabled, QProgressBar::chunk:disabled { background: %(disabled)s; }

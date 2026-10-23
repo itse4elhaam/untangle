@@ -26,7 +26,7 @@ class MicrophoneMeter(QWidget):
         self.show_status(None)
 
     def show_status(self, status, name='', enabled=True):
-        if not isinstance(status, dict) or status.get('state') == 'off':
+        if not enabled or not isinstance(status, dict) or status.get('state') == 'off':
             status = dict(state='idle' if enabled else 'off', peak_db=-math.inf)
         state = status['state']
         source = status.get('source')

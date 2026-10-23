@@ -1,4 +1,4 @@
-"""Companion layout, themes and sheet ownership with mocked devices only."""
+"""Recorder themes and inline audio-check ownership with mocked devices only."""
 import unittest
 from unittest.mock import patch
 
@@ -8,7 +8,7 @@ from untangle.theme import THEMES
 import test_app
 
 
-class CompanionChecks(unittest.TestCase):
+class RecorderThemeChecks(unittest.TestCase):
     setUp = test_app.AppChecks.setUp
     tearDown = test_app.AppChecks.tearDown
 
@@ -32,9 +32,9 @@ class CompanionChecks(unittest.TestCase):
         w = self.window
         self.assertTrue(all(not edit.isChecked() for edit in w.setup_sections))
         w.set_mode('camera', configure=False)
-        self.assertIn('Camera only', w.summary_labels[0].text())
+        self.assertIn('Camera only', w.capture_caption.text())
         w.desktop_audio.setChecked(True)
-        self.assertIn('Computer sound on', w.summary_labels[2].text())
+        self.assertTrue(w.desktop_audio.isChecked())
         w.show()
         w.focus_button.setChecked(True)
         test_app.qt.processEvents()
@@ -42,7 +42,7 @@ class CompanionChecks(unittest.TestCase):
         self.assertTrue(w.microphone_meter.isVisible())
         w.set_mode('screen', configure=False)
         self.assertFalse(w.focus_button.isChecked())
-        self.assertIn('Entire screen', w.summary_labels[0].text())
+        self.assertIn('Entire screen', w.capture_caption.text())
 
     def test_output_options_can_open_for_zoom_while_recording(self):
         w = self.window
@@ -60,7 +60,7 @@ class CompanionChecks(unittest.TestCase):
         self.assertTrue(w.zoom_motion.enabled)
         w.zoom_timer.stop()
 
-    def test_audio_sheet_does_not_reparent_preview_or_start_capture(self):
+    def test_inline_audio_check_keeps_setup_and_does_not_reparent_preview_or_start_capture(self):
         w = self.window
         w.show()
         parent = w.preview.parentWidget()
@@ -76,7 +76,8 @@ class CompanionChecks(unittest.TestCase):
                     self.assertFalse(sheet.isWindow())
                     self.assertEqual(sheet.windowFlags() & Qt.WindowType_Mask, Qt.Widget)
                     self.assertIs(w.preview.parentWidget(), parent)
-                    self.assertGreaterEqual(w.preview.height(), 360)
+                    self.assertGreaterEqual(w.preview.height(), 220)
+                    self.assertTrue(w.controls_panel.isVisible())
                     self.assertTrue(w.rect().contains(sheet.mapTo(w, sheet.rect().bottomRight())))
                     self.assertTrue(w.rect().contains(w.library_button.mapTo(w, QPoint())))
             w.engine.begin_audio_check.assert_not_called()

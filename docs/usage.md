@@ -2,7 +2,7 @@
 
 Open **Untangle** from the application launcher, or run `untangle`.
 
-1. In the preparation summary, open **1 Capture · Change** and choose Camera or Screen. New preferences default to Camera; existing preferences keep your last mode.
+1. Use the visible **Camera** or **Screen** buttons in the left setup column. New preferences default to Camera; existing preferences keep your last mode.
 2. In Screen mode, choose **Entire screen** or **A specific window**. For a window, select it from the list; use the refresh button after opening another window. Choose your camera and microphone, then a camera shape, size, and corner.
 3. Start recording. A three-second countdown gives you time to get ready.
 4. Press **Ctrl + Shift + F9** to stop and save. **Ctrl + Shift + F10** pauses or resumes. **Ctrl + Shift + F8** toggles pointer-follow zoom. These also work while the main window is hidden. The tray menu has the same controls.
@@ -15,13 +15,13 @@ Window capture records the selected window's content, including when another win
 
 In Camera mode, **Expand camera** hides the settings panel while keeping recording controls visible. **Show controls** brings the settings back. The complete camera image fits inside the video frame without cropping; sources with a different aspect ratio have black borders.
 
-## Companion appearance and setup
+## Clearline appearance and setup
 
 Choose **Light** or **Dark** at the top of the recorder or library. The choice applies to the app, menus, dialogs, microphone meters and audio-check sheet, and persists in the existing settings store. The default is Light. Untangle bundles Inter and Manrope with their open font licenses; it does not install desktop fonts.
 
-The preview stays on the left. The preparation summary stays on the right, with expandable Capture, Camera, Microphone and Output options sections. Microphone levels remain below the preview even when camera controls are expanded. Recordings and Sharing remain at the lower left.
+Setup stays on the left and the large preview stays on the right. Mode, source and device controls are visible immediately. **More options** contains camera appearance, microphone processing and output quality. Microphone levels remain below the preview even when camera controls are expanded. Recordings and Sharing remain at the lower left.
 
-Quick audio check opens a side sheet beside the preview. **Record sample** explicitly captures four seconds; **Play sample** explicitly plays the temporary result. There is no automatic playback. **Back to setup** waits for pending microphone work and safe release before returning. The input meter reports live samples; a nonzero sample does not establish intelligible speech or fix the unresolved Bluetooth silence issue.
+Quick audio check opens below the preview, with the selected inputs still visible. **Record sample** explicitly captures four seconds; **Play sample** explicitly plays the temporary result. There is no automatic playback. **Back to setup** waits for pending microphone work and safe release before returning. The input meter reports live samples; a nonzero sample does not establish intelligible speech or fix the unresolved Bluetooth silence issue.
 
 Thumbnails decode a bounded batch of local files in the background. Missing FFmpeg, slow decoding or unreadable video falls back to an icon; it does not block file actions. Opening another view stops thumbnail work and releases the player.
 

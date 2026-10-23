@@ -250,12 +250,12 @@ class Window(QMainWindow):
         layout.setSpacing(14)
         header = QHBoxLayout()
         logo = QLabel()
-        logo.setPixmap(QIcon(str(ICON)).pixmap(46, 46))
+        logo.setPixmap(QIcon(str(ICON)).pixmap(36, 36))
         header.addWidget(logo)
         title_box = QVBoxLayout()
         title_box.setSpacing(0)
         title_box.addWidget(label('Untangle', 'title'))
-        title_box.addWidget(label('Ready when you have something to show.', 'muted'))
+        title_box.addWidget(label('Screen and camera recording', 'muted'))
         header.addLayout(title_box)
         header.addStretch()
         self.theme_choice = QComboBox()
@@ -271,59 +271,56 @@ class Window(QMainWindow):
         content.setHorizontalSpacing(20)
         content.setVerticalSpacing(10)
         content.setRowStretch(0, 1)
-        content.setColumnStretch(0, 1)
-        content.setColumnStretch(1, 0)
+        content.setColumnStretch(0, 0)
+        content.setColumnStretch(1, 1)
         controls = QVBoxLayout()
         controls.setSpacing(9)
         side = QWidget()
+        side.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         self.controls_panel = QScrollArea()
         self.controls_panel.setObjectName('sidebar')
         self.controls_panel.setWidgetResizable(True)
         self.controls_panel.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.controls_panel.setFixedWidth(304)
+        self.controls_panel.setFixedWidth(276)
         self.controls_panel.setWidget(side)
         side.setLayout(controls)
         controls.setContentsMargins(0, 0, 10, 0)
         summary = controls
         summary.setContentsMargins(12, 12, 12, 12)
-        summary.addWidget(label('Before you start', 'section'))
+        summary.addWidget(label('Recording setup', 'section'))
         self.setup_sections = []
-        self.summary_labels = []
 
-        def section(title):
+        def section(title, advanced=False):
             frame = QFrame()
             frame.setObjectName('setupSection')
             outer = QVBoxLayout(frame)
-            outer.setContentsMargins(0, 8, 0, 8)
-            outer.setSpacing(5)
-            edit = QPushButton(title + '  ·  Change')
-            edit.setObjectName('setupHeading')
-            edit.setCheckable(True)
-            outer.addWidget(edit)
-            value = label('', 'summaryValue')
-            value.setWordWrap(True)
-            value.setMinimumWidth(0)
-            value.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
-            outer.addWidget(value)
+            outer.setContentsMargins(0, 4, 0, 4)
+            outer.setSpacing(6)
             body = QWidget()
-            body.setObjectName('setupDetails')
             body_layout = QVBoxLayout(body)
-            body_layout.setContentsMargins(0, 6, 0, 0)
+            body_layout.setContentsMargins(0, 0, 0, 0)
             body_layout.setSpacing(8)
+            if advanced:
+                edit = QPushButton(title + '  ▾')
+                edit.setObjectName('setupHeading')
+                edit.setCheckable(True)
+                edit.toggled.connect(body.setVisible)
+                outer.addWidget(edit)
+                body.hide()
+                self.setup_sections.append(edit)
+            else:
+                outer.addWidget(label(title, 'muted'))
             outer.addWidget(body)
-            body.hide()
-            edit.toggled.connect(body.setVisible)
             summary.addWidget(frame)
-            self.setup_sections.append(edit)
-            self.summary_labels.append(value)
             return body_layout
 
-        controls = self.capture_setup = section('1  Capture')
+        controls = self.capture_setup = section('Record')
         modes = QHBoxLayout()
         self.screen_button = QPushButton('Screen')
         self.camera_button = QPushButton('◉  Camera')
         for button, mode in [(self.screen_button, 'screen'), (self.camera_button, 'camera')]:
             button.setCheckable(True)
+            button.setObjectName('mode')
             button.setMinimumHeight(42)
             button.clicked.connect(lambda checked, m=mode: self.set_mode(m))
             modes.addWidget(button)
@@ -331,7 +328,7 @@ class Window(QMainWindow):
         self.mode_hint = label('Your screen, with you in the corner.', 'muted')
         self.mode_hint.setWordWrap(True)
         controls.addWidget(self.mode_hint)
-        controls.addSpacing(6)
+        controls.addSpacing(0)
         self.capture_label = label('Capture', 'section')
         controls.addWidget(self.capture_label)
         self.capture_kind = QComboBox()
@@ -359,7 +356,7 @@ class Window(QMainWindow):
         window_layout.addWidget(self.refresh_button)
         self.window_row.setVisible(False)
         controls.addWidget(self.window_row)
-        controls = self.camera_setup = section('2  Camera')
+        controls = self.camera_setup = section('Camera')
         self.camera = QComboBox()
         self.camera.addItem('Camera off', None)
         for name, path in cameras():
@@ -367,7 +364,7 @@ class Window(QMainWindow):
         if self.camera.count() > 1:
             self.camera.setCurrentIndex(1)
         controls.addWidget(self.camera)
-        controls = self.microphone_setup = section('3  Microphone')
+        controls = self.microphone_setup = section('Microphone')
         self.microphone = QComboBox()
         self.microphone.addItem('Automatic microphone', 'default')
         self.microphone.addItem('Microphone off', None)
@@ -386,7 +383,6 @@ class Window(QMainWindow):
         self.clean_microphone = QCheckBox('Clean microphone')
         self.clean_microphone.setChecked(True)
         self.clean_microphone.setToolTip('Reduce background microphone noise and control loud peaks. Turn off to record the microphone without processing. Computer sound is unchanged.')
-        controls.addWidget(self.clean_microphone)
         self.desktop_audio = QCheckBox('Include computer sound')
         controls.addWidget(self.desktop_audio)
         controls.addSpacing(4)
@@ -416,23 +412,25 @@ class Window(QMainWindow):
         self.mask_button.setVisible(False)
         self.mask_button.clicked.connect(self.choose_mask)
         widget_layout.addWidget(self.mask_button)
-        self.camera_setup.addWidget(self.widget_panel)
         self.mirror = QCheckBox('Mirror my camera')
         self.mirror.setChecked(True)
-        self.camera_setup.addWidget(self.mirror)
-        controls = self.output_setup = section('Output options')
+        controls = self.output_setup = section('More options', advanced=True)
+        controls.addWidget(self.widget_panel)
+        controls.addWidget(self.mirror)
+        controls.addWidget(self.clean_microphone)
+        controls.addWidget(label('Recording quality', 'muted'))
         quality_row = QHBoxLayout()
         self.quality = QComboBox()
         self.quality.addItem('4K · 30 fps', (3840, 2160))
         self.quality.addItem('1080p · 30 fps', (1920, 1080))
         quality_row.addWidget(self.quality)
         controls.addLayout(quality_row)
-        content.addWidget(self.controls_panel, 0, 1, 2, 1)
+        content.addWidget(self.controls_panel, 0, 0)
 
         right = QVBoxLayout()
         right.setSpacing(8)
         preview_top = QHBoxLayout()
-        self.preview_title = label('FULL CAMERA VIEW', 'eyebrow')
+        self.preview_title = label('Camera preview', 'section')
         preview_top.addWidget(self.preview_title)
         self.focus_button = QPushButton('Expand camera')
         self.focus_button.setCheckable(True)
@@ -441,8 +439,10 @@ class Window(QMainWindow):
         preview_top.addStretch()
         self.encoder_label = label('Starting recording engine…', 'muted')
         self.encoder_label.setWordWrap(True)
-        preview_top.addWidget(self.encoder_label)
         right.addLayout(preview_top)
+        self.capture_caption = label('', 'muted')
+        self.capture_caption.setWordWrap(True)
+        right.addWidget(self.capture_caption)
         preview_frame = QFrame()
         preview_frame.setObjectName('panel')
         preview_layout = QVBoxLayout(preview_frame)
@@ -461,13 +461,14 @@ class Window(QMainWindow):
         self.zoom_button.setEnabled(False)
         self.zoom_button.setToolTip('While recording, press Ctrl + Shift + F8 to zoom in or out at your pointer.')
         self.zoom_button.clicked.connect(self.toggle_zoom)
-        zoom_row.addWidget(self.zoom_button, 1)
+        zoom_row.addStretch()
+        zoom_row.addWidget(self.zoom_button)
         self.zoom_amount = QComboBox()
         for title, value in [('1.5×', 1.5), ('2×', 2.0), ('2.5×', 2.5)]:
             self.zoom_amount.addItem(title, value)
         self.zoom_amount.setCurrentIndex(1)
         zoom_row.addWidget(self.zoom_amount)
-        self.output_setup.addLayout(zoom_row)
+        right.addLayout(zoom_row)
         self.status = label('Preparing your recording setup…')
         self.status.setWordWrap(True)
         self.status.setMinimumHeight(38)
@@ -477,13 +478,16 @@ class Window(QMainWindow):
         self.record_button.setObjectName('record')
         self.record_button.setEnabled(False)
         self.record_button.clicked.connect(self.toggle_record)
-        actions.addWidget(self.record_button, 1)
+        actions.addStretch()
+        self.record_button.setFixedWidth(210)
+        self.record_button.setMinimumHeight(44)
         self.pause_button = QPushButton('Pause')
         self.pause_button.setVisible(False)
         self.pause_button.clicked.connect(self.toggle_pause)
         actions.addWidget(self.pause_button)
+        actions.addWidget(self.record_button)
         right.addLayout(actions)
-        shortcuts = label('Ctrl + Shift + F9  record / stop    ·    F10  pause    ·    F8  pointer zoom', 'muted')
+        shortcuts = self.shortcuts = label('Ctrl+Shift+F9  record / stop  ·  Ctrl+Shift+F10  pause  ·  Ctrl+Shift+F8  zoom', 'muted')
         shortcuts.setWordWrap(True)
         right.addWidget(shortcuts)
         summary.addStretch()
@@ -496,9 +500,9 @@ class Window(QMainWindow):
         self.zoom_amount.setMinimumContentsLength(3)
         self.zoom_amount.setMaximumWidth(90)
         self.preview_column = right
-        content.addLayout(right, 0, 0)
+        content.addLayout(right, 0, 1, 2, 1)
         self.navigation_footer = QWidget()
-        self.navigation_footer.setFixedWidth(280)
+        self.navigation_footer.setFixedWidth(276)
         navigation = QHBoxLayout(self.navigation_footer)
         navigation.setContentsMargins(0, 0, 10, 0)
         navigation.setSpacing(6)
@@ -538,15 +542,15 @@ class Window(QMainWindow):
             self.recordings.theme_choice.blockSignals(False)
 
     def update_setup_summary(self, *_):
-        if not hasattr(self, 'summary_labels'):
+        if not hasattr(self, 'capture_caption'):
             return
         capture = ('Camera only · Full image' if self.mode == 'camera' else
             self.capture_kind.currentText() + ' · ' +
             (self.capture_window.currentText() if self.capture_kind.currentData() == 'window' else self.screen.currentText()))
-        for item, value in zip(self.summary_labels, (capture, self.camera.currentText(),
-                self.microphone.currentText() + (' · Computer sound on' if self.desktop_audio.isChecked() else ' · Computer sound off'), self.quality.currentText())):
-            item.setText(value)
-            item.setToolTip(value)
+        self.capture_caption.setText(capture)
+        self.capture_caption.setToolTip(capture)
+        for combo in (self.camera, self.microphone, self.screen, self.capture_window):
+            combo.setToolTip(combo.currentText())
 
     def setup_tray(self):
         self.tray = QSystemTrayIcon(QIcon(str(ICON)), self)
@@ -642,7 +646,7 @@ class Window(QMainWindow):
         self.focus_button.setVisible(camera_mode)
         if not camera_mode:
             self.focus_button.setChecked(False)
-        self.preview_title.setText('FULL CAMERA VIEW' if camera_mode else 'LIVE PREVIEW')
+        self.preview_title.setText('Camera preview' if camera_mode else 'Screen preview')
         self.capture_label.setVisible(not camera_mode)
         self.capture_kind.setVisible(not camera_mode)
         self.screen.setVisible(not camera_mode and self.capture_kind.currentData() == 'screen')
@@ -654,7 +658,7 @@ class Window(QMainWindow):
         self.capture_kind.setEnabled(self.mode == 'screen')
         self.capture_window.setEnabled(self.mode == 'screen')
         self.refresh_button.setEnabled(self.mode == 'screen')
-        self.mode_hint.setText('Your screen, with you in the corner.' if self.mode == 'screen' else 'Just you. Full frame. Ready to explain.')
+        self.mode_hint.setText('Screen with optional camera overlay.' if self.mode == 'screen' else 'Camera only. Your full camera image.')
         self.update_setup_summary()
         if configure:
             self.schedule_configure()
@@ -665,7 +669,7 @@ class Window(QMainWindow):
         if expanded:
             self.recorder_content.addLayout(self.preview_column, 0, 0, 1, 2)
         else:
-            self.recorder_content.addLayout(self.preview_column, 0, 0)
+            self.recorder_content.addLayout(self.preview_column, 0, 1, 2, 1)
         self.focus_button.setText('Show controls' if expanded else 'Expand camera')
 
     def capture_changed(self):
@@ -1199,26 +1203,37 @@ class Window(QMainWindow):
         self.record_button.setEnabled(False)
         dialog = self.audio_check_dialog = AudioCheck(self.engine, self.audio_devices,
             self.microphone.currentData(), self.clean_microphone.isChecked(),
-            self.microphone.currentText(), self)
+            self.microphone.currentText(), self, inline=True)
+        previous_status = self.status.text()
         def finished():
-            self.recorder_content.removeWidget(dialog)
-            self.controls_panel.show()
+            self.preview_column.removeWidget(dialog)
+            self.microphone_meter.show()
+            self.shortcuts.show()
+            self.zoom_button.setVisible(self.mode == 'screen')
+            self.zoom_amount.setVisible(self.mode == 'screen')
+            self.status.setText(previous_status)
             self.audio_check_dialog = None
             self.busy = False
             self.lock_controls(False)
             self.record_button.setEnabled(self.configuration_valid)
+            if getattr(dialog, 'change_input_requested', False):
+                self.microphone.setFocus(Qt.OtherFocusReason)
             dialog.deleteLater()
             self.retry_audio_restore()
             if self._configure_pending:
                 self.configure_timer.start(0)
         dialog.finished.connect(finished)
-        # A child sheet beside the native OBS preview avoids overlay stacking
-        # and keeps the existing capture/worker teardown handshake intact.
+        # Keep the native preview in its original parent. The check is a compact
+        # child below it; setup stays visible and a safe return unlocks inputs.
         dialog.setWindowFlags(Qt.Widget)
         dialog.setModal(False)
-        dialog.setFixedWidth(self.controls_panel.width())
-        self.controls_panel.hide()
-        self.recorder_content.addWidget(dialog, 0, 1, 2, 1)
+        dialog.setFixedHeight(230)
+        self.microphone_meter.hide()
+        self.shortcuts.hide()
+        self.zoom_button.hide()
+        self.zoom_amount.hide()
+        self.status.setText('Audio check open. Close it to change the recording setup.')
+        self.preview_column.insertWidget(3, dialog)
         dialog.show()
 
     def release_audio(self):
@@ -1280,18 +1295,21 @@ class Window(QMainWindow):
         friendly = getattr(self.audio_devices, 'source_label', None)
         if source and isinstance(friendly, str) and friendly:
             name = friendly
-        if not source and self.microphone.currentData() != 'default':
+        if self.microphone.currentData() is None or (not source and self.microphone.currentData() != 'default'):
             name = self.microphone.currentText()
         self.microphone_meter.show_status(status, name, self.microphone.currentData() is not None)
         if not self.recording and not self.preparing_audio and not getattr(self, 'audio_check_dialog', None):
-            if self.idle_audio.error:
+            if self.microphone.currentData() is None:
+                pass  # The explicit off state takes precedence over old monitor data.
+            elif not self.live_microphone.isChecked():
+                self.microphone_meter.show_status(None, self.microphone.currentText())
+                self.microphone_meter.message.setText('Live monitoring off')
+            elif self.idle_audio.error:
                 self.microphone_meter.message.setText('Monitor unavailable: ' + self.idle_audio.error)
             elif self.idle_audio.pending or (self.idle_audio.source and not self.idle_audio.verified):
                 self.microphone_meter.message.setText('Preparing live microphone…')
             elif self.idle_audio.source:
                 self.microphone_meter.message.setText('Live · ' + self.microphone_meter.message.text())
-            elif not self.live_microphone.isChecked() and self.microphone.currentData():
-                self.microphone_meter.message.setText('Live monitoring off')
         trace = getattr(self, 'audio_trace', None)
         if isinstance(trace, AudioTrace) and self.recording:
             trace.telemetry('health', status)
@@ -1330,7 +1348,7 @@ class Window(QMainWindow):
             self.engine_notice(f'{state} · {duration}   |   Ctrl + Shift + F9 to stop and save\n'
                 + (f'Microphone: {self.selected_source}' if self.selected_source else 'Microphone off')
                 + ('\n' + (self.recording_error or warning) if self.recording_error or warning else ''))
-            self.record_button.setText(f'■  Stop and save · {duration}')
+            self.record_button.setText('■  Stop and save')
             self.tray.setToolTip(f'Untangle · {state} {duration}\nCtrl + Shift + F9 to stop')
             if elapsed % 10 == 0 and shutil.disk_usage(VIDEOS).free < 256 * 1024 ** 2:
                 self.notice('Storage almost full. Stopping to save your recording.')
