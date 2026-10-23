@@ -229,6 +229,7 @@ class Window(QMainWindow):
         self.paused_duration = 0
         self.quit_after_save = False
         self._configure_pending = False
+        self._live_update_failed = False
         self.configuration_valid = False
         self.recording_error = ''
         self.recording_error_baseline = 0
@@ -702,6 +703,7 @@ class Window(QMainWindow):
             self.engine.set_camera_framing(**changes)
             self.save_preferences()
         except Exception as exc:
+            self._live_update_failed = True
             self.configuration_valid = False
             self.record_button.setEnabled(False)
             self.notice(f'Could not update camera framing: {exc}')
@@ -836,14 +838,28 @@ class Window(QMainWindow):
 
     def quality_changed(self):
         self.update_setup_summary()
-        if self.engine and not (self.recording or self.busy or self.counting):
-            try:
-                self.engine.set_canvas(*self.output_dimensions())
-                self.apply_camera_framing(framing=self.effective_framing())
-            except Exception as exc:
-                self.configuration_valid = False
-                self.record_button.setEnabled(False)
-                self.notice(f'Could not update the recording canvas: {exc}')
+        if self.recording or self.busy or self.counting:
+            return
+        # A canvas retry can recover a failed live edit, but cannot validate a
+        # pending device change or a source configuration that never succeeded.
+        if (not self.engine or self.in_library() or self._configure_pending
+                or not (self.configuration_valid or getattr(self, '_live_update_failed', False))):
+            return
+        try:
+            self.engine.set_canvas(*self.output_dimensions())
+            if self.camera.currentData():
+                self.engine.set_camera_framing(framing=self.effective_framing(),
+                    camera_zoom=self.camera_zoom.value() / 100,
+                    size=self.size.value() / 100, mirror=self.mirror.isChecked())
+            self._live_update_failed = False
+            self.configuration_valid = True
+            self.record_button.setEnabled(True)
+            self.save_preferences()
+        except Exception as exc:
+            self._live_update_failed = True
+            self.configuration_valid = False
+            self.record_button.setEnabled(False)
+            self.notice(f'Could not update the recording canvas: {exc}')
 
     def set_mode(self, mode, configure=True):
         if self.recording or self.busy or self.counting:
@@ -936,6 +952,7 @@ class Window(QMainWindow):
         if hasattr(self, 'configure_timer') and self.engine and not (self.recording or self.busy or self.counting):
             self.configuration_valid = False
             self.record_button.setEnabled(False)
+            self._live_update_failed = False
             self._configure_pending = True
             self.configure_timer.start(180)
 
@@ -948,6 +965,7 @@ class Window(QMainWindow):
         if self.in_library() or not self.engine or self.recording or (self.busy and not recording_setup):
             return
         self._configure_pending = False
+        self._live_update_failed = False
         self.configuration_valid = False
         try:
             self.hide_bubble()

@@ -256,3 +256,46 @@ class CameraControlsTests(unittest.TestCase):
         self.assertFalse(w.canvas_panel.isVisible())
         self.case.click(w.focus_button)
         self.assertTrue(w.canvas_panel.isVisible())
+
+    def test_canvas_retry_restores_record_and_pending_zoom_without_reloading(self):
+        w = self.window
+        engine = w.engine
+        engine.reset_mock()
+        engine.set_canvas.side_effect = RuntimeError('synthetic reset failure')
+        self.case.choose(w.canvas, 'portrait')
+        self.assertFalse(w.configuration_valid)
+        self.assertFalse(w.record_button.isEnabled())
+        w.camera_zoom.setValue(150)
+        engine.set_canvas.side_effect = None
+        self.case.choose(w.canvas, 'square')
+        self.assertTrue(w.configuration_valid)
+        self.assertTrue(w.record_button.isEnabled())
+        self.assertEqual(engine.set_camera_framing.call_args.kwargs['camera_zoom'], 1.5)
+        self.case.click(w.camera_zoom_plus)
+        self.assertEqual(engine.set_camera_framing.call_args, call(camera_zoom=1.6))
+        engine.configure.assert_not_called()
+        engine.close.assert_not_called()
+
+    def test_screen_quality_saves_immediately_with_camera_off(self):
+        w = self.window
+        self.case.click(w.screen_button)
+        self.case.choose(w.camera, None)
+        QTest.qWait(220)
+        self.reveal(w.quality)
+        w.quality.setCurrentIndex(1)
+        self.assertEqual(w.prefs.value('quality'), w.quality.currentText())
+        w.restore_preferences()
+        self.assertEqual(w.quality.currentData(), (1920, 1080))
+
+    def test_canvas_retry_does_not_validate_pending_device_configuration(self):
+        w = self.window
+        w._live_update_failed = True
+        w.schedule_configure()
+        w.configure_timer.stop()
+        w.engine.reset_mock()
+        w.canvas.setCurrentIndex(w.canvas.findData('portrait'))
+        self.assertFalse(w.configuration_valid)
+        self.assertFalse(w.record_button.isEnabled())
+        w.engine.set_canvas.assert_not_called()
+        w.engine.set_camera_framing.assert_not_called()
+        self.assertTrue(w._configure_pending)
