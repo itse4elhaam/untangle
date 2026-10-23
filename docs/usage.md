@@ -4,16 +4,35 @@ Open **Untangle** from the application launcher, or run `untangle`.
 
 1. Use the visible **Camera** or **Screen** buttons in the left setup column. New preferences default to Camera; existing preferences keep your last mode.
 2. In Screen mode, choose **Entire screen** or **A specific window**. For a window, select it from the list; use the refresh button after opening another window. Choose your camera and microphone, then a camera shape, size, and corner.
-3. Start recording. A three-second countdown gives you time to get ready.
+3. Above the preview, choose a **Canvas** and **Fit** or **Fill**. Adjust camera **Zoom** beside the camera selector, then start recording. A three-second countdown gives you time to get ready.
 4. Press **Ctrl + Shift + F9** to stop and save. **Ctrl + Shift + F10** pauses or resumes. **Ctrl + Shift + F8** toggles pointer-follow zoom. These also work while the main window is hidden. The tray menu has the same controls.
 
-Screen recordings hide the main window before capture begins. A live camera widget remains visible above your desktop, including when you change workspaces. Drag it to move it; right-click for Stop, Pause, Zoom, or Open Untangle. It also appears while preparing a screen recording. Camera recordings keep the main preview visible and use the camera for the complete video frame. Escape cancels the countdown.
+Screen recordings hide the main window before capture begins. With Landscape and Fit, a live camera widget remains visible above your desktop, including when you change workspaces. Other canvases and Fill compose the camera directly into the recording; use the shape, size and corner controls under More options. Drag it to move it; right-click for Stop, Pause, Zoom, or Open Untangle. It also appears while preparing a screen recording. Camera recordings keep the main preview visible and use the camera for the complete video frame. Escape cancels the countdown.
 
 Videos save to `~/Videos/RecIt`. Recordings opens a dedicated library page with a newest-first list of saved MP4 and MKV videos, dates, file sizes, and filename search. Selecting a recording shows its thumbnail and metadata without opening playback. Choose **Play** to load the video. You can then pause, seek, or adjust volume in the embedded player. Use **Copy path**, **Delete recording**, or **Upload to Loom** for the selected video. Long names are shortened in the list; hover to see the complete path. Refresh reloads the list; Open folder opens the directory. **Back to recorder** stops playback and restores your recorder setup. The library is unavailable during countdown, recording, saving, or uploading. Recording hotkeys and tray recording are disabled while browsing, and pending recording starts cannot run behind the library.
 
 Window capture records the selected window's content, including when another window covers it. Keep the selected window open and unminimized. Closing or minimizing it stops and saves the recording with a warning. Resizing the selected window refits it to the video frame. Computer sound, if enabled, still records the computer's audio rather than audio isolated to that window.
 
-In Camera mode, **Expand camera** hides the settings panel while keeping recording controls visible. **Show controls** brings the settings back. The complete camera image fits inside the video frame without cropping; sources with a different aspect ratio have black borders.
+In Camera mode, **Expand camera** hides the settings panel while keeping recording controls visible. **Show controls** brings the settings back. Expansion changes the local layout, not the recording canvas or crop. Fit at 100% camera zoom retains the complete camera image; sources with a different aspect ratio have black bars.
+
+## Canvas and camera framing
+
+**Canvas** sets the recording shape independently of **Recording quality**. The preview displays the same OBS composition as the saved video. At 1080p quality the presets are:
+
+| Canvas | Output |
+| --- | --- |
+| Landscape · 16:9 | 1920 × 1080 |
+| Reels / Shorts · 9:16 | 1080 × 1920 |
+| Square · 1:1 | 1080 × 1080 |
+| Portrait · 4:5 | 1080 × 1350 |
+
+4K quality doubles both dimensions. Existing preferences retain Landscape, Fit and 100% camera zoom until changed. The current pixel dimensions appear above the preview.
+
+**Fit · whole image** keeps the source within the canvas with black bars where needed. **Fill · crop center** covers the canvas by cropping the center. Neither stretches the image. These apply to camera-only and screen/window recording. Camera overlays always use a square crop before applying their chosen silhouette.
+
+Camera **Zoom** crops the center of the camera image from 100% to 300%. **Reset** returns to 100%. This changes the camera framing, while the camera widget **Size** changes its area in the video. **Zoom to pointer** still magnifies the screen during recording. Cropping and digital zoom reduce the source detail available to the output.
+
+Choose the canvas, framing and camera zoom before starting. These controls lock during countdown, microphone preparation, recording and saving. Changing canvas or quality restarts the preview engine; microphone monitoring safely releases and resumes. More options scrolls its fields into view when opened at the minimum window size.
 
 ## Clearline appearance and setup
 
@@ -80,7 +99,7 @@ Official references: [TWG command catalog](https://atlassian.github.io/twg-cli/c
 - Default output: 3840 × 2160, 30 fps, H.264 with AAC audio.
 - Intel VAAPI hardware encoding is preferred. The app labels CPU encoding if hardware encoding cannot start.
 - Alternative output: 1920 × 1080, 30 fps.
-- Cameras advertising MJPEG use an explicit resolution and frame rate instead of inheriting the driver's raw-video defaults. Untangle chooses the largest advertised MJPEG resolution within the output size at 30 fps, or the smallest advertised size if none fits. Other cameras keep OBS's defaults. The MX Brio advertises 3840 × 2160 MJPEG at 30 fps.
+- Cameras advertising MJPEG use an explicit resolution and frame rate instead of inheriting the driver's raw-video defaults. Untangle chooses the largest advertised MJPEG resolution within the selected quality’s landscape dimensions at 30 fps, or the smallest advertised size if none fits. Other cameras keep OBS's defaults. The MX Brio advertises 3840 × 2160 MJPEG at 30 fps.
 - Output resolution does not create missing source detail. This machine's display is 1920 × 1200; its built-in camera currently opens at 1920 × 1080 MJPEG/30. A higher-resolution source is needed for native 4K detail.
 - The preview and recording use OBS's native GPU rendering. Python does not copy video frames through the interface.
 - This version targets the installed **OBS 27.x**, x86-64 Linux, and X11. It uses GLX for desktop and window capture and keeps the OpenGL library loaded to work around an OBS 27 loader issue. The engine also supports an explicit EGL fallback for desktop-only capture. It does not support Wayland capture.

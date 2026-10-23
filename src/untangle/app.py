@@ -21,6 +21,7 @@ from .naming import next_recording_path, recording_files
 from .audio_devices import AudioDevices, AudioDeviceError
 from .audio_debug import AudioTrace, emit
 from .engine import recording_audio_warning
+from .composition import canvas_dimensions
 from .microphone_meter import MicrophoneMeter
 from .idle_audio import IdleAudio
 from PySide6.QtWidgets import (
@@ -274,7 +275,7 @@ class Window(QMainWindow):
         content.setColumnStretch(0, 0)
         content.setColumnStretch(1, 1)
         controls = QVBoxLayout()
-        controls.setSpacing(9)
+        controls.setSpacing(6)
         side = QWidget()
         side.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         self.controls_panel = QScrollArea()
@@ -305,6 +306,8 @@ class Window(QMainWindow):
                 edit.setObjectName('setupHeading')
                 edit.setCheckable(True)
                 edit.toggled.connect(body.setVisible)
+                edit.toggled.connect(lambda opened, target=body: QTimer.singleShot(
+                    0, lambda: self.controls_panel.ensureWidgetVisible(target, 0, 12)) if opened else None)
                 outer.addWidget(edit)
                 body.hide()
                 self.setup_sections.append(edit)
@@ -428,7 +431,7 @@ class Window(QMainWindow):
         content.addWidget(self.controls_panel, 0, 0)
 
         right = QVBoxLayout()
-        right.setSpacing(8)
+        right.setSpacing(6)
         preview_top = QHBoxLayout()
         self.preview_title = label('Camera preview', 'section')
         preview_top.addWidget(self.preview_title)
@@ -443,6 +446,42 @@ class Window(QMainWindow):
         self.capture_caption = label('', 'muted')
         self.capture_caption.setWordWrap(True)
         right.addWidget(self.capture_caption)
+        canvas_row = QHBoxLayout()
+        canvas_row.addWidget(label('Canvas', 'muted'))
+        self.canvas = QComboBox()
+        self.canvas.setAccessibleName('Recording canvas')
+        for title, value in [('Landscape · 16:9', 'landscape'), ('Reels / Shorts · 9:16', 'portrait'),
+                             ('Square · 1:1', 'square'), ('Portrait · 4:5', 'portrait45')]:
+            self.canvas.addItem(title, value)
+        canvas_row.addWidget(self.canvas, 1)
+        self.framing = QComboBox()
+        self.framing.setAccessibleName('Source framing')
+        self.framing.addItem('Fit · whole image', 'fit')
+        self.framing.addItem('Fill · crop center', 'fill')
+        self.framing.setToolTip('Fit keeps the whole source with black bars. Fill crops the center to cover the canvas. Camera widgets always crop to a square.')
+        canvas_row.addWidget(self.framing, 1)
+        self.canvas_panel = QWidget()
+        canvas_row.setContentsMargins(0, 0, 0, 0)
+        self.canvas_panel.setLayout(canvas_row)
+        right.addWidget(self.canvas_panel)
+        camera_zoom_row = QHBoxLayout()
+        camera_zoom_row.addWidget(label('Zoom', 'muted'))
+        self.camera_zoom = QSlider(Qt.Horizontal)
+        self.camera_zoom.setAccessibleName('Camera framing zoom')
+        self.camera_zoom.setRange(100, 300)
+        self.camera_zoom.setSingleStep(10)
+        self.camera_zoom.setPageStep(25)
+        self.camera_zoom.setToolTip('Center crop your camera from 100% to 300%. Camera widget size and pointer zoom are separate.')
+        camera_zoom_row.addWidget(self.camera_zoom, 1)
+        self.camera_zoom_value = label('100%')
+        self.camera_zoom_value.setMinimumWidth(42)
+        camera_zoom_row.addWidget(self.camera_zoom_value)
+        self.camera_zoom_reset = QPushButton('Reset')
+        self.camera_zoom_reset.setAccessibleName('Reset camera zoom')
+        self.camera_zoom_reset.clicked.connect(lambda: self.camera_zoom.setValue(100))
+        camera_zoom_row.addWidget(self.camera_zoom_reset)
+        self.camera_setup.addLayout(camera_zoom_row)
+        self.canvas_note = self.capture_caption
         preview_frame = QFrame()
         preview_frame.setObjectName('panel')
         preview_layout = QVBoxLayout(preview_frame)
@@ -515,7 +554,7 @@ class Window(QMainWindow):
             navigation.addWidget(button, 1)
         content.addWidget(self.navigation_footer, 1, 0, Qt.AlignLeft | Qt.AlignBottom)
         layout.addLayout(content, 1)
-        self.config_controls = [self.screen_button, self.camera_button, self.capture_kind, self.capture_window, self.refresh_button, self.screen, self.camera, self.microphone, self.clean_microphone, self.desktop_audio, self.shape, self.size, self.position, self.mask_button, self.mirror, self.quality]
+        self.config_controls = [self.screen_button, self.camera_button, self.capture_kind, self.capture_window, self.refresh_button, self.screen, self.camera, self.microphone, self.clean_microphone, self.desktop_audio, self.shape, self.size, self.position, self.mask_button, self.mirror, self.quality, self.canvas, self.framing, self.camera_zoom, self.camera_zoom_reset]
         for combo in (self.screen, self.capture_window, self.camera, self.microphone, self.position):
             combo.currentIndexChanged.connect(self.schedule_configure)
         self.capture_kind.currentIndexChanged.connect(self.capture_changed)
@@ -525,6 +564,9 @@ class Window(QMainWindow):
         self.clean_microphone.toggled.connect(self.schedule_configure)
         self.desktop_audio.toggled.connect(self.schedule_configure)
         self.quality.currentIndexChanged.connect(self.quality_changed)
+        self.canvas.currentIndexChanged.connect(self.quality_changed)
+        self.framing.currentIndexChanged.connect(self.schedule_configure)
+        self.camera_zoom.valueChanged.connect(self.schedule_configure)
         self.set_mode('screen', configure=False)
         for combo in (self.screen, self.capture_window, self.capture_kind, self.camera, self.microphone):
             combo.currentIndexChanged.connect(self.update_setup_summary)
@@ -544,13 +586,33 @@ class Window(QMainWindow):
     def update_setup_summary(self, *_):
         if not hasattr(self, 'capture_caption'):
             return
-        capture = ('Camera only · Full image' if self.mode == 'camera' else
+        capture = ('Camera only' if self.mode == 'camera' else
             self.capture_kind.currentText() + ' · ' +
             (self.capture_window.currentText() if self.capture_kind.currentData() == 'window' else self.screen.currentText()))
-        self.capture_caption.setText(capture)
-        self.capture_caption.setToolTip(capture)
+        width, height = self.output_dimensions()
+        self.capture_caption.setText(f'{capture} · {width} × {height}')
+        self.capture_caption.setToolTip(f'{capture} · {width} × {height} · 30 fps')
+        self.camera_zoom_value.setText(f'{self.camera_zoom.value()}%')
+        self.update_camera_controls()
         for combo in (self.camera, self.microphone, self.screen, self.capture_window):
             combo.setToolTip(combo.currentText())
+
+    def output_dimensions(self):
+        return canvas_dimensions(self.quality.currentData(), self.canvas.currentData())
+
+    def update_camera_controls(self):
+        enabled = bool(self.camera.currentData()) and not (self.recording or self.busy or self.counting)
+        self.camera_zoom.setEnabled(enabled)
+        self.camera_zoom_reset.setEnabled(enabled and self.camera_zoom.value() != 100)
+
+    def uses_floating_camera(self):
+        # A desktop bubble is captured by XShm, so it follows screen cropping.
+        # Keep it only for the original landscape Fit workflow. Other canvases
+        # compose the camera in OBS so it stays inside the chosen output frame.
+        return (self.mode == 'screen' and bool(self.camera.currentData())
+                and self.capture_kind.currentData() == 'screen'
+                and self.canvas.currentData() == 'landscape'
+                and self.framing.currentData() == 'fit')
 
     def setup_tray(self):
         self.tray = QSystemTrayIcon(QIcon(str(ICON)), self)
@@ -587,6 +649,14 @@ class Window(QMainWindow):
         self.mirror.setChecked(self.prefs.value('mirror', True, type=bool))
         self.clean_microphone.setChecked(self.prefs.value('clean_microphone', True, type=bool))
         self.desktop_audio.setChecked(self.prefs.value('desktop_audio', False, type=bool))
+        for name, default in (('canvas', 'landscape'), ('framing', 'fit')):
+            widget = getattr(self, name)
+            widget.setCurrentIndex(max(0, widget.findData(self.prefs.value(name, default))))
+        try:
+            zoom = int(self.prefs.value('camera_zoom', 100))
+        except (TypeError, ValueError, OverflowError):
+            zoom = 100
+        self.camera_zoom.setValue(max(100, min(300, zoom)))
         self.set_mode(self.prefs.value('mode', 'camera'), configure=False)
         files = recording_files(VIDEOS)
         if files:
@@ -600,6 +670,9 @@ class Window(QMainWindow):
         self.prefs.setValue('mirror', self.mirror.isChecked())
         self.prefs.setValue('clean_microphone', self.clean_microphone.isChecked())
         self.prefs.setValue('desktop_audio', self.desktop_audio.isChecked())
+        self.prefs.setValue('canvas', self.canvas.currentData())
+        self.prefs.setValue('framing', self.framing.currentData())
+        self.prefs.setValue('camera_zoom', self.camera_zoom.value())
         self.prefs.setValue('mode', self.mode)
         self.prefs.setValue('mask', self.mask_path)
         self.prefs.sync()
@@ -611,7 +684,7 @@ class Window(QMainWindow):
             if os.environ.get('XDG_SESSION_TYPE') == 'wayland':
                 raise RuntimeError('This version needs an X11 session. Sign in with an Xorg session to record.')
             from .engine import Engine
-            w, h = self.quality.currentData()
+            w, h = self.output_dimensions()
             self.engine = Engine(int(self.preview.winId()), w, h, fps=30)
             self.resize_preview(self.preview.width(), self.preview.height())
             self.configure()
@@ -622,7 +695,7 @@ class Window(QMainWindow):
 
     def quality_changed(self):
         self.update_setup_summary()
-        if self.engine and not (self.recording or self.busy):
+        if self.engine and not (self.recording or self.busy or self.counting):
             self.configuration_valid = False
             self.idle_audio.stop()
             self.hide_bubble()
@@ -658,13 +731,14 @@ class Window(QMainWindow):
         self.capture_kind.setEnabled(self.mode == 'screen')
         self.capture_window.setEnabled(self.mode == 'screen')
         self.refresh_button.setEnabled(self.mode == 'screen')
-        self.mode_hint.setText('Screen with optional camera overlay.' if self.mode == 'screen' else 'Camera only. Your full camera image.')
+        self.mode_hint.setText('Screen + optional camera.' if self.mode == 'screen' else 'Camera only, in your canvas.')
         self.update_setup_summary()
         if configure:
             self.schedule_configure()
 
     def focus_camera(self, expanded):
         self.controls_panel.setVisible(not expanded)
+        self.canvas_panel.setVisible(not expanded)
         self.recorder_content.removeItem(self.preview_column)
         if expanded:
             self.recorder_content.addLayout(self.preview_column, 0, 0, 1, 2)
@@ -749,8 +823,9 @@ class Window(QMainWindow):
                 desktop_audio=recording_setup and self.desktop_audio.isChecked(), shape=self.shape.currentData(),
                 mask_path=self.mask_path or None, size=self.size.value() / 100,
                 position=self.position.currentData(), screen=self.screen.currentData() or 0,
-                mirror=self.mirror.isChecked(), floating_camera=self.mode == 'screen' and bool(camera) and not window_id, window_id=window_id)
-            if self.mode == 'screen' and camera:
+                mirror=self.mirror.isChecked(), floating_camera=self.uses_floating_camera(), window_id=window_id,
+                camera_zoom=self.camera_zoom.value() / 100, framing=self.framing.currentData())
+            if self.mode == 'screen' and camera and (self.uses_floating_camera() or window_id):
                 self.show_bubble()
             self.record_button.setEnabled(True)
             self.configuration_valid = True
@@ -759,12 +834,14 @@ class Window(QMainWindow):
             screen = QApplication.screens()[self.screen.currentIndex()]
             geo = screen.geometry()
             ratio = screen.devicePixelRatio()
-            self.source_note.setText(f'{self.quality.currentText()} output · Display source {round(geo.width() * ratio)} × {round(geo.height() * ratio)}. '
+            width, height = self.output_dimensions()
+            output = f'{width} × {height} · 30 fps'
+            self.source_note.setText(f'{output} output · Display source {round(geo.width() * ratio)} × {round(geo.height() * ratio)}. '
                 + ('Source resolution determines actual detail.' if camera else 'Camera is off.'))
             if self.mode == 'camera':
-                self.source_note.setText(f'{self.camera.currentText()} · {self.quality.currentText()} output · Full image, no crop.')
+                self.source_note.setText(f'{self.camera.currentText()} · {output} output · Camera zoom {self.camera_zoom.value()}%.')
             if window_id:
-                self.source_note.setText(f'{self.quality.currentText()} · Recording only the selected window. Keep it open and unminimized.')
+                self.source_note.setText(f'{output} · Recording only the selected window. Keep it open and unminimized.')
             self.save_preferences()
         except Exception as exc:
             self.record_button.setEnabled(False)
@@ -1370,6 +1447,7 @@ class Window(QMainWindow):
             self.capture_kind.setEnabled(self.mode == 'screen')
             self.capture_window.setEnabled(self.mode == 'screen')
             self.refresh_button.setEnabled(self.mode == 'screen')
+            self.update_camera_controls()
         if self.recordings:
             self.recordings.update_actions()
 

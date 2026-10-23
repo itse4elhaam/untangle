@@ -10,8 +10,8 @@ This is a native Linux app built with Qt and OBS. Python handles the interface a
 
 ## What it does
 
-- Record a whole screen, a selected window, or the full camera image.
-- Add a camera bubble, choose its shape, and zoom toward the pointer.
+- Record a whole screen, a selected window, or your camera in a chosen canvas.
+- Choose landscape, Reels / Shorts, square, or 4:5 output. Frame your camera with 100–300% zoom and Reset; pointer zoom remains separate.
 - See microphone levels before recording and listen to a quick audio check.
 - Reduce microphone noise with RNNoise and limit loud peaks.
 - Browse, play, rename, delete, and copy paths to saved recordings.
@@ -55,7 +55,7 @@ For Loom, open Sharing and choose Connect Loom account. Complete Atlassian's sig
 
 ## Recording controls
 
-Use the visible setup controls on the left to choose the recording mode, capture source, camera, and microphone. Less frequent settings are under More options. Choose Camera for the full camera frame, or Screen for screen and camera recording. In screen mode, choose your display or a specific window. Check the microphone, then start recording.
+Use the visible setup controls on the left to choose the recording mode, capture source, camera, and microphone. Less frequent settings are under More options. Choose Camera for camera-only video, or Screen for screen and camera recording. Above the preview, choose your canvas and Fit or Fill. Fit keeps the source inside the canvas with bars; Fill crops its center. Camera zoom is beside the camera selector. Quality remains under More options. In screen mode, choose your display or a specific window. Check the microphone, then start recording.
 
 - `Ctrl + Shift + F9` starts recording or stops and saves.
 - `Ctrl + Shift + F10` pauses or resumes.
