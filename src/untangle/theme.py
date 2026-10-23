@@ -178,8 +178,3 @@ def apply_theme(application, name='light'):
                          QColor(c['disabled']))
     application.setPalette(palette)
     application.setStyleSheet(style)
-    # Import here keeps the meter free to read tokens without an import cycle.
-    from .microphone_meter import MicrophoneMeter
-    for widget in application.allWidgets():
-        if isinstance(widget, MicrophoneMeter):
-            widget.update_style()

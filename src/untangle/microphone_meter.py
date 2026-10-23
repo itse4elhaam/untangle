@@ -1,6 +1,7 @@
 """Compact microphone telemetry display. This widget never opens a device."""
 import math
 
+from PySide6.QtCore import QEvent
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QProgressBar, QSizePolicy, QApplication
 
 
@@ -24,6 +25,12 @@ class MicrophoneMeter(QWidget):
         layout.addWidget(self.level)
         layout.addWidget(self.message)
         self.show_status(None)
+
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        # Palette changes can arrive before the constructor creates the level.
+        if event.type() == QEvent.PaletteChange and hasattr(self, 'level'):
+            self.update_style()
 
     def show_status(self, status, name='', enabled=True):
         if not enabled or not isinstance(status, dict) or status.get('state') == 'off':

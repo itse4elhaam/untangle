@@ -31,7 +31,7 @@ sys.path[:0] = [str(REPO / 'src'), str(REPO / 'tests')]
 from PySide6 import __version__ as pyside_version
 from PySide6.QtCore import QRect, QRectF, Qt, QUrl, Signal, qVersion
 from PySide6.QtGui import QColor, QFontInfo, QIcon, QPainter, QPainterPath, QPen, QPixmap
-from PySide6.QtMultimedia import QMediaPlayer
+from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QWidget
 from untangle import app as glint
@@ -187,6 +187,16 @@ def silent_player_type():
     return player_type
 
 
+def silent_audio_output(*args, **kwargs):
+    """No output backend is needed for paused screenshot review controls."""
+    output = MagicMock(spec=QAudioOutput)
+    output.volume.return_value = .5
+    output.isMuted.return_value = False
+    output.setVolume.side_effect = lambda value: setattr(output.volume, 'return_value', value)
+    output.setMuted.side_effect = lambda value: setattr(output.isMuted, 'return_value', value)
+    return output
+
+
 def wait(predicate, message):
     deadline = time.monotonic() + 4
     while not predicate() and time.monotonic() < deadline:
@@ -338,7 +348,7 @@ def main():
         'timezone': 'UTC',
         'screen_geometry': [[screen.geometry().width(), screen.geometry().height()]
                             for screen in qt.screens()],
-        'disclosure': 'Actual production Qt widgets and styles. Reuses ClearlineClickthrough hardware-mocked fixture. Offscreen Fusion; temporary INI preferences and synthetic files only. Native OBS preview replaced by a software QWidget with four edge markers and an explicit synthetic label. Engine, device enumeration, audio devices, hotkeys, initialization and the non-widget QMediaPlayer backend are mocked. Native QMediaPlayer construction intermittently segfaulted in Qt 6.11 offscreen before playback, including with isolated processes; this renderer replaces that backend explicitly. No normal app launch, OBS, hardware, desktop/profile/settings changes, login or uploads. Thumbnail decoding is disabled. These are visual evidence, not a claim of native OBS/media backend fidelity or pixel-equality tests.',
+        'disclosure': 'Actual production Qt widgets and styles. Reuses ClearlineClickthrough hardware-mocked fixture. Offscreen Fusion; temporary INI preferences and synthetic files only. Native OBS preview replaced by a software QWidget with four edge markers and an explicit synthetic label. Engine, device enumeration, audio devices, hotkeys, initialization and the non-widget QMediaPlayer and QAudioOutput backends are mocked. Native QMediaPlayer and QAudioOutput construction intermittently segfaulted in Qt 6.11 offscreen before playback, including with isolated processes; this renderer replaces that backend explicitly. No normal app launch, OBS, hardware, desktop/profile/settings changes, login or uploads. Thumbnail decoding is disabled. These are visual evidence, not a claim of native OBS/media backend fidelity or pixel-equality tests.',
         'images': manifest.get('images', {}),
     })
     scenes = []
@@ -374,6 +384,8 @@ def main():
         stack.enter_context(patch('untangle.engine.Engine', side_effect=AssertionError('Native engine forbidden in renderer')))
         stack.enter_context(patch.object(recordings, 'QMediaPlayer', silent_player_type()))
         stack.enter_context(patch.object(audio_check, 'QMediaPlayer', silent_player_type()))
+        stack.enter_context(patch.object(recordings, 'QAudioOutput', side_effect=silent_audio_output))
+        stack.enter_context(patch.object(audio_check, 'QAudioOutput', side_effect=silent_audio_output))
         stack.enter_context(patch.object(recordings.shutil, 'which', return_value=None))
         for scene, size in scenes:
             for theme in (args.single_theme,):
