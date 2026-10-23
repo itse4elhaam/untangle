@@ -8,16 +8,16 @@ THEMES = {
     'light': dict(
         canvas='#F6F7F9', panel='#FFFFFF', text='#202936', muted='#586373',
         action='#C33C0A', action_hover='#A93208', on_action='#FFFFFF',
-        selection='#FFF0E8', border='#D5DAE1', control_border='#858E9A', hover='#ECEFF3',
-        disabled='#657080', disabled_bg='#E9ECF0', focus='#C33C0A',
+        selection='#EDEFF2', border='#D5DAE1', control_border='#858E9A', hover='#ECEFF3',
+        disabled='#657080', disabled_bg='#E9ECF0', focus='#66758A',
         warning='#805000', warning_bg='#FFF1CF', error='#B42332', error_bg='#FFF0F1',
         success='#24704B', recording='#B42332', meter_track='#D5DAE1',
     ),
     'dark': dict(
         canvas='#191B1F', panel='#23262B', text='#F1F2F4', muted='#B6BDC7',
         action='#FF995F', action_hover='#FFB080', on_action='#281A12',
-        selection='#473026', border='#41464F', control_border='#78818E', hover='#30343B',
-        disabled='#9DA5B0', disabled_bg='#2D3138', focus='#FF995F',
+        selection='#30343B', border='#41464F', control_border='#78818E', hover='#30343B',
+        disabled='#9DA5B0', disabled_bg='#2D3138', focus='#A8B3C3',
         warning='#F6CE80', warning_bg='#42351E', error='#FFA6AE', error_bg='#46262D',
         success='#8CD4AB', recording='#FFA6AE', meter_track='#41464F',
     ),
@@ -59,8 +59,8 @@ QLabel#muted { color: %(muted)s; font-size: 13px; }
 QLabel#eyebrow { color: %(action)s; font-size: 13px; font-weight: 600; }
 QLabel#title { font-family: 'Inter'; font-size: 24px; font-weight: 600; }
 QLabel#section { color: %(muted)s; font-size: 13px; font-weight: 600; }
-QFrame#panel, QWidget#panel { background: %(panel)s; border: 1px solid %(border)s; border-radius: 8px; }
-QFrame#previewWorkspace { background: %(hover)s; border: 1px solid %(border)s; border-radius: 8px; }
+QFrame#panel, QWidget#panel { background: %(panel)s; border: none; border-radius: 8px; }
+QFrame#previewWorkspace { background: %(hover)s; border: none; border-radius: 8px; }
 QPushButton#cameraZoomStep { min-height: 20px; padding: 1px 4px; }
 QPushButton#cameraZoomReset { min-height: 18px; padding: 2px 6px; }
 QScrollArea, QScrollArea#sidebar, QStackedWidget { border: none; background: transparent; }
@@ -68,22 +68,22 @@ QScrollArea > QWidget > QWidget { background: transparent; }
 QScrollArea#sidebar { background: transparent; border: none; border-right: 1px solid %(border)s; border-radius: 0; }
 QScrollArea#sidebar > QWidget, QScrollArea#sidebar > QWidget > QWidget { background: transparent; border: none; }
 QWidget#setupColumn { background: transparent; border: none; border-right: 1px solid %(border)s; }
-QFrame#setupSection { background: transparent; border: none; border-bottom: 1px solid %(border)s; }
+QFrame#setupSection { background: transparent; border: none; }
 QWidget#setupDetails { background: transparent; }
-QFrame#libraryBrowser, QFrame#libraryReview { background: %(panel)s; border: 1px solid %(border)s; border-radius: 8px; }
+QFrame#libraryBrowser, QFrame#libraryReview { background: %(panel)s; border: none; border-radius: 8px; }
 QWidget#libraryStage, QLabel#libraryPoster, QLabel#libraryPlaceholder { background: %(canvas)s; color: %(muted)s; border-radius: 8px; }
 QLabel#librarySelectedTitle { font-family: 'Inter'; font-size: 18px; font-weight: 500; }
 QLabel#libraryMetadata, QLabel#libraryMessage, QLabel#libraryCount { color: %(muted)s; font-size: 13px; }
-QListWidget#recordingFiles { background: %(panel)s; border: none; qproperty-iconSize: 112px 64px; }
+QListWidget#recordingFiles { background: %(panel)s; border: 1px solid transparent; qproperty-iconSize: 112px 64px; }
 QListWidget#recordingFiles::item { min-height: 76px; padding: 8px; margin: 0 0 2px 0; }
 QSplitter#librarySplitter::handle { background: transparent; }
 QDialog#audioCheck { background: %(panel)s; border: 1px solid %(border)s; border-radius: 10px; }
 QLabel#checkTitle { font-family: 'Inter'; font-size: 18px; font-weight: 700; }
 QLabel#checkStatus { font-size: 13px; color: %(muted)s; }
 QLabel#summaryValue { font-size: 14px; color: %(text)s; }
-QPushButton, QToolButton { background: %(panel)s; border: 1px solid %(control_border)s; min-height: 22px; padding: 6px 10px; border-radius: 6px; font-weight: 600; }
-QPushButton:hover, QToolButton:hover { background: %(hover)s; border-color: %(action)s; }
-QPushButton:checked, QToolButton:checked { background: %(selection)s; border: 1px solid %(action)s; color: %(action)s; font-weight: 700; }
+QPushButton, QToolButton { background: %(panel)s; border: 1px solid %(border)s; min-height: 22px; padding: 6px 10px; border-radius: 6px; font-weight: 500; }
+QPushButton:hover, QToolButton:hover { background: %(hover)s; border-color: %(control_border)s; }
+QPushButton:checked, QToolButton:checked { background: %(selection)s; border: 1px solid %(control_border)s; color: %(text)s; font-weight: 600; }
 QPushButton#mode, QPushButton[mode="true"] { min-height: 28px; }
 QPushButton:pressed, QToolButton:pressed { background: %(selection)s; }
 QPushButton#record, QPushButton#playRecording, QPushButton#primary { background: %(action)s; color: %(on_action)s; border-color: %(action)s; }
@@ -96,7 +96,7 @@ QPushButton#quiet { background: transparent; border-color: transparent; color: %
 QPushButton#setupHeading { text-align: left; background: transparent; color: %(text)s; border: 1px solid transparent; padding: 6px; font-size: 14px; }
 QPushButton#setupHeading:hover, QPushButton#setupHeading:checked { background: %(selection)s; }
 QPushButton#footerNavigation { padding: 6px 8px; font-size: 13px; }
-QComboBox, QLineEdit, QTextEdit, QPlainTextEdit, QSpinBox, QDoubleSpinBox { background: %(panel)s; color: %(text)s; border: 1px solid %(control_border)s; border-radius: 6px; min-height: 22px; padding: 6px 8px; selection-background-color: %(selection)s; selection-color: %(text)s; }
+QComboBox, QLineEdit, QTextEdit, QPlainTextEdit, QSpinBox, QDoubleSpinBox { background: %(panel)s; color: %(text)s; border: 1px solid %(border)s; border-radius: 6px; min-height: 22px; padding: 6px 8px; selection-background-color: %(selection)s; selection-color: %(text)s; }
 QLineEdit { placeholder-text-color: %(muted)s; }
 QComboBox { padding-right: 30px; }
 QComboBox::drop-down { subcontrol-origin: padding; subcontrol-position: top right; width: 28px; border: none; background: transparent; }
@@ -104,10 +104,10 @@ QComboBox::down-arrow { image: url("%(chevron)s"); width: 12px; height: 12px; }
 QComboBox QAbstractItemView::item { min-height: 30px; padding: 3px 8px; }
 QComboBox QAbstractItemView { background: %(panel)s; color: %(text)s; border: 1px solid %(border)s; selection-background-color: %(selection)s; selection-color: %(text)s; }
 QAbstractItemView { background: %(panel)s; alternate-background-color: %(canvas)s; color: %(text)s; border: 1px solid %(border)s; border-radius: 8px; selection-background-color: %(selection)s; selection-color: %(text)s; }
-QListWidget { background: %(canvas)s; border: none; }
-QListWidget::item { background: %(panel)s; border: 1px solid %(border)s; border-radius: 8px; margin: 0 4px 7px 0; padding: 10px; }
+QListWidget { background: %(canvas)s; border: 1px solid transparent; }
+QListWidget::item { background: %(panel)s; border: 1px solid transparent; border-radius: 8px; margin: 0 4px 7px 0; padding: 10px; }
 QListWidget::item:hover { background: %(hover)s; }
-QListWidget::item:selected { background: %(selection)s; color: %(text)s; border-color: %(action)s; }
+QListWidget::item:selected { background: %(selection)s; color: %(text)s; border-color: transparent; }
 QCheckBox, QRadioButton { spacing: 8px; min-height: 36px; background: transparent; border: 1px solid transparent; border-radius: 3px; }
 QCheckBox::indicator, QRadioButton::indicator { width: 16px; height: 16px; border: 1px solid %(control_border)s; border-radius: 3px; background: %(panel)s; }
 QRadioButton::indicator { border-radius: 9px; }
@@ -147,10 +147,11 @@ QLabel#recording, QLabel[status="recording"] { color: %(recording)s; }
    Outline on item views preserves the geometry of borderless library lists. */
 QPushButton, QToolButton, QComboBox, QCheckBox, QRadioButton, QSlider, QAbstractItemView, QAbstractItemView::item { outline: none; }
 QPushButton:focus, QToolButton:focus, QComboBox:focus, QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QAbstractSpinBox:focus { border: 1px solid %(focus)s; }
-QListWidget::item:focus { border: 1px solid %(focus)s; }
+QListWidget::item:focus { border: 1px solid transparent; }
 QPushButton#record:focus, QPushButton#playRecording:focus, QPushButton#primary:focus { border: 1px solid %(on_action)s; }
 QCheckBox:focus, QRadioButton:focus, QSlider:focus { border: 1px solid %(focus)s; background: %(selection)s; }
-QAbstractItemView:focus { border-color: %(focus)s; outline: 1px solid %(focus)s; }
+QAbstractItemView:focus { border-color: %(focus)s; outline: none; }
+QListWidget#recordingFiles:focus { border-color: %(focus)s; }
 QPushButton#quiet:focus, QPushButton#setupHeading:focus { border-color: %(focus)s; }
 QPushButton#record[stopping="true"]:focus { border-color: %(focus)s; }
 QWidget:disabled { color: %(disabled)s; }

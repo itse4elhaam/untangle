@@ -1,0 +1,17 @@
+{
+  "disclosure": "Actual Qt dialog, synthetic path, no filesystem rename or app launch.",
+  "sources": {
+    "src/untangle/naming_dialog.py": "57378e8a623adbdfece86d70378ee7695994f25312d9041049bc9acc5519d69a",
+    "src/untangle/naming.py": "4c8fd8b49d5152a198384a194483b00c91a34907ef4fc1ddba686c9d0a9b1af7",
+    "src/untangle/theme.py": "e03cffae019c586eac51dba7b98733628f3347cc621d491b24196abdece94778",
+    "scripts/render-naming-ui.py": "386f68368bd088cf4292f2a5d8504e327d35b10e047b95ea9927006a7e1cb763"
+  },
+  "images": {
+    "finished-light.png": "354f04e28bbcef9414b713516766d4bb77c6dc4c0a0c84ccc111eca21d0a2f54",
+    "rename-light.png": "82137ff390d6660252f5aa774ed039ba395eceef77ef8c047e9ee65cb3a81d1e",
+    "error-light.png": "0b8f699f6e766e35cf4b11900524681edc123a3fc828de234fd7d6e7d390a1b6",
+    "finished-dark.png": "a4be0464be0e92b4097a46690270d4a56734166d1a7b019ed5c303c5fe41f764",
+    "rename-dark.png": "91b2ee8e2531a7e1469142f408108dd064a74e0b9801aed80bfd52ec72e04073",
+    "error-dark.png": "a5e5be8311d239ba25e40775e5055cac43e1101eea490987a7eea9e1fea225e9"
+  }
+}

@@ -29,4 +29,6 @@ Never enable screen readers, Orca, speech-dispatcher, accessibility speech, or d
 
 ## Installation and delivery
 
+Ensure that before you deploy a change its versioned and pushed to gh
+
 All new changes go through a pull request. Do not automatically install, deploy, update the installed runtime or launchers, authenticate to Loom, or upload recordings. `./scripts/install.sh` is an explicit user action, not a verification command. Keep repository work separate from the installed app and other projects.

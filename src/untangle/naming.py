@@ -54,6 +54,25 @@ def recording_title(path):
     return f'{title} · {date.day} {date:%b %Y}, {date:%H:%M}{suffix}'
 
 
+def editable_recording_title(path):
+    """Return just the editable title, without a generated date or collision suffix."""
+    stem = Path(path).stem
+    match = _READABLE.fullmatch(stem)
+    if match:
+        title, date, hour, minute, _ = match.groups()
+    else:
+        match = _LEGACY.fullmatch(stem)
+        if not match:
+            return stem
+        date, hour, minute, _ = match.groups()
+        title = 'Recording'
+    try:
+        datetime.strptime(f'{date} {hour}:{minute}', '%Y-%m-%d %H:%M')
+    except ValueError:
+        return stem
+    return title
+
+
 def rename_recording(path, title):
     """Rename a released local video without replacing any existing file."""
     path = Path(path)

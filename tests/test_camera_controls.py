@@ -23,13 +23,16 @@ class CameraControlsTests(unittest.TestCase):
         QTest.qWait(220)
 
     def reveal(self, control):
+        if not self.window.settings_dialog.isVisible():
+            self.case.open_settings()
+        self.case.reveal_setting(control)
+
+    def set_legacy_framing(self, framing):
+        """The hidden compatibility API still accepts old explicit preferences."""
         w = self.window
-        if not control.isVisible():
-            w.controls_panel.ensureWidgetVisible(w.setup_sections[0])
-            self.case.click(w.setup_sections[0])
-        w.controls_panel.ensureWidgetVisible(control)
-        QTest.qWait(20)
-        self.case.visible_control(control)
+        self.assertFalse(w.framing.isVisible())
+        w.framing.setCurrentIndex(w.framing.findData(framing))
+        w.framing_selected()
 
     def assert_live_update(self, engine, preview, parent, native_id):
         w = self.window
@@ -104,7 +107,7 @@ class CameraControlsTests(unittest.TestCase):
         w = self.window
         self.case.choose(w.canvas, 'portrait')
         self.assertEqual(w.framing.currentData(), 'fill')
-        self.case.choose(w.framing, 'fit')
+        self.set_legacy_framing('fit')
         self.case.click(w.camera_zoom_plus)
         preview, parent, native_id = w.preview, w.preview.parentWidget(), int(w.preview.winId())
         engine = w.engine
@@ -138,25 +141,54 @@ class CameraControlsTests(unittest.TestCase):
             with self.subTest(preset=preset):
                 self.case.choose(w.canvas, preset)
                 self.assertEqual(w.framing.currentData(), 'fill')
-                self.case.choose(w.framing, 'fit')
+                self.set_legacy_framing('fit')
                 w.save_preferences()
                 w.restore_preferences()
                 self.assertEqual(w.canvas.currentData(), preset)
                 self.assertEqual(w.framing.currentData(), 'fit')
 
-    def test_fit_fill_and_mirror_reframe_without_configuring_sources(self):
+    def test_raw_canvas_uses_full_native_camera_dimensions_at_both_quality_levels(self):
+        w = self.window
+        engine = w.engine
+        engine._camera_dimensions = (4096, 3072)
+        engine.reset_mock()
+        self.case.choose(w.canvas, 'raw')
+        self.assertEqual(w.canvas.currentText(), 'Raw · source size')
+        self.assertFalse(w.framing.isVisible())
+        self.assertEqual(w.effective_framing(), 'fit')
+        self.assertEqual(w.output_dimensions(), (4096, 3072))
+        engine.set_canvas.assert_called_with(4096, 3072)
+        self.assertIn('4096 × 3072', w.preview_title.text())
+        self.reveal(w.quality)
+        self.case.choose(w.quality, (1920, 1080))
+        self.case.close_settings()
+        self.assertEqual(w.output_dimensions(), (4096, 3072))
+        engine.set_canvas.assert_called_with(4096, 3072)
+        self.assertEqual(engine.set_camera_framing.call_args.kwargs['framing'], 'fit')
+        self.case.click(w.screen_button)
+        QTest.qWait(220)
+        self.assertEqual(w.output_dimensions(), (1920, 1080))
+        self.assertEqual(engine.configure.call_args.kwargs['framing'], 'fit')
+        self.case.click(w.camera_button)
+        QTest.qWait(220)
+        self.assertEqual(w.canvas.currentData(), 'raw')
+        self.assertEqual(w.output_dimensions(), (4096, 3072))
+        engine.close.assert_not_called()
+
+    def test_hidden_framing_api_and_settings_mirror_reframe_without_configuring_sources(self):
         w = self.window
         self.case.choose(w.canvas, 'portrait')
         engine, preview = w.engine, w.preview
         parent, native_id = preview.parentWidget(), int(preview.winId())
         engine.reset_mock()
-        self.case.choose(w.framing, 'fit')
+        self.set_legacy_framing('fit')
         self.assertEqual(engine.set_camera_framing.call_args.kwargs['framing'], 'fit')
-        self.case.choose(w.framing, 'fill')
+        self.set_legacy_framing('fill')
         self.assertEqual(engine.set_camera_framing.call_args.kwargs['framing'], 'fill')
         self.reveal(w.mirror)
         self.case.click(w.mirror)
         self.assertEqual(engine.set_camera_framing.call_args.kwargs['mirror'], w.mirror.isChecked())
+        self.case.close_settings()
         self.assert_live_update(engine, preview, parent, native_id)
 
     def test_screen_overlay_size_and_position_use_the_same_reframe_api(self):
@@ -176,6 +208,7 @@ class CameraControlsTests(unittest.TestCase):
         self.reveal(w.position)
         self.case.choose(w.position, target)
         self.assertEqual(engine.set_camera_framing.call_args.kwargs['position'], target)
+        self.case.close_settings()
         engine.configure.assert_not_called()
         engine.close.assert_not_called()
         self.assertFalse(w.configure_timer.isActive())
@@ -236,7 +269,8 @@ class CameraControlsTests(unittest.TestCase):
         self.assertIs(parent.preview, preview)
         engine = w.engine
         engine.reset_mock()
-        for preset in ('portrait', 'square', 'portrait45', 'landscape'):
+        engine._camera_dimensions = (2592, 1944)
+        for preset in ('portrait', 'square', 'portrait45', 'landscape', 'raw'):
             self.case.choose(w.canvas, preset)
             self.assertIs(w.engine, engine)
             engine.set_canvas.assert_any_call(*w.output_dimensions())
@@ -282,8 +316,9 @@ class CameraControlsTests(unittest.TestCase):
         self.case.choose(w.camera, None)
         QTest.qWait(220)
         self.reveal(w.quality)
-        w.quality.setCurrentIndex(1)
+        self.case.choose(w.quality, (1920, 1080))
         self.assertEqual(w.prefs.value('quality'), w.quality.currentText())
+        self.case.close_settings()
         w.restore_preferences()
         self.assertEqual(w.quality.currentData(), (1920, 1080))
 

@@ -22,6 +22,8 @@ class AppChecks(unittest.TestCase):
         devices.prepare.return_value = 'test-microphone'
         self.patches = [patch.object(glint, 'AudioDevices', return_value=devices),
             patch.object(glint.Window, 'initialize'), patch.object(glint.Hotkeys, 'start'),
+            patch.object(glint, 'prompt_recording_name', return_value=None),
+            patch.object(glint, 'local_title_capability', return_value=(False, 'Synthetic transcription unavailable.')),
             patch.object(glint, 'cameras', return_value=[('Test camera', '/dev/video-test')]),
             patch.object(glint, 'microphones', return_value=[]), patch.object(glint, 'VIDEOS', self.root),
             patch.object(glint, 'STATE', self.root), patch.object(glint, 'QSettings', return_value=QSettings(str(self.root/'prefs.ini'), QSettings.IniFormat))]
@@ -55,7 +57,9 @@ class AppChecks(unittest.TestCase):
         def inspect_dialog(dialog):
             buttons = dialog.findChildren(glint.QPushButton)
             self.assertEqual([button.text() for button in buttons], [
-                'Connect Loom account ↗', 'Open Loom connection instructions ↗', 'Done',
+                'Reconnect Loom account ↗', 'Check connection', 'Disconnect TWG account…',
+                'Loom automatic-title settings ↗', 'Open Loom workspace settings ↗',
+                'Open Loom connection instructions ↗', 'Done',
             ])
             self.assertEqual(dialog.findChildren(glint.QLineEdit), [])
             text = ' '.join(item.text() for item in dialog.findChildren(glint.QLabel)).lower()
@@ -107,11 +111,12 @@ class AppChecks(unittest.TestCase):
             process.readAllStandardOutput.return_value = b'Usage: twg loom video upload [options] <file>'
             process.readAllStandardError.return_value = b''
             self.window.upload_help(0, QProcess.NormalExit)
-            self.assertEqual(process.setArguments.call_args.args[0], ['loom', 'video', 'upload', str(path), '-o', 'json'])
+            self.assertEqual(process.setArguments.call_args.args[0], ['loom', 'video', 'upload', str(path), '-o', 'json', '--output-summary', 'none'])
             self.window.prefs.setValue('visibility', 'public')
             process.readAllStandardOutput.return_value = b'{"url":"https://www.loom.com/share/abc123"}'
             self.window.upload_done(0, QProcess.NormalExit)
-            self.assertEqual(process.setArguments.call_args.args[0][-4:], ['--visibility', 'owner', '-o', 'json'])
+            self.assertEqual(process.setArguments.call_args.args[0][-4:], ['-o', 'json', '--output-summary', 'none'])
+            self.assertIn('owner', process.setArguments.call_args.args[0])
             self.assertEqual(qt.clipboard().text(), 'unchanged')
             self.window.visibility_done(1, QProcess.NormalExit)
             self.assertEqual(qt.clipboard().text(), 'unchanged')
@@ -119,8 +124,11 @@ class AppChecks(unittest.TestCase):
             self.assertEqual(path.read_bytes(), b'private video')
 
     def test_loom_unknown_help_and_failed_start_unlock_controls(self):
+        self.prepare_upload_snapshot()
         self.window.busy = True
         self.window.process = MagicMock()
+        self.window._upload_visibility = 'owner'
+        self.window._upload_auto_title = True
         self.window.process.readAllStandardOutput.return_value = b'Usage: unsupported grammar'
         self.window.process.readAllStandardError.return_value = b''
         self.window.upload_help(0, QProcess.NormalExit)
@@ -133,11 +141,13 @@ class AppChecks(unittest.TestCase):
         self.assertIn('sharing command could not start', self.window.status.text())
 
     def test_loom_visibility_success_copies_only_after_confirmation(self):
+        self.prepare_upload_snapshot()
         self.window._upload_url = 'https://www.loom.com/share/abc123'
         self.window.visibility_done(0, QProcess.NormalExit)
         self.assertEqual(qt.clipboard().text(), self.window._upload_url)
 
     def test_loom_error_does_not_expose_cli_secrets(self):
+        self.prepare_upload_snapshot()
         self.window.process = MagicMock()
         self.window.process.readAllStandardOutput.return_value = b''
         self.window.process.readAllStandardError.return_value = b'OAuth token secret-private-value expired'
@@ -207,9 +217,9 @@ class AppChecks(unittest.TestCase):
         self.assertEqual(self.window.engine.configure.call_args.kwargs['mode'], 'camera')
         self.assertFalse(self.window.widget_panel.isVisible())
         self.window.camera.setCurrentIndex(0)
-        self.window.configure()
         self.assertFalse(self.window.record_button.isEnabled())
-        self.assertIn('Choose a camera', self.window.status.text())
+        self.assertIn('Camera off', self.window.status.text())
+        self.window.engine.clear_video.assert_called_once_with()
 
     def test_countdown_cancel_never_records(self):
         self.window.toggle_record()
@@ -262,6 +272,7 @@ class AppChecks(unittest.TestCase):
         path = self.root/'video.mp4'
         path.write_bytes(b'video')
         self.window.set_last(path)
+        self.prepare_upload_snapshot(path)
         self.window.process = MagicMock()
         self.window.process.readAllStandardOutput.return_value = b''
         self.window.process.readAllStandardError.return_value = b'account needs login'
@@ -271,6 +282,7 @@ class AppChecks(unittest.TestCase):
         self.assertIn('local recording is safe', self.window.status.text())
 
     def test_upload_completion_cannot_enable_invalid_camera_setup(self):
+        self.prepare_upload_snapshot()
         self.window.camera.setCurrentIndex(0)
         self.window.set_mode('camera')
         self.window.configure_timer.stop()
@@ -278,6 +290,13 @@ class AppChecks(unittest.TestCase):
         self.assertFalse(self.window.configuration_valid)
         self.window.upload_end('Upload complete')
         self.assertFalse(self.window.record_button.isEnabled())
+
+    def prepare_upload_snapshot(self, path=None):
+        if path is None:
+            path = self.root / 'video.mp4'
+            path.write_bytes(b'synthetic video')
+        self.window._upload_file = path
+        self.window._upload_identity = self.window.upload_store.file_identity(path)
 
     def test_cancel_stops_pending_start_timer(self):
         self.window.toggle_record()
@@ -364,7 +383,7 @@ class AppChecks(unittest.TestCase):
             process_type.NormalExit = QProcess.NormalExit
             self.window.recordings.upload.click()
             process = process_type.return_value
-            process.readAllStandardOutput.return_value = b'Usage: twg loom video upload <file> --visibility'
+            process.readAllStandardOutput.return_value = b'Usage: twg loom video upload <file>\n  --visibility <value>  Sharing setting'
             process.readAllStandardError.return_value = b''
             self.window.upload_help(0, QProcess.NormalExit)
             self.assertIn('--visibility', process.setArguments.call_args.args[0])
@@ -383,6 +402,52 @@ class AppChecks(unittest.TestCase):
             self.window.finish_save(path, '')
             upload.assert_called_once_with()
         self.assertEqual(self.window.last_file, path)
+
+    def test_saved_video_name_is_resolved_before_automatic_upload(self):
+        path = self.root / 'Screen recording - 2026-10-23 at 12.30.mp4'
+        path.write_bytes(b'saved synthetic recording')
+        self.window.prefs.setValue('auto_upload', True)
+        def name(parent, original, rename, *, new_recording):
+            self.assertTrue(new_recording)
+            self.assertTrue(self.window.busy)
+            self.assertFalse(self.window.library_button.isEnabled())
+            self.window.toggle_record()
+            self.window.engine.start.assert_not_called()
+            upload.assert_not_called()
+            return rename('Project walkthrough')
+        with patch.object(glint, 'prompt_recording_name', side_effect=name), \
+                patch.object(self.window, 'upload') as upload:
+            self.window.finish_save(path, '')
+            upload.assert_called_once_with()
+        self.assertEqual(self.window.last_file, self.root / 'Project walkthrough.mp4')
+        self.assertEqual(self.window.last_file.read_bytes(), b'saved synthetic recording')
+        self.assertFalse(path.exists())
+        self.assertFalse(self.window.busy)
+
+    def test_skip_name_keeps_saved_video_and_allows_auto_upload(self):
+        path = self.root / 'saved.mp4'
+        path.write_bytes(b'synthetic recording')
+        self.window.prefs.setValue('auto_upload', True)
+        with patch.object(glint, 'prompt_recording_name', return_value=None) as prompt, \
+                patch.object(self.window, 'upload') as upload:
+            self.window.finish_save(path, '')
+            prompt.assert_called_once()
+            upload.assert_called_once_with()
+        self.assertEqual(self.window.last_file, path)
+        self.assertTrue(path.is_file())
+
+    def test_save_error_or_quit_does_not_open_naming_prompt(self):
+        path = self.root / 'saved.mp4'
+        path.write_bytes(b'synthetic recording')
+        with patch.object(glint, 'prompt_recording_name') as prompt:
+            self.window.finish_save(path, 'Review this recovered recording.')
+            prompt.assert_not_called()
+            self.window.quit_after_save = True
+            with patch.object(self.window, 'close') as close:
+                self.window.finish_save(path, '')
+                close.assert_called_once_with()
+            prompt.assert_not_called()
+        self.window.quit_after_save = False
 
     def test_failed_stop_restores_pointer_zoom(self):
         self.window.set_mode('screen')

@@ -51,7 +51,7 @@ Installation changes your local launchers and desktop entry. It points `untangle
 
 After installation, open Untangle from your application launcher or run `untangle`. The recorder itself opens selected capture devices, including live microphone monitoring when enabled.
 
-For Loom, open Sharing and choose Connect Loom account. Complete Atlassian's sign-in flow yourself. Connecting doesn't upload a recording. The optional official CLI needs to be installed separately; [the usage guide](docs/usage.md#loom) covers the setup and account limits.
+For Loom, open Sharing to check your connected account or connect through Atlassian's sign-in flow. Uploads show activity and elapsed time, then a Loom link you can open or copy. Recordings keeps the link and upstream title across restarts. Connecting does not upload a recording. The optional official CLI needs to be installed separately; [the usage guide](docs/usage.md#loom) covers setup, account limits, and AI-title availability.
 
 ## Recording controls
 

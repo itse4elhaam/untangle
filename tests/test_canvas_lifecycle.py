@@ -87,7 +87,7 @@ class CanvasLifecycleTests(unittest.TestCase):
                     self.assertEqual(w.output_dimensions(), w.quality.currentData())
                     self.assertEqual(w.bubble.isVisible(), floating)
                     if floating:
-                        w.engine.attach_camera_preview.assert_called()
+                        w.engine.attach_bubble.assert_called_with(w.bubble)
                     else:
                         w.engine.detach_camera_preview.assert_called()
             with patch.object(w.window_catalog, 'list', return_value=[('Editor', 4242)]), \

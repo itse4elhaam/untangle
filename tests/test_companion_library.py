@@ -147,7 +147,7 @@ class CompanionLibraryTests(unittest.TestCase):
               patch.object(self.library.thumbnail_process, 'waitForFinished', return_value=True) as wait):
             self.library.reject()
         kill.assert_called_once()
-        wait.assert_called_once_with(1000)
+        wait.assert_not_called()
         self.assertEqual(self.library.thumbnail_queue, [])
         self.assertIsNone(self.library.thumbnail_key)
         self.assertFalse(self.library.thumbnail_timer.isActive())

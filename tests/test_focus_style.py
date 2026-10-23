@@ -114,7 +114,9 @@ class FocusStyleTests(unittest.TestCase):
                         rect = view.visualItemRect(view.item(0))
                         image = view.viewport().grab().toImage()
                         x = rect.center().x()
-                        self.assertTrue(all(image.pixelColor(px, rect.top()) == QColor(c['focus'])
+                        # One view-level focus cue; selected rows use a quiet fill,
+                        # without a second rectangle around their text.
+                        self.assertTrue(all(image.pixelColor(px, rect.top() + 2) == QColor(c['selection'])
                                             for px in range(x - 8, x + 8)))
                 for widget in (controls[0], controls[8], controls[10]):
                     anchor.setFocus()

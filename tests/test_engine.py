@@ -235,7 +235,8 @@ class CameraPreviewTests(unittest.TestCase):
                 crop, mask = e._filter.call_args_list
                 self.assertEqual(crop.args[3], {
                     'relative': False, 'left': 780, 'top': 360, 'cx': 360, 'cy': 360})
-                e._mask.assert_called_once_with('circle', None, 360, 360)
+                side = round(min(e.width, e.height) * .22)
+                e._mask.assert_called_once_with('circle', None, side, side)
                 self.assertEqual(mask.args[1], 'mask_filter_v2')
                 _, x, y, scale, mirror, dw = e._place.call_args.args
                 self.assertEqual(scale, dw / 360)
