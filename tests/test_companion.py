@@ -76,7 +76,7 @@ class RecorderThemeChecks(unittest.TestCase):
                     self.assertFalse(sheet.isWindow())
                     self.assertEqual(sheet.windowFlags() & Qt.WindowType_Mask, Qt.Widget)
                     self.assertIs(w.preview.parentWidget(), parent)
-                    self.assertGreaterEqual(w.preview.height(), 220)
+                    self.assertGreaterEqual(w.preview_frame.height(), 220)
                     self.assertTrue(w.controls_panel.isVisible())
                     self.assertTrue(w.rect().contains(sheet.mapTo(w, sheet.rect().bottomRight())))
                     self.assertTrue(w.rect().contains(w.library_button.mapTo(w, QPoint())))

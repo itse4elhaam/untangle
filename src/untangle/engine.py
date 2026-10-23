@@ -191,6 +191,7 @@ def _load_obs():
         "obs_set_nix_platform": (None, I), "obs_set_nix_platform_display": (None, P),
         "obs_add_data_path": (None, S),
         "obs_reset_video": (I, C.POINTER(_VideoInfo)),
+        "obs_source_update": (None, P, P),
         "obs_reset_audio": (B, C.POINTER(_AudioInfo)),
         "obs_open_module": (I, C.POINTER(P), S, S),
         "obs_init_module": (B, P), "obs_post_load_modules": (None,),
@@ -296,6 +297,12 @@ class Engine:
         self._camera_display = None
         self._camera_source = None  # Owned by _sources, never released separately.
         self._camera_item = None  # Overlay only; borrowed from _scene.
+        self._camera_scene_item = None
+        self._camera_crop_filter = None  # Borrowed from the camera source.
+        self._camera_dimensions = None
+        self._camera_framing = None
+        self._camera_position = None
+        self._screen_zoom = (1.0, .5, .5)
         self._camera_display_size = None
         self._camera_mirror = False
         self._camera_preview_enabled = False
@@ -353,6 +360,7 @@ class Engine:
                 raise EngineError(f"OBS {platform.upper()} video initialization failed ({result}) "
                                   f"at {width}×{height}/{fps}. "
                                   "Use platform='egl' for desktop capture if GLX is unavailable.")
+            self._video_info = vi
             if not o.obs_reset_audio(C.byref(_AudioInfo(48000, 2))):
                 raise EngineError("OBS could not initialize 48 kHz stereo audio.")
             self._load_modules()
@@ -422,6 +430,8 @@ class Engine:
             self._obs.obs_source_filter_add(source, filt)
         finally:
             self._obs.obs_source_release(filt)
+        # The source owns this borrowed reference until _clear_scene().
+        return filt
 
     def _microphone_noise_backend(self):
         """Inspect compiled backends, including OBS 27's single-backend builds."""
@@ -632,15 +642,20 @@ class Engine:
                     item = o.obs_scene_add(self._scene, source)
                     if not item:
                         raise EngineError("OBS could not add the camera to the scene.")
+                self._camera_scene_item = item
                 cw, ch = self._dimensions(source, f"Camera {camera}")
+                self._camera_dimensions = (cw, ch)
+                self._camera_framing = dict(mode=mode, camera_zoom=camera_zoom,
+                                            framing=framing, size=size, position=position)
                 crop, placement = camera_composition(
                     self.width, self.height, cw, ch, mode=mode,
                     camera_zoom=camera_zoom, framing=framing, size=size, position=position)
                 left, top, crop_w, crop_h = crop
                 x, y, scale = placement
                 dw, dh = crop_w * scale, crop_h * scale
-                if mode != "camera" or (crop_w, crop_h) != (cw, ch):
-                    self._filter(source, "crop_filter", "RecIt camera crop", {
+                # Install even at 1x, before the mask, so updates never reorder filters.
+                self._camera_crop_filter = self._filter(
+                    source, "crop_filter", "RecIt camera crop", {
                         "relative": False, "left": left, "top": top,
                         "cx": crop_w, "cy": crop_h})
                 if mode != "camera":
@@ -812,8 +827,14 @@ class Engine:
         self.detach_camera_preview()
         self._camera_source = None
         self._camera_item = None
+        self._camera_scene_item = None
+        self._camera_crop_filter = None
+        self._camera_dimensions = None
+        self._camera_framing = None
+        self._camera_position = None
         self._camera_display_size = None
         self._camera_mirror = False
+        self._screen_zoom = (1.0, .5, .5)
         self._screen_item = None
         self._screen_source = None
         self._window_id = None
@@ -907,6 +928,15 @@ class Engine:
         o.obs_display_add_draw_callback(self._camera_display, self._camera_draw_callback, None)
         self.set_camera_preview_enabled(True)
 
+    def resize_camera_preview(self, width: int, height: int):
+        """Resize the attached camera swapchain in physical pixels, without detach."""
+        self._check_open()
+        if (type(width) is not int or type(height) is not int
+                or not 0 < width <= 0x7FFFFFFF or not 0 < height <= 0x7FFFFFFF):
+            raise EngineError("Camera preview requires positive integer dimensions.")
+        if self._camera_display:
+            self._obs.obs_display_resize(self._camera_display, width, height)
+
     def detach_camera_preview(self):
         """Synchronize with the render callback before releasing its source."""
         if not self._camera_display:
@@ -959,6 +989,103 @@ class Engine:
             o.gs_projection_pop()
             o.gs_viewport_pop()
 
+    def set_canvas(self, width: int, height: int):
+        """Reset idle video dimensions without reopening sources or native displays.
+
+        OBS 27 requires output width divisible by four and height by two.
+        Capture resolution stays unchanged; quality changes affect output only.
+        Call on the controlling thread, with the UI's busy/countdown guard held.
+        """
+        self._check_open()
+        if self._output:
+            raise EngineError("Stop the recording before changing the canvas.")
+        if (type(width) is not int or type(height) is not int
+                or not 16 <= width <= 32768 or not 16 <= height <= 32768
+                or width % 4 or height % 2):
+            raise EngineError("Canvas width must be divisible by four and height by two, between 16 and 32768.")
+        if ((width, height) == (self.width, self.height)
+                and not getattr(self, "_video_reset_failed", False)):
+            return
+        previous = self._video_info
+        vi = _VideoInfo.from_buffer_copy(previous)
+        vi.base_width = vi.output_width = width
+        vi.base_height = vi.output_height = height
+        result = self._obs.obs_reset_video(C.byref(vi))
+        if result != 0:
+            # A failed allocation can leave video stopped. Restore the old format.
+            restored = self._obs.obs_reset_video(C.byref(previous))
+            self._video_reset_failed = restored != 0
+            detail = "" if restored == 0 else f"; restoring previous video also failed ({restored})"
+            raise EngineError(f"OBS canvas reset failed ({result}){detail}.")
+        self._video_info = vi
+        self._video_reset_failed = False
+        self.width, self.height = width, height
+        if self._camera_source:
+            self.set_camera_framing()
+        self.set_screen_zoom(*getattr(self, '_screen_zoom', (1.0, .5, .5)))
+
+    def set_camera_framing(self, *, camera_zoom=None, framing=None, size=None,
+                           position=None, mirror=None):
+        """Reframe the existing camera, idle only, without touching capture/audio.
+
+        None preserves that setting. Zoom is a continuous 1–3 factor, clamped
+        after finite-number validation. Framing, size and position use the same
+        values as configure(). Screen pointer zoom is independent. Floating
+        camera window geometry/silhouette remains the caller's responsibility.
+        """
+        self._check_open()
+        if self._output:
+            raise EngineError("Stop the recording before changing camera framing.")
+        if camera_zoom is not None:
+            if (isinstance(camera_zoom, bool) or not isinstance(camera_zoom, (int, float))
+                    or not math.isfinite(camera_zoom)):
+                raise EngineError("Camera zoom must be a finite number.")
+            camera_zoom = max(1.0, min(3.0, camera_zoom))
+        if framing is not None and framing not in ('fit', 'fill'):
+            raise EngineError("Framing must be 'fit' or 'fill'.")
+        if size is not None and (isinstance(size, bool) or not isinstance(size, (int, float))
+                                 or not math.isfinite(size) or not .05 <= size <= 1):
+            raise EngineError("Camera size must be 0.05–1.0.")
+        if position is not None and position not in (
+                'top-left', 'top-right', 'bottom-left', 'bottom-right', 'center'):
+            raise EngineError("Unknown camera position.")
+        if mirror is not None and not isinstance(mirror, bool):
+            raise EngineError("Camera mirror must be enabled or disabled.")
+        if not self._camera_source:
+            return
+        settings = dict(self._camera_framing)
+        for key, value in (('camera_zoom', camera_zoom), ('framing', framing),
+                           ('size', size), ('position', position)):
+            if value is not None:
+                settings[key] = value
+        crop, (x, y, scale) = camera_composition(
+            self.width, self.height, *self._camera_dimensions, **settings)
+        left, top, cw, ch = crop
+        dw, dh = cw * scale, ch * scale
+        normalized = None if position is not None else self._camera_position
+        if settings['mode'] == 'screen' and normalized is not None:
+            x, y = normalized[0] * (self.width - dw), normalized[1] * (self.height - dh)
+        mirrored = self._camera_mirror if mirror is None else mirror
+        data = self._data(dict(relative=False, left=left, top=top, cx=cw, cy=ch))
+        item, o = self._camera_scene_item, self._obs
+        try:
+            if item:
+                o.obs_sceneitem_defer_update_begin(item)
+            try:
+                o.obs_source_update(self._camera_crop_filter, data)
+                if item:
+                    self._place(item, x, y, scale, mirrored, dw)
+            finally:
+                if item:
+                    o.obs_sceneitem_defer_update_end(item)
+        finally:
+            o.obs_data_release(data)
+        self._camera_framing = settings
+        self._camera_mirror = mirrored
+        self._camera_position = normalized
+        if self._camera_item:
+            self._camera_display_size = (dw, dh)
+
     def set_camera_position(self, x: float, y: float):
         """Move a composited overlay within its available canvas travel area.
 
@@ -971,10 +1098,12 @@ class Engine:
             raise EngineError("Camera coordinates must be finite.")
         if not self._camera_item:
             return
+        self._camera_position = (max(0.0, min(1.0, x)), max(0.0, min(1.0, y)))
         dw, dh = self._camera_display_size
-        source_width = self._obs.obs_source_get_width(self._camera_source)
-        if not source_width:
-            return
+        # Filter video dimensions can lag a queued OBS update by one frame.
+        crop, _ = camera_composition(self.width, self.height,
+                                     *self._camera_dimensions, **self._camera_framing)
+        source_width = crop[2]
         o = self._obs
         o.obs_sceneitem_defer_update_begin(self._camera_item)
         try:
@@ -1012,6 +1141,7 @@ class Engine:
         x, y, scale = screen_transform(self.width, self.height,
             *self._screen_dimensions, factor, center_x, center_y,
             framing=getattr(self, '_framing', 'fit'))
+        self._screen_zoom = (factor, center_x, center_y)
         o = self._obs
         o.obs_sceneitem_defer_update_begin(self._screen_item)
         try:
@@ -1073,6 +1203,8 @@ class Engine:
         self._check_open()
         if self._output:
             raise EngineError("A recording already exists; stop it before starting another.")
+        if getattr(self, "_video_reset_failed", False):
+            raise EngineError("OBS video reset failed. Retry the canvas reset or recreate the engine before recording.")
         if not self._configured:
             raise EngineError("Configure a scene before recording.")
         if getattr(self, '_microphone_meter', None):

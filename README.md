@@ -55,7 +55,7 @@ For Loom, open Sharing and choose Connect Loom account. Complete Atlassian's sig
 
 ## Recording controls
 
-Use the visible setup controls on the left to choose the recording mode, capture source, camera, and microphone. Less frequent settings are under More options. Choose Camera for camera-only video, or Screen for screen and camera recording. Above the preview, choose your canvas and Fit or Fill. Fit keeps the source inside the canvas with bars; Fill crops its center. Camera zoom is beside the camera selector. Quality remains under More options. In screen mode, choose your display or a specific window. Check the microphone, then start recording.
+Use the visible setup controls on the left to choose the recording mode, capture source, camera, and microphone. Less frequent settings are under More options. Choose Camera for camera-only video, or Screen for screen and camera recording. In Camera mode, choose your canvas and Fit or Fill above the preview. Social presets use Fill to crop the center; Fit keeps the whole image with bars. Camera zoom has a slider, −/+ buttons, percentage and Reset beside the camera selector. Framing edits update the existing feed. Quality remains under More options. In screen mode, choose your display or a specific window. Check the microphone, then start recording.
 
 - `Ctrl + Shift + F9` starts recording or stops and saves.
 - `Ctrl + Shift + F10` pauses or resumes.

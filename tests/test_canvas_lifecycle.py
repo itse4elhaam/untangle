@@ -46,24 +46,24 @@ class CanvasLifecycleTests(unittest.TestCase):
                         w.engine.close()
             w.configure_timer.stop()
 
-    def test_rapid_canvas_changes_cancel_stale_debounce_and_create_one_engine(self):
+    def test_rapid_canvas_changes_retain_engine_and_pending_device_configuration(self):
         w = self.window
         w.timer.stop()
-        previous = w.engine
-        w.initialize = initialize.__get__(w)
-        with self.factory() as factory:
-            w.schedule_configure()
-            self.assertTrue(w.configure_timer.isActive())
-            w.canvas.setCurrentIndex(w.canvas.findData('portrait'))
-            w.canvas.setCurrentIndex(w.canvas.findData('square'))
-            self.assertFalse(w.configure_timer.isActive())
-            QTest.qWait(220)
-            previous.close.assert_called_once()
-            factory.assert_called_once()
-            self.assertEqual(factory.call_args.args[1:], (2160, 2160))
-            self.assertTrue(w.configuration_valid)
-            self.assertTrue(w.record_button.isEnabled())
-            self.assertEqual(w.prefs.value('canvas'), 'square')
+        engine = w.engine
+        w.schedule_configure()
+        self.assertTrue(w.configure_timer.isActive())
+        w.canvas.setCurrentIndex(w.canvas.findData('portrait'))
+        w.canvas.setCurrentIndex(w.canvas.findData('square'))
+        # A live canvas update must not cancel an actual pending device change.
+        self.assertTrue(w.configure_timer.isActive())
+        self.assertFalse(w.record_button.isEnabled())
+        QTest.qWait(220)
+        self.assertIs(w.engine, engine)
+        engine.close.assert_not_called()
+        engine.set_canvas.assert_called_with(2160, 2160)
+        self.assertTrue(w.configuration_valid)
+        self.assertTrue(w.record_button.isEnabled())
+        self.assertEqual(w.prefs.value('canvas'), 'square')
 
     def test_floating_and_composited_overlay_transitions_and_recovery(self):
         w = self.window
@@ -73,8 +73,8 @@ class CanvasLifecycleTests(unittest.TestCase):
         with self.factory():
             w.set_mode('screen', configure=False)
             for preset, framing, floating in (
-                ('landscape', 'fit', True), ('landscape', 'fill', False),
-                ('portrait', 'fill', False), ('square', 'fit', False),
+                ('landscape', 'fit', True), ('landscape', 'fill', True),
+                ('portrait', 'fill', True), ('square', 'fit', True),
                 ('landscape', 'fit', True),
             ):
                 with self.subTest(preset=preset, framing=framing):
@@ -83,6 +83,8 @@ class CanvasLifecycleTests(unittest.TestCase):
                     QTest.qWait(220)
                     w.configure()
                     self.assertEqual(w.engine.configure.call_args.kwargs['floating_camera'], floating)
+                    self.assertEqual(w.engine.configure.call_args.kwargs['framing'], 'fit')
+                    self.assertEqual(w.output_dimensions(), w.quality.currentData())
                     self.assertEqual(w.bubble.isVisible(), floating)
                     if floating:
                         w.engine.attach_camera_preview.assert_called()

@@ -187,7 +187,8 @@ class CameraPreviewTests(unittest.TestCase):
         self.engine._dimensions.return_value = (640, 480)
         self.engine._place = Mock()
         self.configure(mode="camera", mirror=True)
-        self.engine._filter.assert_not_called()
+        self.engine._filter.assert_called_once_with(301, 'crop_filter', 'RecIt camera crop', {
+            'relative': False, 'left': 0, 'top': 0, 'cx': 640, 'cy': 480})
         self.engine._place.assert_called_once_with(201, 240, 0, 2.25, True, 1440)
 
     def test_camera_only_fit_zoom_uses_centered_crop_and_preserves_letterbox(self):

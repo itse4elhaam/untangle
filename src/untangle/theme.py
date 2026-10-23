@@ -60,6 +60,9 @@ QLabel#eyebrow { color: %(action)s; font-size: 13px; font-weight: 600; }
 QLabel#title { font-family: 'Inter'; font-size: 24px; font-weight: 600; }
 QLabel#section { color: %(muted)s; font-size: 13px; font-weight: 600; }
 QFrame#panel, QWidget#panel { background: %(panel)s; border: 1px solid %(border)s; border-radius: 8px; }
+QFrame#previewWorkspace { background: %(hover)s; border: 1px solid %(border)s; border-radius: 8px; }
+QPushButton#cameraZoomStep { min-height: 20px; padding: 1px 4px; }
+QPushButton#cameraZoomReset { min-height: 18px; padding: 2px 6px; }
 QScrollArea, QScrollArea#sidebar, QStackedWidget { border: none; background: transparent; }
 QScrollArea > QWidget > QWidget { background: transparent; }
 QScrollArea#sidebar { background: transparent; border: none; border-right: 1px solid %(border)s; border-radius: 0; }
@@ -140,11 +143,16 @@ QLabel#warning, QLabel[status="warning"] { color: %(warning)s; background: %(war
 QLabel#error, QLabel[status="error"] { color: %(error)s; background: %(error_bg)s; padding: 6px; border-radius: 5px; }
 QLabel#success, QLabel[status="success"] { color: %(success)s; }
 QLabel#recording, QLabel[status="recording"] { color: %(recording)s; }
-QPushButton:focus, QToolButton:focus, QComboBox:focus, QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QAbstractSpinBox:focus { border: 1px dashed %(focus)s; }
-QListWidget::item:focus { border: 1px dashed %(focus)s; }
-QPushButton#record:focus, QPushButton#playRecording:focus, QPushButton#primary:focus { border: 1px dashed %(on_action)s; }
-QCheckBox:focus, QRadioButton:focus, QSlider:focus { border: 1px dashed %(focus)s; background: %(selection)s; }
-QAbstractItemView:focus { border: 1px dashed %(focus)s; }
+/* Suppress native dotted focus rectangles; the solid cues below replace them.
+   Outline on item views preserves the geometry of borderless library lists. */
+QPushButton, QToolButton, QComboBox, QCheckBox, QRadioButton, QSlider, QAbstractItemView, QAbstractItemView::item { outline: none; }
+QPushButton:focus, QToolButton:focus, QComboBox:focus, QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QAbstractSpinBox:focus { border: 1px solid %(focus)s; }
+QListWidget::item:focus { border: 1px solid %(focus)s; }
+QPushButton#record:focus, QPushButton#playRecording:focus, QPushButton#primary:focus { border: 1px solid %(on_action)s; }
+QCheckBox:focus, QRadioButton:focus, QSlider:focus { border: 1px solid %(focus)s; background: %(selection)s; }
+QAbstractItemView:focus { border-color: %(focus)s; outline: 1px solid %(focus)s; }
+QPushButton#quiet:focus, QPushButton#setupHeading:focus { border-color: %(focus)s; }
+QPushButton#record[stopping="true"]:focus { border-color: %(focus)s; }
 QWidget:disabled { color: %(disabled)s; }
 QPushButton:disabled, QPushButton#record:disabled, QPushButton#playRecording:disabled, QPushButton#primary:disabled, QToolButton:disabled, QComboBox:disabled, QLineEdit:disabled { background: %(disabled_bg)s; color: %(disabled)s; border-color: %(border)s; }
 QSlider::handle:disabled, QSlider::sub-page:disabled, QProgressBar::chunk:disabled { background: %(disabled)s; }
