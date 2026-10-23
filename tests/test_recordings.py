@@ -77,6 +77,8 @@ class PlaybackChecks(unittest.TestCase):
         self.assertEqual(self.dialog.files.count(), 2)
         self.assertEqual(self.dialog.files.item(0).data(Qt.UserRole), str(newer))
         self.dialog.files.setCurrentRow(0)
+        self.assertTrue(self.dialog.player.source().isEmpty())
+        self.dialog.toggle_play()
         self.assertTrue(wait_for(lambda: len(frames) > 1 and self.dialog.player.duration() > 0))
         self.dialog.toggle_play()
         self.assertEqual(self.dialog.player.playbackState(), QMediaPlayer.PausedState)
@@ -100,6 +102,8 @@ class PlaybackChecks(unittest.TestCase):
         self.assertEqual(self.dialog.player.playbackState(), QMediaPlayer.PlayingState)
         count = len(frames)
         self.dialog.files.setCurrentRow(1)
+        self.assertTrue(self.dialog.player.source().isEmpty())
+        self.dialog.toggle_play()
         self.assertEqual(self.dialog.player.source().toLocalFile(), str(older))
         self.assertTrue(wait_for(lambda: len(frames) > count))
         self.dialog.reject()
@@ -125,6 +129,7 @@ class PlaybackChecks(unittest.TestCase):
         (self.root / 'broken.mp4').write_bytes(b'not video')
         self.dialog.refresh()
         self.dialog.files.setCurrentRow(0)
+        self.dialog.toggle_play()
         self.assertTrue(wait_for(lambda: 'Could not play' in self.dialog.message.text()))
         self.assertFalse(self.dialog.toggle.isEnabled())
 
@@ -139,6 +144,7 @@ class RecordingActionsChecks(unittest.TestCase):
         self.new.touch()
         os.utime(self.old, (1, 1))
         self.dialog = Recordings(self.root)
+        self.dialog.player.setAudioOutput(None)
         self.dialog.resize(1100, 750)
         self.dialog.show()
         qt.processEvents()
@@ -151,7 +157,7 @@ class RecordingActionsChecks(unittest.TestCase):
         self.temp.cleanup()
 
     def test_volume_actual_output_mouse_keyboard_zero_and_mute(self):
-        self.assertIs(self.dialog.player.audioOutput(), self.dialog.audio)
+        self.assertIsNone(self.dialog.player.audioOutput())
         volume = self.dialog.volume
         QTest.mouseClick(volume, Qt.LeftButton, pos=QPoint(volume.width() * 3 // 4, volume.height() // 2))
         self.assertGreater(self.dialog.audio.volume(), .65)
@@ -283,7 +289,8 @@ class RecordingActionsChecks(unittest.TestCase):
 
     def test_splitter_resizes_without_decorative_line(self):
         self.assertEqual(self.dialog.body.handleWidth(), 12)
-        self.assertIn('QSplitter::handle { background: transparent; }', self.dialog.styleSheet())
+        self.assertEqual(self.dialog.body.objectName(), 'librarySplitter')
+        self.assertEqual(self.dialog.styleSheet(), '')
         before = self.dialog.body.sizes()
         self.dialog.body.setSizes([before[0] + 50, before[1] - 50])
         self.assertGreater(self.dialog.body.sizes()[0], before[0])
@@ -313,6 +320,7 @@ class LatestRecordingDeletionChecks(unittest.TestCase):
             try:
                 window.open_recordings(latest)
                 library = window.recordings
+                library.player.setAudioOutput(None)
                 self.assertEqual(window.last_file, latest)
                 for state in ('recording', 'counting', 'busy'):
                     setattr(window, state, True)

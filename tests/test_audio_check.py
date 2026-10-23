@@ -100,7 +100,7 @@ class DialogChecks(unittest.TestCase):
         self.dialog.finish_capture()
         self.wait()
 
-    def test_prepare_capture_release_restore_then_play(self):
+    def test_prepare_capture_release_restore_then_explicit_play(self):
         order = []
         self.engine.end_audio_check.side_effect = lambda: order.append('release')
         self.devices.restore.side_effect = lambda: order.append('restore') or True
@@ -108,7 +108,11 @@ class DialogChecks(unittest.TestCase):
         self.capture()
         self.devices.prepare.assert_called_once_with('default')
         self.engine.begin_audio_check.assert_called_once_with('exact.headset.source', True)
-        self.assertEqual(order, ['release', 'restore', 'play'])
+        self.assertEqual(order, ['release', 'restore'])
+        self.dialog.player.play.assert_not_called()
+        self.dialog.prepare_playback()
+        self.wait()
+        self.assertEqual(order, ['release', 'restore', 'restore', 'play'])
         self.assertTrue(self.dialog.path.is_file())
         self.dialog.reject()
         self.assertFalse(self.dialog.path.exists())
@@ -215,12 +219,16 @@ class EntryChecks(unittest.TestCase):
                 window.open_audio_check()
                 setattr(window, flag, False)
             dialog_type.assert_not_called()
+        with patch('untangle.audio_check.QMediaPlayer'):
             window.open_audio_check()
             self.assertTrue(window.busy)
             self.assertFalse(window.audio_check_button.isEnabled())
             self.assertFalse(window.record_button.isEnabled())
-            window.audio_check_dialog = None
-            window.busy = False
+            self.assertTrue(window.controls_panel.isHidden())
+            window.audio_check_dialog.reject()
+            self.assertIsNone(window.audio_check_dialog)
+            self.assertFalse(window.busy)
+            self.assertFalse(window.controls_panel.isHidden())
 
 
 if __name__ == '__main__':

@@ -33,43 +33,10 @@ ROOT = Path(__file__).resolve().parents[2]
 ICON = ROOT / 'assets/untangle-mark.svg'
 VIDEOS = Path.home() / 'Videos/RecIt'
 STATE = Path.home() / '.local/state/glint'
-STYLE = """
-QWidget { background: #111b20; color: #eef1ec; font-family: 'Fira Sans', 'DejaVu Sans'; font-size: 14px; }
-QMainWindow { background: #111b20; }
-QLabel { background: transparent; }
-QLabel#muted { color: #a8babb; font-size: 12px; }
-QLabel#eyebrow { color: #9ddbc4; font-size: 11px; font-weight: 600; letter-spacing: 1px; }
-QLabel#title { font-size: 28px; font-weight: 600; }
-QLabel#section { font-size: 12px; font-weight: 600; color: #b7c5c4; }
-QFrame#panel { background: #18252b; border: 1px solid #2a3a40; border-radius: 16px; }
-QPushButton { background: #223239; border: 1px solid #35464c; padding: 10px 15px; border-radius: 9px; font-weight: 600; }
-QPushButton:hover { background: #2d4148; border-color: #819a9b; }
-QPushButton:checked { background: #28463e; border-color: #9ddbc4; color: #c5f2df; }
-QPushButton:disabled { color: #617477; border-color: #26363c; background: #1b2a30; }
-QPushButton#record { background: #6cdda6; color: #10291e; border: none; padding: 16px; font-size: 15px; }
-QPushButton#record:hover { background: #8aebbc; }
-QPushButton#record[stopping="true"] { background: #f8957e; color: #291812; }
-QPushButton#record[stopping="true"]:hover { background: #ffae97; }
-QPushButton#record:disabled { background: #2b5142; color: #9aada4; }
-QScrollArea#sidebar { border: none; background: transparent; }
-QScrollBar:vertical { background: transparent; width: 6px; margin: 0; }
-QScrollBar::handle:vertical { background: #40575c; min-height: 24px; border-radius: 3px; }
-QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
-QPushButton#footerNavigation { padding: 8px 6px; font-size: 12px; }
-QPushButton#quiet { border: none; background: transparent; color: #b8caca; padding: 6px; }
-QComboBox, QLineEdit { background: #1c2b31; border: 1px solid #35464c; border-radius: 7px; padding: 9px; min-height: 15px; }
-QComboBox::drop-down { border: none; width: 24px; }
-QComboBox QAbstractItemView { background: #223239; selection-background-color: #34564c; }
-QCheckBox { spacing: 8px; background: transparent; }
-QCheckBox::indicator { width: 16px; height: 16px; border: 1px solid #627e7e; border-radius: 4px; background: #1c2b31; }
-QCheckBox::indicator:checked { background: #9ddbc4; }
-QSlider::groove:horizontal { height: 4px; background: #35464c; border-radius: 2px; }
-QSlider::handle:horizontal { background: #9ddbc4; width: 15px; margin: -6px 0; border-radius: 7px; }
-QMenu { background: #1c2b31; padding: 6px; border: 1px solid #35464c; }
-QMenu::item { padding: 9px 18px; }
-QMenu::item:selected { background: #34564c; }
-QToolTip { background: #2d4148; color: #eef1ec; border: none; padding: 7px; }
-"""
+from .theme import stylesheet, apply_theme, load_fonts
+
+# Kept as a public constant for offscreen consumers of the recorder style.
+STYLE = stylesheet('light')
 
 
 def label(text, kind=None):
@@ -238,6 +205,7 @@ class Window(QMainWindow):
         VIDEOS.mkdir(parents=True, exist_ok=True)
         STATE.mkdir(parents=True, exist_ok=True)
         self.build()
+        self.set_theme(self.prefs.value('theme', 'light'))
         self.setup_tray()
         self.restore_preferences()
         self.hotkeys = Hotkeys(self)
@@ -278,8 +246,8 @@ class Window(QMainWindow):
         self.pages.addWidget(container)
         self.setCentralWidget(self.pages)
         layout = QVBoxLayout(container)
-        layout.setContentsMargins(30, 24, 30, 20)
-        layout.setSpacing(18)
+        layout.setContentsMargins(24, 20, 24, 16)
+        layout.setSpacing(14)
         header = QHBoxLayout()
         logo = QLabel()
         logo.setPixmap(QIcon(str(ICON)).pixmap(46, 46))
@@ -287,9 +255,15 @@ class Window(QMainWindow):
         title_box = QVBoxLayout()
         title_box.setSpacing(0)
         title_box.addWidget(label('Untangle', 'title'))
-        title_box.addWidget(label('A little less setup. A lot more showing.', 'muted'))
+        title_box.addWidget(label('Ready when you have something to show.', 'muted'))
         header.addLayout(title_box)
         header.addStretch()
+        self.theme_choice = QComboBox()
+        self.theme_choice.setAccessibleName('Appearance')
+        self.theme_choice.addItem('Light', 'light')
+        self.theme_choice.addItem('Dark', 'dark')
+        self.theme_choice.currentIndexChanged.connect(lambda: self.set_theme(self.theme_choice.currentData()))
+        header.addWidget(self.theme_choice)
         layout.addLayout(header)
 
         content = QGridLayout()
@@ -297,7 +271,8 @@ class Window(QMainWindow):
         content.setHorizontalSpacing(20)
         content.setVerticalSpacing(10)
         content.setRowStretch(0, 1)
-        content.setColumnStretch(1, 1)
+        content.setColumnStretch(0, 1)
+        content.setColumnStretch(1, 0)
         controls = QVBoxLayout()
         controls.setSpacing(9)
         side = QWidget()
@@ -305,13 +280,47 @@ class Window(QMainWindow):
         self.controls_panel.setObjectName('sidebar')
         self.controls_panel.setWidgetResizable(True)
         self.controls_panel.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.controls_panel.setFixedWidth(280)
+        self.controls_panel.setFixedWidth(304)
         self.controls_panel.setWidget(side)
         side.setLayout(controls)
         controls.setContentsMargins(0, 0, 10, 0)
-        controls.addWidget(label('RECORDING SETUP', 'eyebrow'))
+        summary = controls
+        summary.setContentsMargins(12, 12, 12, 12)
+        summary.addWidget(label('Before you start', 'section'))
+        self.setup_sections = []
+        self.summary_labels = []
+
+        def section(title):
+            frame = QFrame()
+            frame.setObjectName('setupSection')
+            outer = QVBoxLayout(frame)
+            outer.setContentsMargins(0, 8, 0, 8)
+            outer.setSpacing(5)
+            edit = QPushButton(title + '  ·  Change')
+            edit.setObjectName('setupHeading')
+            edit.setCheckable(True)
+            outer.addWidget(edit)
+            value = label('', 'summaryValue')
+            value.setWordWrap(True)
+            value.setMinimumWidth(0)
+            value.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+            outer.addWidget(value)
+            body = QWidget()
+            body.setObjectName('setupDetails')
+            body_layout = QVBoxLayout(body)
+            body_layout.setContentsMargins(0, 6, 0, 0)
+            body_layout.setSpacing(8)
+            outer.addWidget(body)
+            body.hide()
+            edit.toggled.connect(body.setVisible)
+            summary.addWidget(frame)
+            self.setup_sections.append(edit)
+            self.summary_labels.append(value)
+            return body_layout
+
+        controls = self.capture_setup = section('1  Capture')
         modes = QHBoxLayout()
-        self.screen_button = QPushButton('▣  Loom')
+        self.screen_button = QPushButton('Screen')
         self.camera_button = QPushButton('◉  Camera')
         for button, mode in [(self.screen_button, 'screen'), (self.camera_button, 'camera')]:
             button.setCheckable(True)
@@ -350,7 +359,7 @@ class Window(QMainWindow):
         window_layout.addWidget(self.refresh_button)
         self.window_row.setVisible(False)
         controls.addWidget(self.window_row)
-        controls.addWidget(label('Camera', 'section'))
+        controls = self.camera_setup = section('2  Camera')
         self.camera = QComboBox()
         self.camera.addItem('Camera off', None)
         for name, path in cameras():
@@ -358,7 +367,7 @@ class Window(QMainWindow):
         if self.camera.count() > 1:
             self.camera.setCurrentIndex(1)
         controls.addWidget(self.camera)
-        controls.addWidget(label('Microphone', 'section'))
+        controls = self.microphone_setup = section('3  Microphone')
         self.microphone = QComboBox()
         self.microphone.addItem('Automatic microphone', 'default')
         self.microphone.addItem('Microphone off', None)
@@ -367,14 +376,13 @@ class Window(QMainWindow):
         controls.addWidget(self.microphone)
         self.audio_check_button = QPushButton('Quick audio check')
         self.audio_check_button.clicked.connect(self.open_audio_check)
-        controls.addWidget(self.audio_check_button)
+        summary.addWidget(self.audio_check_button)
         self.live_microphone = QCheckBox('Live microphone levels')
         self.live_microphone.setChecked(True)
         self.live_microphone.setToolTip('Uses your microphone while the recorder is visible. Bluetooth headsets use hands-free audio. Turn off to release the microphone.')
         self.live_microphone.toggled.connect(lambda _: self.idle_audio.reconcile())
         controls.addWidget(self.live_microphone)
         self.microphone_meter = MicrophoneMeter()
-        controls.addWidget(self.microphone_meter)
         self.clean_microphone = QCheckBox('Clean microphone')
         self.clean_microphone.setChecked(True)
         self.clean_microphone.setToolTip('Reduce background microphone noise and control loud peaks. Turn off to record the microphone without processing. Computer sound is unchanged.')
@@ -408,20 +416,21 @@ class Window(QMainWindow):
         self.mask_button.setVisible(False)
         self.mask_button.clicked.connect(self.choose_mask)
         widget_layout.addWidget(self.mask_button)
-        controls.addWidget(self.widget_panel)
+        self.camera_setup.addWidget(self.widget_panel)
         self.mirror = QCheckBox('Mirror my camera')
         self.mirror.setChecked(True)
-        controls.addWidget(self.mirror)
+        self.camera_setup.addWidget(self.mirror)
+        controls = self.output_setup = section('Output options')
         quality_row = QHBoxLayout()
         self.quality = QComboBox()
         self.quality.addItem('4K · 30 fps', (3840, 2160))
         self.quality.addItem('1080p · 30 fps', (1920, 1080))
         quality_row.addWidget(self.quality)
         controls.addLayout(quality_row)
-        content.addWidget(self.controls_panel, 0, 0)
+        content.addWidget(self.controls_panel, 0, 1, 2, 1)
 
         right = QVBoxLayout()
-        right.setSpacing(12)
+        right.setSpacing(8)
         preview_top = QHBoxLayout()
         self.preview_title = label('FULL CAMERA VIEW', 'eyebrow')
         preview_top.addWidget(self.preview_title)
@@ -442,9 +451,10 @@ class Window(QMainWindow):
         self.preview.resized.connect(self.resize_preview)
         preview_layout.addWidget(self.preview)
         right.addWidget(preview_frame, 1)
+        right.addWidget(self.microphone_meter)
         self.source_note = label('4K output · source detail depends on your display and camera.', 'muted')
         self.source_note.setWordWrap(True)
-        right.addWidget(self.source_note)
+        self.output_setup.addWidget(self.source_note)
         zoom_row = QHBoxLayout()
         self.zoom_button = QPushButton('⌖  Zoom to pointer')
         self.zoom_button.setCheckable(True)
@@ -457,8 +467,8 @@ class Window(QMainWindow):
             self.zoom_amount.addItem(title, value)
         self.zoom_amount.setCurrentIndex(1)
         zoom_row.addWidget(self.zoom_amount)
-        right.addLayout(zoom_row)
-        self.status = label('Getting your studio ready…')
+        self.output_setup.addLayout(zoom_row)
+        self.status = label('Preparing your recording setup…')
         self.status.setWordWrap(True)
         self.status.setMinimumHeight(38)
         right.addWidget(self.status)
@@ -476,15 +486,17 @@ class Window(QMainWindow):
         shortcuts = label('Ctrl + Shift + F9  record / stop    ·    F10  pause    ·    F8  pointer zoom', 'muted')
         shortcuts.setWordWrap(True)
         right.addWidget(shortcuts)
-        controls.addStretch()
+        summary.addStretch()
         # Device/window labels must not set the scroll content's minimum width.
         # Qt then resizes it to the viewport, including the vertical scrollbar.
         for combo in side.findChildren(QComboBox):
             combo.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
             combo.setMinimumContentsLength(12)
             combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.zoom_amount.setMinimumContentsLength(3)
+        self.zoom_amount.setMaximumWidth(90)
         self.preview_column = right
-        content.addLayout(right, 0, 1, 2, 1)
+        content.addLayout(right, 0, 0)
         self.navigation_footer = QWidget()
         self.navigation_footer.setFixedWidth(280)
         navigation = QHBoxLayout(self.navigation_footer)
@@ -510,6 +522,31 @@ class Window(QMainWindow):
         self.desktop_audio.toggled.connect(self.schedule_configure)
         self.quality.currentIndexChanged.connect(self.quality_changed)
         self.set_mode('screen', configure=False)
+        for combo in (self.screen, self.capture_window, self.capture_kind, self.camera, self.microphone):
+            combo.currentIndexChanged.connect(self.update_setup_summary)
+
+    def set_theme(self, name):
+        name = name if name in ('light', 'dark') else 'light'
+        apply_theme(QApplication.instance(), name)
+        self.theme_choice.blockSignals(True)
+        self.theme_choice.setCurrentIndex(self.theme_choice.findData(name))
+        self.theme_choice.blockSignals(False)
+        self.prefs.setValue('theme', name)
+        if self.recordings and hasattr(self.recordings, 'theme_choice'):
+            self.recordings.theme_choice.blockSignals(True)
+            self.recordings.theme_choice.setCurrentIndex(self.recordings.theme_choice.findData(name))
+            self.recordings.theme_choice.blockSignals(False)
+
+    def update_setup_summary(self, *_):
+        if not hasattr(self, 'summary_labels'):
+            return
+        capture = ('Camera only · Full image' if self.mode == 'camera' else
+            self.capture_kind.currentText() + ' · ' +
+            (self.capture_window.currentText() if self.capture_kind.currentData() == 'window' else self.screen.currentText()))
+        for item, value in zip(self.summary_labels, (capture, self.camera.currentText(),
+                self.microphone.currentText() + (' · Computer sound on' if self.desktop_audio.isChecked() else ' · Computer sound off'), self.quality.currentText())):
+            item.setText(value)
+            item.setToolTip(value)
 
     def setup_tray(self):
         self.tray = QSystemTrayIcon(QIcon(str(ICON)), self)
@@ -580,6 +617,7 @@ class Window(QMainWindow):
             self.record_button.setEnabled(False)
 
     def quality_changed(self):
+        self.update_setup_summary()
         if self.engine and not (self.recording or self.busy):
             self.configuration_valid = False
             self.idle_audio.stop()
@@ -617,6 +655,7 @@ class Window(QMainWindow):
         self.capture_window.setEnabled(self.mode == 'screen')
         self.refresh_button.setEnabled(self.mode == 'screen')
         self.mode_hint.setText('Your screen, with you in the corner.' if self.mode == 'screen' else 'Just you. Full frame. Ready to explain.')
+        self.update_setup_summary()
         if configure:
             self.schedule_configure()
 
@@ -626,7 +665,7 @@ class Window(QMainWindow):
         if expanded:
             self.recorder_content.addLayout(self.preview_column, 0, 0, 1, 2)
         else:
-            self.recorder_content.addLayout(self.preview_column, 0, 1, 2, 1)
+            self.recorder_content.addLayout(self.preview_column, 0, 0)
         self.focus_button.setText('Show controls' if expanded else 'Expand camera')
 
     def capture_changed(self):
@@ -675,6 +714,7 @@ class Window(QMainWindow):
             self.shape.setCurrentIndex(0)
 
     def schedule_configure(self, *_):
+        self.update_setup_summary()
         if hasattr(self, 'configure_timer') and self.engine and not (self.recording or self.busy or self.counting):
             self.configuration_valid = False
             self.record_button.setEnabled(False)
@@ -710,8 +750,8 @@ class Window(QMainWindow):
                 self.show_bubble()
             self.record_button.setEnabled(True)
             self.configuration_valid = True
-            self.engine_notice('Ready when you are. Your recording stays on this computer until you upload it.')
-            self.encoder_label.setText('OBS engine · Intel hardware available')
+            self.engine_notice('Setup selected. Microphone readiness is checked before recording.')
+            self.encoder_label.setText('Recording engine ready')
             screen = QApplication.screens()[self.screen.currentIndex()]
             geo = screen.geometry()
             ratio = screen.devicePixelRatio()
@@ -1153,6 +1193,7 @@ class Window(QMainWindow):
         self.configure_timer.stop()
         self.start_timer.stop()
         self.idle_audio.stop()
+        self.focus_button.setChecked(False)
         self.busy = True
         self.lock_controls(True)
         self.record_button.setEnabled(False)
@@ -1160,6 +1201,8 @@ class Window(QMainWindow):
             self.microphone.currentData(), self.clean_microphone.isChecked(),
             self.microphone.currentText(), self)
         def finished():
+            self.recorder_content.removeWidget(dialog)
+            self.controls_panel.show()
             self.audio_check_dialog = None
             self.busy = False
             self.lock_controls(False)
@@ -1169,7 +1212,14 @@ class Window(QMainWindow):
             if self._configure_pending:
                 self.configure_timer.start(0)
         dialog.finished.connect(finished)
-        dialog.open()
+        # A child sheet beside the native OBS preview avoids overlay stacking
+        # and keeps the existing capture/worker teardown handshake intact.
+        dialog.setWindowFlags(Qt.Widget)
+        dialog.setModal(False)
+        dialog.setFixedWidth(self.controls_panel.width())
+        self.controls_panel.hide()
+        self.recorder_content.addWidget(dialog, 0, 1, 2, 1)
+        dialog.show()
 
     def release_audio(self):
         self.idle_audio.stop()
@@ -1287,6 +1337,7 @@ class Window(QMainWindow):
                 self.stop()
 
     def lock_controls(self, locked):
+        self.focus_button.setEnabled(not locked)
         self.live_microphone.setEnabled(not locked)
         self.audio_check_button.setEnabled(not locked)
         self.sharing_button.setEnabled(not locked)
@@ -1348,6 +1399,7 @@ class Window(QMainWindow):
             self.recordings.recording_renamed.connect(self.recording_renamed)
             self.recordings.upload_requested.connect(self.upload_recording)
             self.recordings.back_requested.connect(self.back_to_recorder)
+            self.recordings.theme_requested.connect(self.set_theme)
             self.pages.addWidget(self.recordings)
         self.configure_timer.stop()
         self.start_timer.stop()
@@ -1692,7 +1744,8 @@ def main():
     app.setDesktopFileName('tech.truedevs.Untangle')
     app.setWindowIcon(QIcon(str(ICON)))
     app.setStyle('Fusion')
-    app.setStyleSheet(STYLE)
+    load_fonts(app)
+    apply_theme(app, QSettings('TrueDevs', 'Glint').value('theme', 'light'))
     from PySide6.QtNetwork import QLocalServer, QLocalSocket
     from PySide6.QtCore import QLockFile, QStandardPaths
     runtime = Path(QStandardPaths.writableLocation(QStandardPaths.RuntimeLocation))

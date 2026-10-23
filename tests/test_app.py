@@ -8,7 +8,7 @@ from pathlib import Path
 import unittest
 from unittest.mock import patch, MagicMock
 from PySide6.QtWidgets import QApplication, QMessageBox
-from PySide6.QtCore import QSettings, QTimer, QProcess
+from PySide6.QtCore import QSettings, QTimer, QProcess, QCoreApplication, QEvent
 from untangle import app as glint
 qt = QApplication.instance() or QApplication([])
 
@@ -42,6 +42,11 @@ class AppChecks(unittest.TestCase):
     def tearDown(self):
         self.window.recording = self.window.busy = self.window.counting = False
         self.window.close()
+        # Closed top-level Qt widgets otherwise survive across the suite and
+        # every theme change repolishes those obsolete recorder trees too.
+        if self.window._closing:
+            self.window.deleteLater()
+            QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
         for p in reversed(self.patches):
             p.stop()
         self.temp.cleanup()
@@ -148,7 +153,8 @@ class AppChecks(unittest.TestCase):
         page = self.window.recordings
         page.player.setAudioOutput(None)
         self.assertIs(self.window.pages.currentWidget(), page)
-        self.assertEqual(page.player.source().toLocalFile(), str(path))
+        self.assertEqual(page.selected_path(), path)
+        self.assertTrue(page.player.source().isEmpty())
         self.assertFalse(self.window.tray_record.isEnabled())
         self.window.toggle_record()
         self.assertFalse(self.window.counting)

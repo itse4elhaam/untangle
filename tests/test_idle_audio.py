@@ -169,11 +169,12 @@ class IdleAudioTests(unittest.TestCase):
 
     def test_check_releases_monitor_before_dialog_and_resumes_after(self):
         self.monitor()
-        with patch('untangle.audio_check.AudioCheck') as dialog:
+        with patch('untangle.audio_check.QMediaPlayer'):
             self.w.open_audio_check()
             self.assertIsNone(self.w.idle_audio.owner)
             self.w.engine.release_audio.assert_called()
-            dialog.return_value.finished.connect.call_args.args[0]()
+            self.w.audio_check_dialog.reject()
+            self.assertIsNone(self.w.audio_check_dialog)
         self.drain()
         self.monitor()
 

@@ -28,7 +28,7 @@ class RecordingTitleTests(unittest.TestCase):
         self.dialog.files.setCurrentRow(0)
 
     def tearDown(self):
-        self.dialog.release()
+        self.dialog.reject()
         self.play.stop()
         self.set_source.stop()
         self.dialog.deleteLater()
@@ -70,7 +70,7 @@ class RecordingTitleTests(unittest.TestCase):
         self.assertTrue(self.source.exists())
         self.assertIn('Could not rename', self.dialog.message.text())
         self.assertTrue(self.dialog.toggle.isEnabled())
-        self.assertEqual(self.source_mock.call_args.args[0].toLocalFile(), str(self.source))
+        self.assertTrue(self.source_mock.call_args.args[0].isEmpty())
         self.rename('')
         self.assertTrue(self.source.exists())
 

@@ -2,18 +2,28 @@
 
 Open **Untangle** from the application launcher, or run `untangle`.
 
-1. Choose Camera or Loom. New preferences default to Camera; existing preferences keep your last mode.
-2. In Loom mode, choose **Entire screen** or **A specific window**. For a window, select it from the list; use the refresh button after opening another window. Choose your camera and microphone, then a camera shape, size, and corner.
+1. In the preparation summary, open **1 Capture · Change** and choose Camera or Screen. New preferences default to Camera; existing preferences keep your last mode.
+2. In Screen mode, choose **Entire screen** or **A specific window**. For a window, select it from the list; use the refresh button after opening another window. Choose your camera and microphone, then a camera shape, size, and corner.
 3. Start recording. A three-second countdown gives you time to get ready.
 4. Press **Ctrl + Shift + F9** to stop and save. **Ctrl + Shift + F10** pauses or resumes. **Ctrl + Shift + F8** toggles pointer-follow zoom. These also work while the main window is hidden. The tray menu has the same controls.
 
 Screen recordings hide the main window before capture begins. A live camera widget remains visible above your desktop, including when you change workspaces. Drag it to move it; right-click for Stop, Pause, Zoom, or Open Untangle. It also appears while preparing a screen recording. Camera recordings keep the main preview visible and use the camera for the complete video frame. Escape cancels the countdown.
 
-Videos save to `~/Videos/RecIt`. Recordings opens a dedicated library page with a newest-first list of saved MP4 and MKV videos, dates, file sizes, and filename search. Select a recording to play, pause, seek, or adjust volume in the embedded player. Use **Copy path**, **Delete recording**, or **Upload to Loom** for the selected video. Long names are shortened in the list; hover to see the complete path. Refresh reloads the list; Open folder opens the directory. **Back to recorder** stops playback and restores your recorder setup. The library is unavailable during countdown, recording, saving, or uploading. Recording hotkeys and tray recording are disabled while browsing, and pending recording starts cannot run behind the library.
+Videos save to `~/Videos/RecIt`. Recordings opens a dedicated library page with a newest-first list of saved MP4 and MKV videos, dates, file sizes, and filename search. Selecting a recording shows its thumbnail and metadata without opening playback. Choose **Play** to load the video. You can then pause, seek, or adjust volume in the embedded player. Use **Copy path**, **Delete recording**, or **Upload to Loom** for the selected video. Long names are shortened in the list; hover to see the complete path. Refresh reloads the list; Open folder opens the directory. **Back to recorder** stops playback and restores your recorder setup. The library is unavailable during countdown, recording, saving, or uploading. Recording hotkeys and tray recording are disabled while browsing, and pending recording starts cannot run behind the library.
 
 Window capture records the selected window's content, including when another window covers it. Keep the selected window open and unminimized. Closing or minimizing it stops and saves the recording with a warning. Resizing the selected window refits it to the video frame. Computer sound, if enabled, still records the computer's audio rather than audio isolated to that window.
 
 In Camera mode, **Expand camera** hides the settings panel while keeping recording controls visible. **Show controls** brings the settings back. The complete camera image fits inside the video frame without cropping; sources with a different aspect ratio have black borders.
+
+## Companion appearance and setup
+
+Choose **Light** or **Dark** at the top of the recorder or library. The choice applies to the app, menus, dialogs, microphone meters and audio-check sheet, and persists in the existing settings store. The default is Light. Untangle bundles Inter and Manrope with their open font licenses; it does not install desktop fonts.
+
+The preview stays on the left. The preparation summary stays on the right, with expandable Capture, Camera, Microphone and Output options sections. Microphone levels remain below the preview even when camera controls are expanded. Recordings and Sharing remain at the lower left.
+
+Quick audio check opens a side sheet beside the preview. **Record sample** explicitly captures four seconds; **Play sample** explicitly plays the temporary result. There is no automatic playback. **Back to setup** waits for pending microphone work and safe release before returning. The input meter reports live samples; a nonzero sample does not establish intelligible speech or fix the unresolved Bluetooth silence issue.
+
+Thumbnails decode a bounded batch of local files in the background. Missing FFmpeg, slow decoding or unreadable video falls back to an icon; it does not block file actions. Opening another view stops thumbnail work and releases the player.
 
 ## Microphones and Bluetooth headsets
 

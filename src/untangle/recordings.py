@@ -1,15 +1,17 @@
 """Local recordings browser using Qt's native media player."""
+from collections import OrderedDict
 from datetime import datetime
+import shutil
 from pathlib import Path
 from .naming import recording_title, recording_files, rename_recording
 
-from PySide6.QtCore import Qt, QUrl, Signal, QSize, QSignalBlocker
-from PySide6.QtGui import QDesktopServices
+from PySide6.QtCore import Qt, QUrl, Signal, QSize, QSignalBlocker, QProcess, QTimer, QEvent
+from PySide6.QtGui import QDesktopServices, QIcon, QPixmap
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtMultimediaWidgets import QVideoWidget
 from PySide6.QtWidgets import (
     QWidget, QFrame, QSplitter, QStackedWidget, QLineEdit, QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
-    QPushButton, QSlider, QVBoxLayout, QApplication, QMessageBox, QInputDialog, QStyle, QStyleOptionSlider,
+    QPushButton, QComboBox, QSizePolicy, QSlider, QVBoxLayout, QApplication, QMessageBox, QInputDialog, QStyle, QStyleOptionSlider,
 )
 
 
@@ -40,22 +42,23 @@ class Recordings(QWidget):
     recording_deleted = Signal(str)
     recording_renamed = Signal(str, str)
     upload_requested = Signal(str)
+    theme_requested = Signal(str)
 
     def __init__(self, directory, parent=None, deletion_blocked=None):
         super().__init__(parent)
         self.directory = Path(directory)
         self.deletion_blocked = deletion_blocked or (lambda path: False)
         self.setObjectName('recordingsPage')
-        self.setStyleSheet("""
-            QListWidget { background: #111b20; border: none; outline: none; }
-            QListWidget::item { background: #18252b; border: 1px solid #2a3a40;
-                border-radius: 12px; margin: 0 6px 10px 0; padding: 16px; }
-            QListWidget::item:hover { background: #223239; }
-            QListWidget::item:selected { background: #28463e; border-color: #9ddbc4; color: #c5f2df; }
-            QSplitter::handle { background: transparent; }
-            QPushButton#playRecording { background: #9ddbc4; color: #172329; }
-            QPushButton#playRecording:disabled { background: #223239; color: #617477; }
-        """)
+        self.thumbnail_cache = OrderedDict()
+        self.thumbnail_queue = []
+        self.thumbnail_key = None
+        self.thumbnail_process = QProcess(self)
+        self.thumbnail_process.finished.connect(self.thumbnail_finished)
+        self.thumbnail_process.errorOccurred.connect(self.thumbnail_error)
+        self.thumbnail_timer = QTimer(self)
+        self.thumbnail_timer.setSingleShot(True)
+        self.thumbnail_timer.timeout.connect(self.thumbnail_process.kill)
+        self.ffmpeg = shutil.which('ffmpeg')
         self.player = QMediaPlayer(self)
         self.audio = QAudioOutput(self)
         self.audio.setVolume(.5)
@@ -68,53 +71,77 @@ class Recordings(QWidget):
         self.back.clicked.connect(self.reject)
         header.addWidget(self.back)
         header.addStretch()
-        privacy = QLabel('LOCAL LIBRARY  ·  Only on this computer')
+        privacy = QLabel('Files on this computer')
         privacy.setObjectName('eyebrow')
         header.addWidget(privacy)
+        self.theme_choice = QComboBox()
+        self.theme_choice.setAccessibleName('Appearance')
+        self.theme_choice.addItem('Light', 'light')
+        self.theme_choice.addItem('Dark', 'dark')
+        self.theme_choice.setCurrentIndex(self.theme_choice.findData(
+            QApplication.instance().property('untangleTheme') or 'light'))
+        self.theme_choice.currentIndexChanged.connect(
+            lambda: self.theme_requested.emit(self.theme_choice.currentData()))
+        header.addWidget(self.theme_choice)
         layout.addLayout(header)
         title = QLabel('Your recordings')
         title.setObjectName('title')
         layout.addWidget(title)
-        subtitle = QLabel('A place for everything you have shown, explained, and shared.')
+        subtitle = QLabel('Find a take, give it a name, or review it before sharing.')
         subtitle.setObjectName('muted')
         layout.addWidget(subtitle)
         body = self.body = QSplitter(Qt.Horizontal)
+        body.setObjectName('librarySplitter')
         body.setHandleWidth(12)
         body.setChildrenCollapsible(False)
-        library = QWidget()
+        library = QFrame()
+        library.setObjectName('libraryBrowser')
         library_layout = QVBoxLayout(library)
-        library_layout.setContentsMargins(0, 0, 0, 0)
+        library_layout.setContentsMargins(12, 12, 12, 12)
         self.search = QLineEdit()
+        self.search.setObjectName('librarySearch')
         self.search.setPlaceholderText('Search recordings…')
         self.search.setClearButtonEnabled(True)
         self.search.textChanged.connect(self.filter_files)
         library_layout.addWidget(self.search)
         self.count = QLabel()
-        self.count.setObjectName('muted')
-        self.count.setStyleSheet('color: #f8957e; padding: 4px 0;')
+        self.count.setObjectName('libraryCount')
         library_layout.addWidget(self.count)
         self.files = QListWidget()
-        self.files.setMinimumWidth(220)
+        self.files.setObjectName('recordingFiles')
+        self.files.setMinimumWidth(230)
+        self.files.setIconSize(QSize(112, 64))
+        self.files.setSpacing(4)
+        self.files.setWordWrap(True)
+        self.files.setAccessibleName('Recordings, newest first')
         self.files.setTextElideMode(Qt.ElideMiddle)
         self.files.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         library_layout.addWidget(self.files, 1)
         body.addWidget(library)
         preview = QFrame()
-        preview.setObjectName('panel')
+        preview.setObjectName('libraryReview')
         preview_layout = QVBoxLayout(preview)
         preview_layout.setContentsMargins(18, 18, 18, 18)
-        heading = QLabel('WATCH & REVIEW')
+        heading = QLabel('Selected recording')
         heading.setObjectName('eyebrow')
         preview_layout.addWidget(heading)
         self.video = QVideoWidget()
         self.video.setMinimumSize(160, 120)
         self.stage = QStackedWidget()
+        self.stage.setObjectName('libraryStage')
         self.placeholder = QLabel('Select a recording\nYour playback appears here')
         self.placeholder.setAlignment(Qt.AlignCenter)
         self.placeholder.setWordWrap(True)
-        self.placeholder.setStyleSheet('color: #9aadae; font-size: 18px; padding: 24px;')
+        self.placeholder.setObjectName('libraryPlaceholder')
+        self.poster = QLabel()
+        self.poster.setObjectName('libraryPoster')
+        self.poster.setAlignment(Qt.AlignCenter)
+        self.poster.setMinimumSize(160, 90)
+        self.poster.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
         self.stage.addWidget(self.placeholder)
         self.stage.addWidget(self.video)
+        self.stage.addWidget(self.poster)
+        self.stage.installEventFilter(self)
         preview_layout.addWidget(self.stage, 1)
         body.addWidget(preview)
         body.setStretchFactor(0, 2)
@@ -122,7 +149,18 @@ class Recordings(QWidget):
         body.setSizes([340, 620])
         layout.addWidget(body, 1)
         self.player.setVideoOutput(self.video)
+        self.selected_title = QLabel('Choose a recording')
+        self.selected_title.setObjectName('librarySelectedTitle')
+        self.selected_title.setWordWrap(True)
+        self.selected_title.setTextFormat(Qt.PlainText)
+        preview_layout.addWidget(self.selected_title)
+        self.metadata = QLabel('MP4 and MKV recordings appear here.')
+        self.metadata.setObjectName('libraryMetadata')
+        self.metadata.setWordWrap(True)
+        self.metadata.setTextFormat(Qt.PlainText)
+        preview_layout.addWidget(self.metadata)
         self.message = QLabel('Select a recording to play.')
+        self.message.setObjectName('libraryMessage')
         self.message.setWordWrap(True)
         self.message.setTextFormat(Qt.PlainText)
         self.message.setMinimumWidth(0)
@@ -142,29 +180,34 @@ class Recordings(QWidget):
         self.mute = QPushButton('Mute')
         self.mute.setCheckable(True)
         self.mute.toggled.connect(self.audio.setMuted)
-        controls.addWidget(self.mute)
+        sound = QHBoxLayout()
+        sound.addWidget(self.mute)
         self.volume = PlaybackSlider(Qt.Horizontal)
         self.volume.setRange(0, 100)
         self.volume.setValue(50)
         self.volume.setFixedWidth(110)
         self.volume.setAccessibleName('Volume')
         self.volume.valueChanged.connect(self.set_volume)
-        controls.addWidget(self.volume)
+        sound.addWidget(self.volume)
         self.volume_label = QLabel()
         self.volume_label.setMinimumWidth(42)
-        controls.addWidget(self.volume_label)
+        sound.addWidget(self.volume_label)
+        sound.addStretch()
         self.audio.volumeChanged.connect(self.sync_volume)
         self.audio.mutedChanged.connect(self.sync_volume)
         self.sync_volume()
         preview_layout.addLayout(controls)
+        preview_layout.addLayout(sound)
         actions = QHBoxLayout()
         refresh = QPushButton('Refresh')
         refresh.clicked.connect(lambda: self.refresh())
-        actions.addWidget(refresh)
+        library_tools = QHBoxLayout()
+        library_tools.addWidget(refresh)
         folder = QPushButton('Open folder ↗')
         folder.clicked.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.directory))))
-        actions.addWidget(folder)
-        actions.addStretch()
+        library_tools.addWidget(folder)
+        library_layout.addLayout(library_tools)
+
         self.upload = QPushButton('Upload to Loom')
         self.upload.clicked.connect(self.upload_selected)
         actions.addWidget(self.upload)
@@ -174,10 +217,11 @@ class Recordings(QWidget):
         self.rename = QPushButton('Rename')
         self.rename.clicked.connect(self.rename_selected)
         actions.addWidget(self.rename)
-        self.delete = QPushButton('Delete recording')
+        self.delete = QPushButton('Delete')
+        self.delete.setObjectName('deleteRecording')
         self.delete.clicked.connect(self.delete_selected)
         actions.addWidget(self.delete)
-        layout.addLayout(actions)
+        preview_layout.addLayout(actions)
         self.files.currentItemChanged.connect(self.select)
         self.player.playbackStateChanged.connect(lambda state: self.toggle.setText(
             'Pause' if state == QMediaPlayer.PlayingState else 'Play'))
@@ -189,6 +233,7 @@ class Recordings(QWidget):
 
     def refresh(self, selected=None):
         selected = Path(selected) if selected else (self.selected_path() or Path(self.player.source().toLocalFile()))
+        self.stop_thumbnails()
         self.release()
         self.files.clear()
         self.update_actions()
@@ -215,10 +260,19 @@ class Recordings(QWidget):
             size = stat.st_size
             size_text = f'{size / 1024 ** 3:.1f} GB' if size >= 1024 ** 3 else f'{size / 1024 ** 2:.1f} MB'
             item = QListWidgetItem(f'{recording_title(path)}\n{day} · {date:%H:%M}  •  {size_text}  •  {path.suffix[1:].upper()}')
-            item.setSizeHint(QSize(0, 92))
+            item.setSizeHint(QSize(0, 96))
+            item.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
+            key = (str(path), stat.st_mtime_ns, stat.st_size)
+            item.setData(Qt.UserRole + 1, key)
+            if key in self.thumbnail_cache:
+                item.setIcon(QIcon(self.thumbnail_cache[key]))
+            # Decode a bounded initial batch; selecting older files prioritizes them.
+            elif len(self.thumbnail_queue) < 48:
+                self.thumbnail_queue.append(key)
             item.setData(Qt.UserRole, str(path))
             item.setToolTip(str(path))
             self.files.addItem(item)
+        self.start_thumbnail()
         self.filter_files(self.search.text())
         for index in range(self.files.count()):
             item = self.files.item(index)
@@ -247,6 +301,8 @@ class Recordings(QWidget):
             if self.player.source().isEmpty():
                 self.stage.setCurrentWidget(self.placeholder)
             self.message.setText('No matching recordings. Try another search.')
+        elif self.selected_path() is not None:
+            self.show_selected_preview()
         elif self.player.source().isEmpty() and self.files.count():
             self.placeholder.setText('Select a recording\nYour playback appears here')
             self.message.setText('Select a recording to play.')
@@ -351,10 +407,12 @@ class Recordings(QWidget):
         self.recording_deleted.emit(str(path))
 
     def reject(self):
+        self.stop_thumbnails()
         self.release()
         self.back_requested.emit()
 
     def hideEvent(self, event):
+        self.stop_thumbnails()
         self.release()
         super().hideEvent(event)
 
@@ -362,25 +420,115 @@ class Recordings(QWidget):
         self.release()
         self.toggle.setEnabled(False)
         self.update_actions()
+        self.selected_title.setText('Choose a recording')
+        self.metadata.setText('MP4 and MKV recordings appear here.')
         if item is None:
             return
         path = Path(item.data(Qt.UserRole))
         if not path.is_file():
             self.message.setText('This recording is missing. Refresh the list.')
             return
-        self.message.setText(recording_title(path))
+        key = item.data(Qt.UserRole + 1)
+        if key not in self.thumbnail_cache and key != self.thumbnail_key:
+            if key in self.thumbnail_queue:
+                self.thumbnail_queue.remove(key)
+            self.thumbnail_queue.insert(0, key)
+            del self.thumbnail_queue[48:]
+            self.start_thumbnail()
+        self.selected_title.setText(recording_title(path))
+        self.metadata.setText(item.text().split('\n', 1)[-1])
+        self.show_selected_preview()
         self.toggle.setEnabled(True)
-        self.stage.setCurrentWidget(self.video)
-        self.player.setSource(QUrl.fromLocalFile(str(path)))
-        self.player.play()
+
+    def show_selected_preview(self, update_message=True):
+        item = self.files.currentItem()
+        if item is None or item.isHidden():
+            return
+        if not self.player.source().isEmpty():
+            self.stage.setCurrentWidget(self.video)
+            return
+        pixmap = self.thumbnail_cache.get(item.data(Qt.UserRole + 1))
+        if pixmap is not None:
+            self.poster.setPixmap(pixmap.scaled(
+                self.stage.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            self.stage.setCurrentWidget(self.poster)
+        else:
+            self.placeholder.setText('Ready to review\nPress Play to watch this recording.')
+            self.stage.setCurrentWidget(self.placeholder)
+        if update_message:
+            self.message.setText('Press Play to review. Uploading is a separate action.')
 
     def toggle_play(self):
         if self.player.playbackState() == QMediaPlayer.PlayingState:
             self.player.pause()
-        elif not self.player.source().isEmpty():
-            if self.player.mediaStatus() == QMediaPlayer.EndOfMedia:
-                self.player.setPosition(0)
-            self.player.play()
+            return
+        path = self.selected_path()
+        if path is None or not path.is_file():
+            self.release()
+            self.update_actions()
+            self.message.setText('This recording is missing. Refresh the list.')
+            return
+        if self.player.source().isEmpty():
+            self.player.setSource(QUrl.fromLocalFile(str(path)))
+        elif self.player.mediaStatus() == QMediaPlayer.EndOfMedia:
+            self.player.setPosition(0)
+        self.stage.setCurrentWidget(self.video)
+        self.message.setText(recording_title(path))
+        self.player.play()
+
+    def start_thumbnail(self):
+        if not self.ffmpeg or self.thumbnail_key is not None or not self.thumbnail_queue:
+            return
+        self.thumbnail_key = self.thumbnail_queue.pop(0)
+        self.thumbnail_process.setStandardErrorFile(QProcess.nullDevice())
+        self.thumbnail_process.start(self.ffmpeg, [
+            '-hide_banner', '-loglevel', 'error', '-nostdin', '-threads', '1',
+            '-protocol_whitelist', 'file,pipe', '-i', self.thumbnail_key[0],
+            '-an', '-sn', '-dn', '-frames:v', '1', '-vf', 'scale=384:216:force_original_aspect_ratio=decrease',
+            '-threads', '1', '-f', 'image2pipe', '-vcodec', 'png', 'pipe:1'])
+        self.thumbnail_timer.start(5000)
+
+    def thumbnail_error(self, error):
+        if error == QProcess.FailedToStart:
+            self.thumbnail_timer.stop()
+            self.thumbnail_key = None
+            self.thumbnail_queue.clear()
+
+    def thumbnail_finished(self, code, status):
+        self.thumbnail_timer.stop()
+        key, self.thumbnail_key = self.thumbnail_key, None
+        data = self.thumbnail_process.readAllStandardOutput()
+        pixmap = QPixmap()
+        if key is not None and code == 0 and status == QProcess.NormalExit and pixmap.loadFromData(data):
+            self.thumbnail_cache[key] = pixmap
+            evicted = set()
+            while len(self.thumbnail_cache) > 48:
+                old_key, _ = self.thumbnail_cache.popitem(last=False)
+                evicted.add(old_key)
+            for index in range(self.files.count()):
+                item = self.files.item(index)
+                if item.data(Qt.UserRole + 1) == key:
+                    item.setIcon(QIcon(pixmap))
+                elif item.data(Qt.UserRole + 1) in evicted:
+                    item.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
+            if (self.toggle.isEnabled() and self.files.currentItem() is not None
+                    and self.files.currentItem().data(Qt.UserRole + 1) == key):
+                self.show_selected_preview(update_message=False)
+        self.start_thumbnail()
+
+    def stop_thumbnails(self):
+        self.thumbnail_queue.clear()
+        self.thumbnail_key = None
+        self.thumbnail_timer.stop()
+        if self.thumbnail_process.state() != QProcess.NotRunning:
+            self.thumbnail_process.kill()
+            self.thumbnail_process.waitForFinished(1000)
+
+    def eventFilter(self, watched, event):
+        if (watched is self.stage and event.type() == QEvent.Resize
+                and self.stage.currentWidget() is self.poster):
+            self.show_selected_preview(update_message=False)
+        return super().eventFilter(watched, event)
 
     def update_position(self, *_):
         duration, position = self.player.duration(), self.player.position()
@@ -396,7 +544,7 @@ class Recordings(QWidget):
         self.seek.setEnabled(False)
         self.placeholder.setText('This recording could not be played\nTry another video or refresh the list.')
         self.stage.setCurrentWidget(self.placeholder)
-        self.message.setText(f'Could not play this recording: {message}')
+        self.message.setText(f'Could not play this recording: {message}. Your file is still on this computer.')
 
     def release(self, *_):
         self.stage.setCurrentWidget(self.placeholder)
