@@ -143,7 +143,7 @@ class SoftwarePreview(QWidget):
                 source_painter.end()
             x, y, source_scale = screen_transform(
                 width, height, source.width(), source.height(), 1, .5, .5,
-                framing=w.framing.currentData())
+                framing='fit')
             painter.drawPixmap(QRectF(x, y, source.width() * source_scale,
                                       source.height() * source_scale), source,
                                QRectF(source.rect()))
@@ -234,28 +234,48 @@ def prepare(case, scene):
                              pos=page.files.visualItemRect(item).center())
             assert page.player.source().isEmpty()
             disclosure.append('Metadata-only MP4/MKV placeholders, fixed year-2000 mtimes; injected software thumbnail cache; no media decoding or playback.')
-    elif scene.startswith('screen-canvas-') or scene.startswith('canvas-') or scene in ('camera-zoom', 'camera-reset', 'framing-fit', 'framing-fill'):
-        screen_canvas = scene.startswith('screen-canvas-')
-        case.click(w.screen_button if screen_canvas else w.camera_button)
+    elif scene.startswith('canvas-') or scene in (
+            'camera-zoom', 'camera-zoom-plus', 'camera-zoom-minus', 'camera-reset',
+            'framing-fit', 'framing-fill', 'screen-after-portrait'):
+        case.click(w.camera_button)
         QTest.qWait(220)
-        canvas = (scene.removeprefix('screen-canvas-').removesuffix('-fill') if screen_canvas else
-                  scene.removeprefix('canvas-') if scene.startswith('canvas-') else 'portrait')
-        case.choose_output(w.canvas, canvas)
-        if screen_canvas and scene.endswith('-fill'):
-            case.choose(w.framing, 'fill')
+        canvas = scene.removeprefix('canvas-') if scene.startswith('canvas-') else 'portrait'
+        case.choose(w.canvas, canvas)
+        if canvas != 'landscape':
+            assert w.framing.currentData() == 'fill', 'Social camera preset must default to Fill'
         if scene.startswith('framing-'):
             case.choose(w.framing, scene.removeprefix('framing-'))
-        if scene in ('camera-zoom', 'camera-reset'):
-            case.click(w.camera_zoom)
+        if scene in ('camera-zoom-plus', 'camera-zoom-minus'):
+            for _ in range(5):
+                case.click(w.camera_zoom_plus)
+            if scene == 'camera-zoom-minus':
+                for _ in range(2):
+                    case.click(w.camera_zoom_minus)
+            assert w.camera_zoom.value() == (130 if scene == 'camera-zoom-minus' else 150)
+        elif scene in ('camera-zoom', 'camera-reset'):
+            w.camera_zoom.setFocus()
             QTest.keyClick(w.camera_zoom, Qt.Key_End)
             QTest.qWait(220)
             if scene == 'camera-reset':
                 case.click(w.camera_zoom_reset)
                 QTest.qWait(220)
-        disclosure.append(f'Production canvas {w.canvas.currentData()}, output {w.output_dimensions()}, '
-                          f'framing {w.framing.currentData()}, camera zoom {w.camera_zoom.value()}%. '
-                          'Synthetic 1280×720 source cropped and placed with production composition helpers; '
-                          'output is letterboxed within the real preview widget.')
+        if scene == 'screen-after-portrait':
+            engine = w.engine
+            engine.set_canvas.reset_mock()
+            case.click(w.screen_button)
+            QTest.qWait(220)
+            assert w.engine is engine
+            engine.set_canvas.assert_any_call(*w.quality.currentData())
+            assert not w.canvas_panel.isVisible()
+            assert w.output_dimensions() == tuple(w.quality.currentData())
+            assert w.engine.configure.call_args.kwargs['framing'] == 'fit'
+        disclosure.append(f'Production camera canvas preference {w.canvas.currentData()}, '
+                          f'actual {w.mode} output {w.output_dimensions()}, '
+                          f'camera framing preference {w.framing.currentData()}, '
+                          f'camera zoom {w.camera_zoom.value()}%. '
+                          'Synthetic 1280×720 source cropped and placed with production composition helpers. '
+                          'Production CanvasPreview workspace surrounds the output at its actual aspect. '
+                          'Zoom plus/minus scenes use real QTest button clicks.')
     elif scene == 'advanced':
         case.click(w.screen_button)
         QTest.qWait(220)
@@ -311,6 +331,10 @@ def prepare(case, scene):
     else:
         case.click(getattr(w, scene + '_button'))
         QTest.qWait(220)
+    if w.mode == 'screen':
+        assert not w.canvas_panel.isVisible(), 'Screen view must hide Canvas and Fit/Fill'
+        assert w.output_dimensions() == tuple(w.quality.currentData())
+        disclosure.append('Screen output uses landscape dimensions and Fit; camera canvas controls are hidden.')
     w.preview.mode = w.mode
     w.preview.update()
     qt.processEvents()
@@ -360,8 +384,8 @@ def main():
         ('audio', ('audio-silence',)), ('advanced', ('advanced',)),
         ('expanded', ('expanded',)), ('states', ('recording', 'paused', 'saving', 'error')),
         ('canvas', ('canvas-landscape', 'canvas-portrait', 'canvas-square', 'canvas-portrait45',
-                    'camera-zoom', 'camera-reset', 'framing-fit', 'framing-fill',
-                    'screen-canvas-portrait', 'screen-canvas-portrait-fill', 'screen-canvas-square')),
+                    'camera-zoom', 'camera-zoom-plus', 'camera-zoom-minus', 'camera-reset',
+                    'framing-fit', 'framing-fill', 'screen-after-portrait')),
     ):
         if group in args.scenes:
             scenes += [(scene, size) for scene in names

@@ -131,7 +131,7 @@ class ClearlineClickthrough(unittest.TestCase):
         QTest.qWait(220)  # Let the real configuration debounce process the selection.
 
     def choose_output(self, combo, data):
-        """Exercise the real restart handler while replacing only engine creation."""
+        """Exercise live output updates and detect any unintended engine reconstruction."""
         engine = self.window.engine
         def initialize():
             self.window.engine = engine
@@ -140,7 +140,7 @@ class ClearlineClickthrough(unittest.TestCase):
             self.choose(combo, data)
         return engine, start
 
-    def test_canvas_choices_restart_engine_and_preserve_quality(self):
+    def test_canvas_choices_update_existing_engine_and_preserve_quality(self):
         w = self.window
         quality = [(w.quality.itemText(i), w.quality.itemData(i))
                    for i in range(w.quality.count())]
@@ -153,8 +153,9 @@ class ClearlineClickthrough(unittest.TestCase):
                 engine = w.engine
                 engine.close.reset_mock()
                 _, initialize = self.choose_output(w.canvas, canvas)
-                engine.close.assert_called_once()
-                initialize.assert_called_once()
+                engine.close.assert_not_called()
+                initialize.assert_not_called()
+                engine.set_canvas.assert_called_with(*w.output_dimensions())
                 width, height = w.output_dimensions()
                 self.assertAlmostEqual(width / height, ratio, places=2)
                 self.assertIn(str(width), w.canvas_note.text())
@@ -173,16 +174,16 @@ class ClearlineClickthrough(unittest.TestCase):
         QTest.qWait(220)
         self.assertEqual(w.camera_zoom.value(), 300)
         self.assertEqual(w.camera_zoom_value.text(), '300%')
-        self.assertEqual(w.engine.configure.call_args.kwargs['camera_zoom'], 3.0)
+        self.assertEqual(w.engine.set_camera_framing.call_args.kwargs['camera_zoom'], 3.0)
         self.choose(w.framing, 'fill')
-        self.assertEqual(w.engine.configure.call_args.kwargs['framing'], 'fill')
+        self.assertEqual(w.engine.set_camera_framing.call_args.kwargs['framing'], 'fill')
         self.choose(w.framing, 'fit')
-        self.assertEqual(w.engine.configure.call_args.kwargs['framing'], 'fit')
+        self.assertEqual(w.engine.set_camera_framing.call_args.kwargs['framing'], 'fit')
         self.click(w.camera_zoom_reset)
         self.assertEqual(w.camera_zoom.value(), 100)
         self.assertEqual(w.camera_zoom_value.text(), '100%')
         QTest.qWait(220)
-        self.assertEqual(w.engine.configure.call_args.kwargs['camera_zoom'], 1.0)
+        self.assertEqual(w.engine.set_camera_framing.call_args.kwargs['camera_zoom'], 1.0)
         self.choose(w.camera, None)
         for control in (w.camera_zoom, w.camera_zoom_reset):
             self.visible_control(control)
@@ -430,7 +431,8 @@ class ClearlineClickthrough(unittest.TestCase):
                         self.click(getattr(w, mode + '_button'))
                         QTest.qWait(220)
                         self.assert_primary_geometry([
-                            w.screen_button, w.camera_button, w.canvas, w.framing, w.canvas_note,
+                            w.screen_button, w.camera_button, w.canvas_note,
+                            *([w.canvas, w.framing] if mode == 'camera' else []),
                             w.camera, w.camera_zoom, w.camera_zoom_value, w.camera_zoom_reset, w.microphone,
                             w.theme_choice, w.library_button, w.sharing_button,
                             w.record_button, w.live_microphone, w.audio_check_button,

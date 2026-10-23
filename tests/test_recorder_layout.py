@@ -61,7 +61,7 @@ class RecorderLayoutChecks(unittest.TestCase):
                             control.mapTo(viewport, control.rect().topLeft())))
                         self.assertTrue(viewport.rect().contains(
                             control.mapTo(viewport, control.rect().bottomRight())))
-                    self.assertGreaterEqual(window.preview.height(), 360)
+                    self.assertGreaterEqual(window.preview_frame.height(), 360)
 
     def test_recorder_has_no_latest_recording_card(self):
         window = self.window
@@ -77,7 +77,7 @@ class RecorderLayoutChecks(unittest.TestCase):
                              [label.text() for label in window.recorder_page.findChildren(QLabel)])
             for attribute in ('recent', 'recent_name', 'play_button', 'upload_button', 'copy_button'):
                 self.assertFalse(hasattr(window, attribute), attribute)
-            self.assertGreaterEqual(window.preview.height(), 360)
+            self.assertGreaterEqual(window.preview_frame.height(), 360)
         window.focus_button.setChecked(True)
         self.assertTrue(window.controls_panel.isHidden())
         self.assertTrue(window.record_button.isVisible())
@@ -103,11 +103,13 @@ class RecorderLayoutChecks(unittest.TestCase):
                             self.assertTrue(window.rect().contains(
                                 button.mapTo(window, button.rect().bottomRight())))
                             self.assertLess(button.mapTo(window, QPoint()).x(), width // 2)
-                        self.assertGreaterEqual(window.preview.height(), 360)
+                        self.assertGreaterEqual(window.preview_frame.height(), 360)
                         self.assertGreater(window.library_button.mapTo(window, QPoint()).y(),
                                            height - 80)
                     if expanded:
-                        self.assertLess(window.preview.mapTo(window, QPoint()).x(), 60)
+                        # The workspace expands; the native canvas stays centered
+                        # at the selected recording aspect ratio inside it.
+                        self.assertLess(window.preview_frame.mapTo(window, QPoint()).x(), 60)
                     else:
                         self.assertLess(window.controls_panel.mapTo(window, QPoint()).x(),
                                            window.preview.mapTo(window, QPoint()).x())

@@ -136,7 +136,7 @@ class MeterUiChecks(unittest.TestCase):
             meter = window.microphone_meter
             self.assertLessEqual(meter.width(), window.preview.parentWidget().width())
             self.assertFalse(window.controls_panel.isAncestorOf(meter))
-            self.assertGreaterEqual(window.preview.height(), 360)
+            self.assertGreaterEqual(window.preview_frame.height(), 360)
         window.focus_button.setChecked(True)
         self.assertTrue(window.controls_panel.isHidden())
         self.assertTrue(window.record_button.isVisible())
