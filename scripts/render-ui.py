@@ -424,6 +424,12 @@ def main():
                     w.idle_audio.stop()
                     details = prepare(case, scene)
                     QTest.qWait(30)
+                    if scene not in ('audio-silence', 'recording', 'paused', 'saving', 'error'):
+                        # The fixture can queue one timer tick before we stop it.
+                        # Pin unmeasured idle telemetry after those callbacks, so
+                        # unrelated worker timing cannot change layout captures.
+                        w.microphone_meter.show_status(None)
+                        details.append('Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices.')
                     assert (w.width(), w.height()) == size, f'Unexpected render size {w.size()}'
                     name = f'{scene}-{theme}-{size[0]}x{size[1]}.png'
                     image = w.grab()

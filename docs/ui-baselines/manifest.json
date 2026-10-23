@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2026-10-23T06:49:21.935753+00:00",
+  "generated_at_utc": "2026-10-23T06:52:06.104540+00:00",
   "command": ".venv/bin/python scripts/render-ui.py --output docs/ui-baselines",
   "qt": "6.11.1",
   "pyside": "6.11.1",
@@ -31,7 +31,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -56,7 +56,8 @@
       },
       "png_sha256": "5837d07cf01aa62fb67448f2e015aef40bae53668bc593a18c2bf8156137d104",
       "details": [
-        "Screen output uses landscape dimensions and Fit; camera canvas controls are hidden."
+        "Screen output uses landscape dimensions and Fit; camera canvas controls are hidden.",
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
       ]
     },
     "screen-dark-1120x840.png": {
@@ -74,7 +75,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -99,7 +100,8 @@
       },
       "png_sha256": "96026dfd0fb3b8428d500d5a7c2e89c169a95d26f68bbe877fe675036bb90c06",
       "details": [
-        "Screen output uses landscape dimensions and Fit; camera canvas controls are hidden."
+        "Screen output uses landscape dimensions and Fit; camera canvas controls are hidden.",
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
       ]
     },
     "screen-light-960x760.png": {
@@ -117,7 +119,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -142,7 +144,8 @@
       },
       "png_sha256": "7d179f723a6041e594266489a5b79b1a138c871611488557f5fa08cefbd2ab3c",
       "details": [
-        "Screen output uses landscape dimensions and Fit; camera canvas controls are hidden."
+        "Screen output uses landscape dimensions and Fit; camera canvas controls are hidden.",
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
       ]
     },
     "screen-dark-960x760.png": {
@@ -160,7 +163,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -185,7 +188,8 @@
       },
       "png_sha256": "27c8309ab03857d1dfee480967e5e8f678b1d5905d96726d30f552a124f2a26f",
       "details": [
-        "Screen output uses landscape dimensions and Fit; camera canvas controls are hidden."
+        "Screen output uses landscape dimensions and Fit; camera canvas controls are hidden.",
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
       ]
     },
     "camera-light-1120x840.png": {
@@ -203,7 +207,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -227,7 +231,9 @@
         "assets/fonts/Manrope-SemiBold.ttf": "f43edb46a08e1538413ea2383ef01ed93cdab191a2c57d2489d9590985858cf7"
       },
       "png_sha256": "3e708989bb1b80ebdbe8fe605a0b1af3a0c890598e0c64fa8e35b58a65ef7a48",
-      "details": []
+      "details": [
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
+      ]
     },
     "camera-dark-1120x840.png": {
       "scene": "camera",
@@ -244,7 +250,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -268,7 +274,9 @@
         "assets/fonts/Manrope-SemiBold.ttf": "f43edb46a08e1538413ea2383ef01ed93cdab191a2c57d2489d9590985858cf7"
       },
       "png_sha256": "c897eb95cdb38ded1b72385fffaa156b54720b2cdcfc26f571fa45a1f561d5a1",
-      "details": []
+      "details": [
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
+      ]
     },
     "camera-light-960x760.png": {
       "scene": "camera",
@@ -285,7 +293,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -309,7 +317,9 @@
         "assets/fonts/Manrope-SemiBold.ttf": "f43edb46a08e1538413ea2383ef01ed93cdab191a2c57d2489d9590985858cf7"
       },
       "png_sha256": "cd2a2dd3bfe547ee3390e31a2c43bf93c76242e801422403d8b7eb78cebbc985",
-      "details": []
+      "details": [
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
+      ]
     },
     "camera-dark-960x760.png": {
       "scene": "camera",
@@ -326,7 +336,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -350,7 +360,9 @@
         "assets/fonts/Manrope-SemiBold.ttf": "f43edb46a08e1538413ea2383ef01ed93cdab191a2c57d2489d9590985858cf7"
       },
       "png_sha256": "140384a3ae53fc53c5b2aed4ec3cc3e917326aebd5fb36ad4424948c17ca3591",
-      "details": []
+      "details": [
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
+      ]
     },
     "library-populated-light-1120x840.png": {
       "scene": "library-populated",
@@ -367,7 +379,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -392,7 +404,8 @@
       },
       "png_sha256": "295e40a029beeec5bf7ddbca7a281f9dea95c6f62e3695a154546d64ba6a8dbd",
       "details": [
-        "Metadata-only MP4/MKV placeholders, fixed year-2000 mtimes; injected software thumbnail cache; no media decoding or playback."
+        "Metadata-only MP4/MKV placeholders, fixed year-2000 mtimes; injected software thumbnail cache; no media decoding or playback.",
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
       ]
     },
     "library-populated-dark-1120x840.png": {
@@ -410,7 +423,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -435,7 +448,8 @@
       },
       "png_sha256": "673a91171c8a0e7521aa5f11b6e31c36f0d8523720d04487f263fb53cf8b79ad",
       "details": [
-        "Metadata-only MP4/MKV placeholders, fixed year-2000 mtimes; injected software thumbnail cache; no media decoding or playback."
+        "Metadata-only MP4/MKV placeholders, fixed year-2000 mtimes; injected software thumbnail cache; no media decoding or playback.",
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
       ]
     },
     "library-populated-light-960x760.png": {
@@ -453,7 +467,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -478,7 +492,8 @@
       },
       "png_sha256": "983cc3a74bd6f8c6116e0200317897b612f36ecfc08d24bb53e35e2d06cbb5d9",
       "details": [
-        "Metadata-only MP4/MKV placeholders, fixed year-2000 mtimes; injected software thumbnail cache; no media decoding or playback."
+        "Metadata-only MP4/MKV placeholders, fixed year-2000 mtimes; injected software thumbnail cache; no media decoding or playback.",
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
       ]
     },
     "library-populated-dark-960x760.png": {
@@ -496,7 +511,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -521,7 +536,8 @@
       },
       "png_sha256": "9302eace2a53a40d53be1d065a78eb4c32bb7e7e71cf4346d6b0c6228412dabe",
       "details": [
-        "Metadata-only MP4/MKV placeholders, fixed year-2000 mtimes; injected software thumbnail cache; no media decoding or playback."
+        "Metadata-only MP4/MKV placeholders, fixed year-2000 mtimes; injected software thumbnail cache; no media decoding or playback.",
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
       ]
     },
     "library-empty-light-1120x840.png": {
@@ -539,7 +555,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -563,7 +579,9 @@
         "assets/fonts/Manrope-SemiBold.ttf": "f43edb46a08e1538413ea2383ef01ed93cdab191a2c57d2489d9590985858cf7"
       },
       "png_sha256": "92e8c963d103ef65ea3f6b1750f939bfce9285f1f946415fe6145cf04d1d7e42",
-      "details": []
+      "details": [
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
+      ]
     },
     "library-empty-dark-1120x840.png": {
       "scene": "library-empty",
@@ -580,7 +598,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -604,7 +622,9 @@
         "assets/fonts/Manrope-SemiBold.ttf": "f43edb46a08e1538413ea2383ef01ed93cdab191a2c57d2489d9590985858cf7"
       },
       "png_sha256": "bfcabc676670f7f48e50259546312834726b7807d11516d9f25c7ec73c435d99",
-      "details": []
+      "details": [
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
+      ]
     },
     "library-empty-light-960x760.png": {
       "scene": "library-empty",
@@ -621,7 +641,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -645,7 +665,9 @@
         "assets/fonts/Manrope-SemiBold.ttf": "f43edb46a08e1538413ea2383ef01ed93cdab191a2c57d2489d9590985858cf7"
       },
       "png_sha256": "f27b913ffddcc85ebc7023f1e6e0a7fb8e2f3f124d46012f15eec351c0cc214d",
-      "details": []
+      "details": [
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
+      ]
     },
     "library-empty-dark-960x760.png": {
       "scene": "library-empty",
@@ -662,7 +684,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -686,7 +708,9 @@
         "assets/fonts/Manrope-SemiBold.ttf": "f43edb46a08e1538413ea2383ef01ed93cdab191a2c57d2489d9590985858cf7"
       },
       "png_sha256": "0e004a0810885d943f7ba9bb78b8bcb33467ceec6c458fab906ceb2205879fb5",
-      "details": []
+      "details": [
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
+      ]
     },
     "audio-silence-light-960x760.png": {
       "scene": "audio-silence",
@@ -703,7 +727,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -746,7 +770,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -789,7 +813,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -815,7 +839,8 @@
       "png_sha256": "d838c2705a565edbbfa4f7628ea7303743df9e07190b2c25d92133c0c5f6d299",
       "details": [
         "More options opened by QTest; production disclosure automatically scrolls its body into view.",
-        "Screen output uses landscape dimensions and Fit; camera canvas controls are hidden."
+        "Screen output uses landscape dimensions and Fit; camera canvas controls are hidden.",
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
       ]
     },
     "advanced-dark-960x760.png": {
@@ -833,7 +858,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -859,7 +884,8 @@
       "png_sha256": "761043bdbbdd4f4f22232c4448c7be92dac0406bb33bf1030e0b51c43e3c114e",
       "details": [
         "More options opened by QTest; production disclosure automatically scrolls its body into view.",
-        "Screen output uses landscape dimensions and Fit; camera canvas controls are hidden."
+        "Screen output uses landscape dimensions and Fit; camera canvas controls are hidden.",
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
       ]
     },
     "expanded-light-960x760.png": {
@@ -877,7 +903,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -901,7 +927,9 @@
         "assets/fonts/Manrope-SemiBold.ttf": "f43edb46a08e1538413ea2383ef01ed93cdab191a2c57d2489d9590985858cf7"
       },
       "png_sha256": "e133aaffaea0c7aa2ade9f3de0a522e0c8f423b42ea7b75bb747aa38f8fdc527",
-      "details": []
+      "details": [
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
+      ]
     },
     "expanded-dark-960x760.png": {
       "scene": "expanded",
@@ -918,7 +946,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -942,7 +970,9 @@
         "assets/fonts/Manrope-SemiBold.ttf": "f43edb46a08e1538413ea2383ef01ed93cdab191a2c57d2489d9590985858cf7"
       },
       "png_sha256": "56cd4df97e29844486eb27cc87a536ab500e466046e71ad010f8dcb6311220fd",
-      "details": []
+      "details": [
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
+      ]
     },
     "recording-light-960x760.png": {
       "scene": "recording",
@@ -959,7 +989,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -1002,7 +1032,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -1045,7 +1075,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -1088,7 +1118,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -1131,7 +1161,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -1174,7 +1204,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -1217,7 +1247,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -1260,7 +1290,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -1303,7 +1333,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -1328,7 +1358,8 @@
       },
       "png_sha256": "cd2a2dd3bfe547ee3390e31a2c43bf93c76242e801422403d8b7eb78cebbc985",
       "details": [
-        "Production camera canvas preference landscape, actual camera output (3840, 2160), camera framing preference fit, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks."
+        "Production camera canvas preference landscape, actual camera output (3840, 2160), camera framing preference fit, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks.",
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
       ]
     },
     "canvas-landscape-dark-960x760.png": {
@@ -1346,7 +1377,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -1371,7 +1402,8 @@
       },
       "png_sha256": "140384a3ae53fc53c5b2aed4ec3cc3e917326aebd5fb36ad4424948c17ca3591",
       "details": [
-        "Production camera canvas preference landscape, actual camera output (3840, 2160), camera framing preference fit, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks."
+        "Production camera canvas preference landscape, actual camera output (3840, 2160), camera framing preference fit, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks.",
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
       ]
     },
     "canvas-landscape-light-1120x840.png": {
@@ -1389,7 +1421,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -1414,7 +1446,8 @@
       },
       "png_sha256": "3e708989bb1b80ebdbe8fe605a0b1af3a0c890598e0c64fa8e35b58a65ef7a48",
       "details": [
-        "Production camera canvas preference landscape, actual camera output (3840, 2160), camera framing preference fit, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks."
+        "Production camera canvas preference landscape, actual camera output (3840, 2160), camera framing preference fit, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks.",
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
       ]
     },
     "canvas-landscape-dark-1120x840.png": {
@@ -1432,7 +1465,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -1457,7 +1490,8 @@
       },
       "png_sha256": "c897eb95cdb38ded1b72385fffaa156b54720b2cdcfc26f571fa45a1f561d5a1",
       "details": [
-        "Production camera canvas preference landscape, actual camera output (3840, 2160), camera framing preference fit, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks."
+        "Production camera canvas preference landscape, actual camera output (3840, 2160), camera framing preference fit, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks.",
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
       ]
     },
     "canvas-portrait-light-960x760.png": {
@@ -1475,7 +1509,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -1500,7 +1534,8 @@
       },
       "png_sha256": "46c651e818fb6ea835755ecc5c09d4b360cbe970cbe16b3205f58f7364dd0435",
       "details": [
-        "Production camera canvas preference portrait, actual camera output (2160, 3840), camera framing preference fill, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks."
+        "Production camera canvas preference portrait, actual camera output (2160, 3840), camera framing preference fill, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks.",
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
       ]
     },
     "canvas-portrait-dark-960x760.png": {
@@ -1518,7 +1553,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -1543,7 +1578,8 @@
       },
       "png_sha256": "f74ee648c7a3836bf3b89bc5e23c82c55cb3a1fb90cd186d6e1ee0d8e3801556",
       "details": [
-        "Production camera canvas preference portrait, actual camera output (2160, 3840), camera framing preference fill, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks."
+        "Production camera canvas preference portrait, actual camera output (2160, 3840), camera framing preference fill, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks.",
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
       ]
     },
     "canvas-portrait-light-1120x840.png": {
@@ -1561,7 +1597,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -1586,7 +1622,8 @@
       },
       "png_sha256": "3f6caf37939507295e5a55f3c96316122ee77fc564b0f5d053dd05d6c9b759fc",
       "details": [
-        "Production camera canvas preference portrait, actual camera output (2160, 3840), camera framing preference fill, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks."
+        "Production camera canvas preference portrait, actual camera output (2160, 3840), camera framing preference fill, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks.",
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
       ]
     },
     "canvas-portrait-dark-1120x840.png": {
@@ -1604,7 +1641,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -1629,7 +1666,8 @@
       },
       "png_sha256": "d4801ffab22ae43e48bc8e9d49133c140329cccbde52fe648d1e6b5c94ebbfb3",
       "details": [
-        "Production camera canvas preference portrait, actual camera output (2160, 3840), camera framing preference fill, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks."
+        "Production camera canvas preference portrait, actual camera output (2160, 3840), camera framing preference fill, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks.",
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
       ]
     },
     "canvas-square-light-960x760.png": {
@@ -1647,7 +1685,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -1672,7 +1710,8 @@
       },
       "png_sha256": "ca4d7d42274e8cd71aa6f27f0b09967527250231df397f67b1a6d6264ef7c84f",
       "details": [
-        "Production camera canvas preference square, actual camera output (2160, 2160), camera framing preference fill, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks."
+        "Production camera canvas preference square, actual camera output (2160, 2160), camera framing preference fill, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks.",
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
       ]
     },
     "canvas-square-dark-960x760.png": {
@@ -1690,7 +1729,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -1715,7 +1754,8 @@
       },
       "png_sha256": "75b3599189864a294b677f283f5599c91179aea7cfc54758876cd00e946a3ade",
       "details": [
-        "Production camera canvas preference square, actual camera output (2160, 2160), camera framing preference fill, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks."
+        "Production camera canvas preference square, actual camera output (2160, 2160), camera framing preference fill, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks.",
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
       ]
     },
     "canvas-square-light-1120x840.png": {
@@ -1733,7 +1773,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -1758,7 +1798,8 @@
       },
       "png_sha256": "5ea69459baccc549bb92b9abecab1553891f05a63fca35447171bcbb01d5e7db",
       "details": [
-        "Production camera canvas preference square, actual camera output (2160, 2160), camera framing preference fill, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks."
+        "Production camera canvas preference square, actual camera output (2160, 2160), camera framing preference fill, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks.",
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
       ]
     },
     "canvas-square-dark-1120x840.png": {
@@ -1776,7 +1817,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -1801,7 +1842,8 @@
       },
       "png_sha256": "ef5dffb8a6b61397aeea0d4395e235e98c3a0ab55ef9861fe1c4c0c58c69ba79",
       "details": [
-        "Production camera canvas preference square, actual camera output (2160, 2160), camera framing preference fill, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks."
+        "Production camera canvas preference square, actual camera output (2160, 2160), camera framing preference fill, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks.",
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
       ]
     },
     "canvas-portrait45-light-960x760.png": {
@@ -1819,7 +1861,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -1844,7 +1886,8 @@
       },
       "png_sha256": "a1171304da6b37034641455ca4da1afe29aa205d9caf0973b65ab8234369a468",
       "details": [
-        "Production camera canvas preference portrait45, actual camera output (2160, 2700), camera framing preference fill, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks."
+        "Production camera canvas preference portrait45, actual camera output (2160, 2700), camera framing preference fill, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks.",
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
       ]
     },
     "canvas-portrait45-dark-960x760.png": {
@@ -1862,7 +1905,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -1887,7 +1930,8 @@
       },
       "png_sha256": "f1b2e43c5c8fa33ef6f3db5094e73e4aa05fab0220f8362d9fb6942f6359f945",
       "details": [
-        "Production camera canvas preference portrait45, actual camera output (2160, 2700), camera framing preference fill, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks."
+        "Production camera canvas preference portrait45, actual camera output (2160, 2700), camera framing preference fill, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks.",
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
       ]
     },
     "canvas-portrait45-light-1120x840.png": {
@@ -1905,7 +1949,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -1930,7 +1974,8 @@
       },
       "png_sha256": "0f04a5426c96fe5e3f329b978534164e26395b63271150e1209140534a28a4e8",
       "details": [
-        "Production camera canvas preference portrait45, actual camera output (2160, 2700), camera framing preference fill, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks."
+        "Production camera canvas preference portrait45, actual camera output (2160, 2700), camera framing preference fill, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks.",
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
       ]
     },
     "canvas-portrait45-dark-1120x840.png": {
@@ -1948,7 +1993,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -1973,7 +2018,8 @@
       },
       "png_sha256": "1e297055d1f9d285ba4342f24f40490cb92af9e7bb93c7a0991f4e7fee2fcc43",
       "details": [
-        "Production camera canvas preference portrait45, actual camera output (2160, 2700), camera framing preference fill, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks."
+        "Production camera canvas preference portrait45, actual camera output (2160, 2700), camera framing preference fill, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks.",
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
       ]
     },
     "camera-zoom-light-960x760.png": {
@@ -1991,7 +2037,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -2016,7 +2062,8 @@
       },
       "png_sha256": "16a8d28845b27e41b6c2f8626eecbf12e04aee57d487223546a92b87250e3d93",
       "details": [
-        "Production camera canvas preference portrait, actual camera output (2160, 3840), camera framing preference fill, camera zoom 300%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks."
+        "Production camera canvas preference portrait, actual camera output (2160, 3840), camera framing preference fill, camera zoom 300%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks.",
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
       ]
     },
     "camera-zoom-dark-960x760.png": {
@@ -2034,7 +2081,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -2059,7 +2106,8 @@
       },
       "png_sha256": "4a18f99ef2a968e116123a34029926c828982ede2a88c380bc7a0a8703380edd",
       "details": [
-        "Production camera canvas preference portrait, actual camera output (2160, 3840), camera framing preference fill, camera zoom 300%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks."
+        "Production camera canvas preference portrait, actual camera output (2160, 3840), camera framing preference fill, camera zoom 300%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks.",
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
       ]
     },
     "camera-zoom-light-1120x840.png": {
@@ -2077,7 +2125,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -2102,7 +2150,8 @@
       },
       "png_sha256": "32c229a17b659c2fdbd1396071b9c01edb75d68e6a1e938735f356ec9d406bc0",
       "details": [
-        "Production camera canvas preference portrait, actual camera output (2160, 3840), camera framing preference fill, camera zoom 300%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks."
+        "Production camera canvas preference portrait, actual camera output (2160, 3840), camera framing preference fill, camera zoom 300%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks.",
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
       ]
     },
     "camera-zoom-dark-1120x840.png": {
@@ -2120,7 +2169,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -2145,7 +2194,8 @@
       },
       "png_sha256": "0665ed2f6d78ad60313fa63a77dd3df33305b0486b7ecc60fdbf7489bbab0ab5",
       "details": [
-        "Production camera canvas preference portrait, actual camera output (2160, 3840), camera framing preference fill, camera zoom 300%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks."
+        "Production camera canvas preference portrait, actual camera output (2160, 3840), camera framing preference fill, camera zoom 300%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks.",
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
       ]
     },
     "camera-zoom-plus-light-960x760.png": {
@@ -2163,7 +2213,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -2188,7 +2238,8 @@
       },
       "png_sha256": "7090bac1fe16bdb0929bec68bc7f5986fed327e588cef2646129ef14dc38f24c",
       "details": [
-        "Production camera canvas preference portrait, actual camera output (2160, 3840), camera framing preference fill, camera zoom 150%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks."
+        "Production camera canvas preference portrait, actual camera output (2160, 3840), camera framing preference fill, camera zoom 150%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks.",
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
       ]
     },
     "camera-zoom-plus-dark-960x760.png": {
@@ -2206,7 +2257,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -2231,7 +2282,8 @@
       },
       "png_sha256": "e703819d6957b51f4eab188a71f4f444798c677839e67d280c9da3b1ff9778f8",
       "details": [
-        "Production camera canvas preference portrait, actual camera output (2160, 3840), camera framing preference fill, camera zoom 150%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks."
+        "Production camera canvas preference portrait, actual camera output (2160, 3840), camera framing preference fill, camera zoom 150%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks.",
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
       ]
     },
     "camera-zoom-plus-light-1120x840.png": {
@@ -2249,7 +2301,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -2274,7 +2326,8 @@
       },
       "png_sha256": "b4f85663d74738b0996c4dbae022f98c032df373277bd7e22d8f493e20b9449a",
       "details": [
-        "Production camera canvas preference portrait, actual camera output (2160, 3840), camera framing preference fill, camera zoom 150%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks."
+        "Production camera canvas preference portrait, actual camera output (2160, 3840), camera framing preference fill, camera zoom 150%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks.",
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
       ]
     },
     "camera-zoom-plus-dark-1120x840.png": {
@@ -2292,7 +2345,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -2317,7 +2370,8 @@
       },
       "png_sha256": "7e880c6518036ccc3fb61067265ecb2a1c27a43069655239162448cc82459bfc",
       "details": [
-        "Production camera canvas preference portrait, actual camera output (2160, 3840), camera framing preference fill, camera zoom 150%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks."
+        "Production camera canvas preference portrait, actual camera output (2160, 3840), camera framing preference fill, camera zoom 150%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks.",
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
       ]
     },
     "camera-zoom-minus-light-960x760.png": {
@@ -2335,7 +2389,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -2360,7 +2414,8 @@
       },
       "png_sha256": "12a259c0cae14e952f211ed3b75ea4933b768218758e2d0f0d375640b74b4173",
       "details": [
-        "Production camera canvas preference portrait, actual camera output (2160, 3840), camera framing preference fill, camera zoom 130%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks."
+        "Production camera canvas preference portrait, actual camera output (2160, 3840), camera framing preference fill, camera zoom 130%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks.",
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
       ]
     },
     "camera-zoom-minus-dark-960x760.png": {
@@ -2378,7 +2433,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -2403,7 +2458,8 @@
       },
       "png_sha256": "1f902959aa2f226fbb40f8bd0529afe2de41db31db9d1dad96d5f32039e6bd1f",
       "details": [
-        "Production camera canvas preference portrait, actual camera output (2160, 3840), camera framing preference fill, camera zoom 130%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks."
+        "Production camera canvas preference portrait, actual camera output (2160, 3840), camera framing preference fill, camera zoom 130%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks.",
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
       ]
     },
     "camera-zoom-minus-light-1120x840.png": {
@@ -2421,7 +2477,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -2444,9 +2500,10 @@
         "assets/fonts/Manrope-Regular.ttf": "d23d6eedf51dd495138aa1a83588027d4a63549cdfcc2fa5e0d8e84e09cf4cb1",
         "assets/fonts/Manrope-SemiBold.ttf": "f43edb46a08e1538413ea2383ef01ed93cdab191a2c57d2489d9590985858cf7"
       },
-      "png_sha256": "63a0001d9618784fb88c4790143ab4a4bb4be11b44ea96990baf459958ade0cf",
+      "png_sha256": "0e01dbd19e079281c3a2df6d3a674b3b6524ae4dc789a2b9cf0e38a1ca2c1f5b",
       "details": [
-        "Production camera canvas preference portrait, actual camera output (2160, 3840), camera framing preference fill, camera zoom 130%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks."
+        "Production camera canvas preference portrait, actual camera output (2160, 3840), camera framing preference fill, camera zoom 130%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks.",
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
       ]
     },
     "camera-zoom-minus-dark-1120x840.png": {
@@ -2464,7 +2521,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -2489,7 +2546,8 @@
       },
       "png_sha256": "43334bb9f525b53c6cc501394f5a7b9336796784ce08ba93cba77a7b07fd0daa",
       "details": [
-        "Production camera canvas preference portrait, actual camera output (2160, 3840), camera framing preference fill, camera zoom 130%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks."
+        "Production camera canvas preference portrait, actual camera output (2160, 3840), camera framing preference fill, camera zoom 130%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks.",
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
       ]
     },
     "camera-reset-light-960x760.png": {
@@ -2507,7 +2565,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -2532,7 +2590,8 @@
       },
       "png_sha256": "f9d3b0ea3ead1c85f8acef6de9f7902756f169025bc959803a1f2856d260169d",
       "details": [
-        "Production camera canvas preference portrait, actual camera output (2160, 3840), camera framing preference fill, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks."
+        "Production camera canvas preference portrait, actual camera output (2160, 3840), camera framing preference fill, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks.",
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
       ]
     },
     "camera-reset-dark-960x760.png": {
@@ -2550,7 +2609,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -2575,7 +2634,8 @@
       },
       "png_sha256": "8d18461fe67a01b29e0e7895d1f6e07545f663be10dd2b45a75b35da2308e01a",
       "details": [
-        "Production camera canvas preference portrait, actual camera output (2160, 3840), camera framing preference fill, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks."
+        "Production camera canvas preference portrait, actual camera output (2160, 3840), camera framing preference fill, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks.",
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
       ]
     },
     "camera-reset-light-1120x840.png": {
@@ -2593,7 +2653,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -2618,7 +2678,8 @@
       },
       "png_sha256": "cf474dae2ceb6ac9599ab72cdf9bcd862c78568483a888f8a0cbf1754f9b796e",
       "details": [
-        "Production camera canvas preference portrait, actual camera output (2160, 3840), camera framing preference fill, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks."
+        "Production camera canvas preference portrait, actual camera output (2160, 3840), camera framing preference fill, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks.",
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
       ]
     },
     "camera-reset-dark-1120x840.png": {
@@ -2636,7 +2697,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -2661,7 +2722,8 @@
       },
       "png_sha256": "ade553709d427e38f9b333628cb61dc6aa119e886297e7efa29b55ca578294c0",
       "details": [
-        "Production camera canvas preference portrait, actual camera output (2160, 3840), camera framing preference fill, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks."
+        "Production camera canvas preference portrait, actual camera output (2160, 3840), camera framing preference fill, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks.",
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
       ]
     },
     "framing-fit-light-960x760.png": {
@@ -2679,7 +2741,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -2704,7 +2766,8 @@
       },
       "png_sha256": "e221657cbfad4c8a81a5e561b495439006fe06225e08aab50417aeb25c4f6129",
       "details": [
-        "Production camera canvas preference portrait, actual camera output (2160, 3840), camera framing preference fit, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks."
+        "Production camera canvas preference portrait, actual camera output (2160, 3840), camera framing preference fit, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks.",
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
       ]
     },
     "framing-fit-dark-960x760.png": {
@@ -2722,7 +2785,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -2747,7 +2810,8 @@
       },
       "png_sha256": "cbce31be33a484a0df1a808d29212a44ffd6ee931ef6057c37343b2db924ba62",
       "details": [
-        "Production camera canvas preference portrait, actual camera output (2160, 3840), camera framing preference fit, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks."
+        "Production camera canvas preference portrait, actual camera output (2160, 3840), camera framing preference fit, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks.",
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
       ]
     },
     "framing-fit-light-1120x840.png": {
@@ -2765,7 +2829,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -2790,7 +2854,8 @@
       },
       "png_sha256": "c867eb85ce7f0d16a36e74df3f5a0ff3b145f496fe09dae0e5351a05b0a8ec43",
       "details": [
-        "Production camera canvas preference portrait, actual camera output (2160, 3840), camera framing preference fit, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks."
+        "Production camera canvas preference portrait, actual camera output (2160, 3840), camera framing preference fit, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks.",
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
       ]
     },
     "framing-fit-dark-1120x840.png": {
@@ -2808,7 +2873,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -2833,7 +2898,8 @@
       },
       "png_sha256": "25d96e587bd7a8f3fff095e0c65fcd368136452377f7d4e1062e02480622faa0",
       "details": [
-        "Production camera canvas preference portrait, actual camera output (2160, 3840), camera framing preference fit, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks."
+        "Production camera canvas preference portrait, actual camera output (2160, 3840), camera framing preference fit, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks.",
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
       ]
     },
     "framing-fill-light-960x760.png": {
@@ -2851,7 +2917,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -2876,7 +2942,8 @@
       },
       "png_sha256": "46c651e818fb6ea835755ecc5c09d4b360cbe970cbe16b3205f58f7364dd0435",
       "details": [
-        "Production camera canvas preference portrait, actual camera output (2160, 3840), camera framing preference fill, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks."
+        "Production camera canvas preference portrait, actual camera output (2160, 3840), camera framing preference fill, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks.",
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
       ]
     },
     "framing-fill-dark-960x760.png": {
@@ -2894,7 +2961,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -2919,7 +2986,8 @@
       },
       "png_sha256": "f74ee648c7a3836bf3b89bc5e23c82c55cb3a1fb90cd186d6e1ee0d8e3801556",
       "details": [
-        "Production camera canvas preference portrait, actual camera output (2160, 3840), camera framing preference fill, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks."
+        "Production camera canvas preference portrait, actual camera output (2160, 3840), camera framing preference fill, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks.",
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
       ]
     },
     "framing-fill-light-1120x840.png": {
@@ -2937,7 +3005,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -2962,7 +3030,8 @@
       },
       "png_sha256": "3f6caf37939507295e5a55f3c96316122ee77fc564b0f5d053dd05d6c9b759fc",
       "details": [
-        "Production camera canvas preference portrait, actual camera output (2160, 3840), camera framing preference fill, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks."
+        "Production camera canvas preference portrait, actual camera output (2160, 3840), camera framing preference fill, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks.",
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
       ]
     },
     "framing-fill-dark-1120x840.png": {
@@ -2980,7 +3049,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -3005,7 +3074,8 @@
       },
       "png_sha256": "d4801ffab22ae43e48bc8e9d49133c140329cccbde52fe648d1e6b5c94ebbfb3",
       "details": [
-        "Production camera canvas preference portrait, actual camera output (2160, 3840), camera framing preference fill, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks."
+        "Production camera canvas preference portrait, actual camera output (2160, 3840), camera framing preference fill, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks.",
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
       ]
     },
     "screen-after-portrait-light-960x760.png": {
@@ -3023,7 +3093,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -3049,7 +3119,8 @@
       "png_sha256": "7d179f723a6041e594266489a5b79b1a138c871611488557f5fa08cefbd2ab3c",
       "details": [
         "Production camera canvas preference portrait, actual screen output (3840, 2160), camera framing preference fill, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks.",
-        "Screen output uses landscape dimensions and Fit; camera canvas controls are hidden."
+        "Screen output uses landscape dimensions and Fit; camera canvas controls are hidden.",
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
       ]
     },
     "screen-after-portrait-dark-960x760.png": {
@@ -3067,7 +3138,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -3093,7 +3164,8 @@
       "png_sha256": "27c8309ab03857d1dfee480967e5e8f678b1d5905d96726d30f552a124f2a26f",
       "details": [
         "Production camera canvas preference portrait, actual screen output (3840, 2160), camera framing preference fill, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks.",
-        "Screen output uses landscape dimensions and Fit; camera canvas controls are hidden."
+        "Screen output uses landscape dimensions and Fit; camera canvas controls are hidden.",
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
       ]
     },
     "screen-after-portrait-light-1120x840.png": {
@@ -3111,7 +3183,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -3137,7 +3209,8 @@
       "png_sha256": "5837d07cf01aa62fb67448f2e015aef40bae53668bc593a18c2bf8156137d104",
       "details": [
         "Production camera canvas preference portrait, actual screen output (3840, 2160), camera framing preference fill, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks.",
-        "Screen output uses landscape dimensions and Fit; camera canvas controls are hidden."
+        "Screen output uses landscape dimensions and Fit; camera canvas controls are hidden.",
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
       ]
     },
     "screen-after-portrait-dark-1120x840.png": {
@@ -3155,7 +3228,7 @@
         "src/untangle/audio_check.py": "8ef8e8e1941b5b2a7befee6b03ca056ace8bae3c3569673e85b91380a7a1ace4",
         "src/untangle/recordings.py": "a082b08cad68ebab5edefb343afabea2779d4fbffa7f9598cca57373438b40b7",
         "src/untangle/microphone_meter.py": "0723a91329deefab0929f0d3838591419fc44deec7c4ec8241224d213095545a",
-        "scripts/render-ui.py": "03596bbebdfafe14257b7239972faa36017c1f733e777c08cd53957dafd21e06",
+        "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05",
         "tests/test_ui_clickthrough.py": "47df5e1a48a4000d7ec6fad008eb967a9c750d2677c92cd373dc618ce5cfdfbf",
         "assets/clearline-check-dark.svg": "1d39dbf843d8ae6a6e1dcdba5a9cd1c9325a3ac464a99ba1da8e150d6182e9f0",
         "assets/clearline-check-light.svg": "5015c00311306a96ce8d6b265a23dd54c5d84fee7c97727cfaca332f753b60a3",
@@ -3181,7 +3254,8 @@
       "png_sha256": "96026dfd0fb3b8428d500d5a7c2e89c169a95d26f68bbe877fe675036bb90c06",
       "details": [
         "Production camera canvas preference portrait, actual screen output (3840, 2160), camera framing preference fill, camera zoom 100%. Synthetic 1280\u00d7720 source cropped and placed with production composition helpers. Production CanvasPreview workspace surrounds the output at its actual aspect. Zoom plus/minus scenes use real QTest button clicks.",
-        "Screen output uses landscape dimensions and Fit; camera canvas controls are hidden."
+        "Screen output uses landscape dimensions and Fit; camera canvas controls are hidden.",
+        "Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices."
       ]
     }
   }
