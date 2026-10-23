@@ -22,6 +22,7 @@ class AppChecks(unittest.TestCase):
         devices.prepare.return_value = 'test-microphone'
         self.patches = [patch.object(glint, 'AudioDevices', return_value=devices),
             patch.object(glint.Window, 'initialize'), patch.object(glint.Hotkeys, 'start'),
+            patch.object(glint, 'prompt_recording_name', return_value=None),
             patch.object(glint, 'cameras', return_value=[('Test camera', '/dev/video-test')]),
             patch.object(glint, 'microphones', return_value=[]), patch.object(glint, 'VIDEOS', self.root),
             patch.object(glint, 'STATE', self.root), patch.object(glint, 'QSettings', return_value=QSettings(str(self.root/'prefs.ini'), QSettings.IniFormat))]
@@ -400,6 +401,52 @@ class AppChecks(unittest.TestCase):
             self.window.finish_save(path, '')
             upload.assert_called_once_with()
         self.assertEqual(self.window.last_file, path)
+
+    def test_saved_video_name_is_resolved_before_automatic_upload(self):
+        path = self.root / 'Screen recording - 2026-10-23 at 12.30.mp4'
+        path.write_bytes(b'saved synthetic recording')
+        self.window.prefs.setValue('auto_upload', True)
+        def name(parent, original, rename, *, new_recording):
+            self.assertTrue(new_recording)
+            self.assertTrue(self.window.busy)
+            self.assertFalse(self.window.library_button.isEnabled())
+            self.window.toggle_record()
+            self.window.engine.start.assert_not_called()
+            upload.assert_not_called()
+            return rename('Project walkthrough')
+        with patch.object(glint, 'prompt_recording_name', side_effect=name), \
+                patch.object(self.window, 'upload') as upload:
+            self.window.finish_save(path, '')
+            upload.assert_called_once_with()
+        self.assertEqual(self.window.last_file, self.root / 'Project walkthrough.mp4')
+        self.assertEqual(self.window.last_file.read_bytes(), b'saved synthetic recording')
+        self.assertFalse(path.exists())
+        self.assertFalse(self.window.busy)
+
+    def test_skip_name_keeps_saved_video_and_allows_auto_upload(self):
+        path = self.root / 'saved.mp4'
+        path.write_bytes(b'synthetic recording')
+        self.window.prefs.setValue('auto_upload', True)
+        with patch.object(glint, 'prompt_recording_name', return_value=None) as prompt, \
+                patch.object(self.window, 'upload') as upload:
+            self.window.finish_save(path, '')
+            prompt.assert_called_once()
+            upload.assert_called_once_with()
+        self.assertEqual(self.window.last_file, path)
+        self.assertTrue(path.is_file())
+
+    def test_save_error_or_quit_does_not_open_naming_prompt(self):
+        path = self.root / 'saved.mp4'
+        path.write_bytes(b'synthetic recording')
+        with patch.object(glint, 'prompt_recording_name') as prompt:
+            self.window.finish_save(path, 'Review this recovered recording.')
+            prompt.assert_not_called()
+            self.window.quit_after_save = True
+            with patch.object(self.window, 'close') as close:
+                self.window.finish_save(path, '')
+                close.assert_called_once_with()
+            prompt.assert_not_called()
+        self.window.quit_after_save = False
 
     def test_failed_stop_restores_pointer_zoom(self):
         self.window.set_mode('screen')

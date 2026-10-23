@@ -36,7 +36,14 @@ class RecordingTitleTests(unittest.TestCase):
         self.temp.cleanup()
 
     def rename(self, title, accepted=True):
-        with patch('untangle.recordings.QInputDialog.getText', return_value=(title, accepted)):
+        def prompt(parent, path, rename):
+            if accepted:
+                try:
+                    return rename(title)
+                except (OSError, ValueError):
+                    pass
+            return None
+        with patch('untangle.recordings.prompt_recording_name', side_effect=prompt):
             self.dialog.rename_selected()
 
     def test_rename_releases_player_keeps_visible_selection_and_emits_paths(self):
@@ -78,14 +85,16 @@ class RecordingTitleTests(unittest.TestCase):
         self.dialog.deletion_blocked = lambda path: True
         self.dialog.update_actions()
         self.assertFalse(self.dialog.rename.isEnabled())
-        with patch('untangle.recordings.QInputDialog.getText') as prompt:
+        with patch('untangle.recordings.prompt_recording_name') as prompt:
             self.dialog.rename_selected()
         prompt.assert_not_called()
         self.dialog.deletion_blocked = lambda path: False
-        def became_busy(*args):
+        def became_busy(parent, path, rename):
             self.dialog.deletion_blocked = lambda path: True
-            return ('Changed', True)
-        with patch('untangle.recordings.QInputDialog.getText', side_effect=became_busy):
+            with self.assertRaisesRegex(ValueError, 'in use'):
+                rename('Changed')
+            return None
+        with patch('untangle.recordings.prompt_recording_name', side_effect=became_busy):
             self.dialog.rename_selected()
         self.assertTrue(self.source.exists())
         self.assertIn('in use', self.dialog.message.text())

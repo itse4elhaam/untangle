@@ -208,7 +208,7 @@ class LoomLibraryTests(unittest.TestCase):
     def test_local_rename_moves_link_and_delete_removes_metadata(self):
         self.uploaded()
         renamed = self.directory / 'Renamed locally.mp4'
-        with patch('untangle.recordings.QInputDialog.getText', return_value=('Renamed locally', True)):
+        with patch('untangle.recordings.prompt_recording_name', side_effect=lambda parent, path, rename: rename('Renamed locally')):
             self.dialog.rename_selected()
         self.assertEqual(self.dialog.selected_path(), renamed)
         restored = UploadStore(self.state_path)
@@ -236,7 +236,7 @@ class LoomLibraryTests(unittest.TestCase):
                 self.dialog.check_loom, self.dialog.forget_loom):
             self.assertFalse(button.isEnabled())
         with patch('untangle.recordings.QMessageBox.question') as confirm, \
-                patch('untangle.recordings.QInputDialog.getText') as title:
+                patch('untangle.recordings.prompt_recording_name') as title:
             self.dialog.upload_selected()
             self.dialog.rename_selected()
             self.dialog.delete_selected()
@@ -280,7 +280,7 @@ class LoomLibraryTests(unittest.TestCase):
         before = self.state_path.read_bytes()
         changed = []
         self.dialog.recording_renamed.connect(lambda old, new: changed.append((old, new)))
-        with patch('untangle.recordings.QInputDialog.getText', return_value=('Renamed locally', True)), \
+        with patch('untangle.recordings.prompt_recording_name', side_effect=lambda parent, path, rename: rename('Renamed locally')), \
                 patch.object(self.store, 'rename', side_effect=PermissionError('read only fixture')):
             self.dialog.rename_selected()
         renamed = self.directory / 'Renamed locally.mp4'

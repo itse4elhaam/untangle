@@ -4,15 +4,16 @@ from datetime import datetime
 import shutil
 from pathlib import Path
 from .naming import recording_title, recording_files, rename_recording
+from .naming_dialog import prompt_recording_name
 from .loom import valid_share_url
 
 from PySide6.QtCore import Qt, QUrl, Signal, QSize, QSignalBlocker, QProcess, QTimer, QEvent
-from PySide6.QtGui import QDesktopServices, QIcon, QPixmap
+from PySide6.QtGui import QDesktopServices, QIcon, QPixmap, QShortcut, QKeySequence
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtMultimediaWidgets import QVideoWidget
 from PySide6.QtWidgets import (
     QWidget, QFrame, QSplitter, QStackedWidget, QLineEdit, QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
-    QPushButton, QComboBox, QSizePolicy, QSlider, QVBoxLayout, QApplication, QMessageBox, QInputDialog, QStyle, QStyleOptionSlider,
+    QPushButton, QComboBox, QSizePolicy, QSlider, QVBoxLayout, QApplication, QMessageBox, QStyle, QStyleOptionSlider,
 )
 
 
@@ -242,7 +243,11 @@ class Recordings(QWidget):
         self.copy.clicked.connect(self.copy_selected_path)
         actions.addWidget(self.copy)
         self.rename = QPushButton('Rename')
+        self.rename.setToolTip('Rename the selected recording (F2)')
         self.rename.clicked.connect(self.rename_selected)
+        rename_shortcut = QShortcut(QKeySequence('F2'), self)
+        rename_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
+        rename_shortcut.activated.connect(self.rename_selected)
         actions.addWidget(self.rename)
         self.delete = QPushButton('Delete')
         self.delete.setObjectName('deleteRecording')
@@ -479,33 +484,34 @@ class Recordings(QWidget):
         self.update_actions()
         if path is None or not path.is_file() or self.deletion_blocked(path):
             return
-        title, accepted = QInputDialog.getText(self, 'Rename recording', 'Title:',
-            QLineEdit.Normal, recording_title(path))
-        if not accepted:
+        metadata_error = None
+        def rename(title):
+            nonlocal metadata_error
+            # The modal event loop can deliver saving/uploading actions.
+            if self.deletion_blocked(path):
+                message = 'This recording is in use. Try again when saving or uploading finishes.'
+                self.message.setText(message)
+                self.update_actions()
+                raise ValueError(message)
+            self.release()
+            try:
+                renamed = rename_recording(path, title)
+            except (OSError, ValueError) as exc:
+                self.select(self.files.currentItem())
+                self.message.setText(f'Could not rename {path.name}: {exc}')
+                self.update_actions()
+                raise
+            if renamed != path:
+                if self.upload_store is not None:
+                    try:
+                        self.upload_store.rename(path, renamed)
+                    except OSError as exc:
+                        metadata_error = exc
+                self.recording_renamed.emit(str(path), str(renamed))
+            return renamed
+        renamed = prompt_recording_name(self, path, rename)
+        if renamed is None:
             return
-        # The dialog runs an event loop. Saving/uploading may have started meanwhile.
-        if self.deletion_blocked(path):
-            self.message.setText('This recording is in use. Try again when saving or uploading finishes.')
-            self.update_actions()
-            return
-        self.release()
-        try:
-            renamed = rename_recording(path, title)
-        except (OSError, ValueError) as exc:
-            self.select(self.files.currentItem())
-            self.message.setText(f'Could not rename {path.name}: {exc}')
-            self.update_actions()
-            return
-        if renamed != path:
-            metadata_error = None
-            if self.upload_store is not None:
-                try:
-                    self.upload_store.rename(path, renamed)
-                except OSError as exc:
-                    metadata_error = exc
-            self.recording_renamed.emit(str(path), str(renamed))
-        else:
-            metadata_error = None
         # Keep the result visible if the old search no longer matches its title.
         if self.search.text().casefold() not in (recording_title(renamed) + ' ' + renamed.name).casefold():
             self.search.clear()

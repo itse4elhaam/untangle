@@ -18,6 +18,7 @@ class WindowStateTests(unittest.TestCase):
         root = Path(self.stack.enter_context(tempfile.TemporaryDirectory()))
         for target, name, value in [
             (app.Window, 'initialize', None), (app.Hotkeys, 'start', None),
+            (app, 'prompt_recording_name', None),
             (app, 'cameras', []), (app, 'microphones', []),
         ]:
             self.stack.enter_context(patch.object(target, name, return_value=value))

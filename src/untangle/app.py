@@ -18,7 +18,8 @@ from .floating import CameraBubble, ZoomMotion
 from .windows import WindowCatalog
 from .recordings import Recordings
 from .naming import next_recording_path, recording_files
-from .naming import recording_title
+from .naming import recording_title, rename_recording
+from .naming_dialog import prompt_recording_name
 from .upload_store import UploadStore
 from .loom import (parse_account_status, parse_video_info, parse_upload_result,
                    parse_upload_progress, valid_share_url, video_id)
@@ -1450,6 +1451,18 @@ class Window(QMainWindow):
         self.lock_controls(False)
         if path and path.exists():
             self.set_last(path)
+            if not error and not self.quit_after_save and not self._closing:
+                self.busy = True
+                self.lock_controls(True)
+                self.notice('Saved safely. Give your recording a name.')
+                try:
+                    renamed = prompt_recording_name(self, path,
+                        lambda title: rename_recording(path, title), new_recording=True)
+                    if renamed is not None:
+                        self.set_last(renamed)
+                finally:
+                    self.busy = False
+                    self.lock_controls(False)
         self.notice(error or 'Saved. Play it back, or upload to Loom when you are ready.')
         if not error and self.prefs.value('auto_upload', False, type=bool):
             self.upload()
