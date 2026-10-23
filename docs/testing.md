@@ -31,3 +31,9 @@ Playback regression checks generate silent H.264 MP4/MKV clips with FFmpeg and a
 
 Navigation checks use a mocked OBS engine and synthetic silent video to exercise repeated Recordings/back transitions. The recorder destroys its native OBS preview before hiding it and recreates it after Qt lays out the recorder again; playback stops and clears its source on return. Tests check teardown order and cancel stale queued restoration, but offscreen Qt cannot establish X11/GLX stacking correctness. No live desktop or device capture was used to verify this fix.
 
+
+## Companion UI verification
+
+Companion adds light/dark themes, a preparation summary, an embedded audio-check side sheet and thumbnail-based local review. Regression checks exercise theme changes through both recorder and library, minimum-window layout, long names, camera expansion, explicit playback, thumbnail process cleanup/cache bounds, and returning from the audio sheet without reparenting the native preview. The output accordion remains usable for Zoom while recording, while configuration fields remain locked.
+
+UI inspection uses offscreen Qt with a synthetic preview and mocked device helpers. It does not establish X11/GLX video stacking, live audio quality or Bluetooth reliability. The OnePlus silence diagnosis remains unresolved. Font files load only into Qt; no desktop font installation or accessibility/speech setting changes are involved.

@@ -66,7 +66,7 @@ class CleanMicrophoneChecks(unittest.TestCase):
             self.window.configure()
             self.assertTrue(self.window.configuration_valid)
             self.assertEqual(self.window.status.text(),
-                             'Ready when you are. Your recording stays on this computer until you upload it.')
+                             'Setup selected. Microphone readiness is checked before recording.')
 
 
 if __name__ == '__main__':

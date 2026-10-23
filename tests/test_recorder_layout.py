@@ -17,6 +17,8 @@ class RecorderLayoutChecks(unittest.TestCase):
     def test_long_device_names_fit_sidebar_viewport(self):
         qt.setStyleSheet(glint.STYLE)
         window = self.window
+        for edit in window.setup_sections:
+            edit.setChecked(True)
         window.camera.addItem('MX Brio 705 for Business Ultra HD Camera', '/dev/video-long')
         window.camera.setCurrentIndex(window.camera.count() - 1)
         window.microphone.addItem('sof-hda-dsp Headphones Stereo Microphone', 'long-source')
@@ -103,9 +105,9 @@ class RecorderLayoutChecks(unittest.TestCase):
                     if expanded:
                         self.assertLess(window.preview.mapTo(window, QPoint()).x(), 60)
                     else:
-                        self.assertGreaterEqual(window.navigation_footer.mapTo(window, QPoint()).y(),
-                                                window.controls_panel.mapTo(window, QPoint()).y()
-                                                + window.controls_panel.height())
+                        self.assertGreater(window.controls_panel.mapTo(window, QPoint()).x(),
+                                           window.preview.mapTo(window, QPoint()).x())
+                        self.assertFalse(window.controls_panel.isAncestorOf(window.navigation_footer))
                     window.library_button.click()
                     qt.processEvents()
                     self.assertTrue(window.in_library())

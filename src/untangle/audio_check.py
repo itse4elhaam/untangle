@@ -8,10 +8,11 @@ import tempfile
 import time
 import wave
 from .audio_debug import AudioTrace, emit
+from .microphone_meter import MicrophoneMeter
 
 from PySide6.QtCore import QThread, QTimer, QUrl, Signal
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
-from PySide6.QtWidgets import QDialog, QLabel, QPushButton, QVBoxLayout, QHBoxLayout
+from PySide6.QtWidgets import QDialog, QLabel, QPushButton, QVBoxLayout, QGridLayout, QScrollArea, QWidget
 
 
 class AudioData(C.Structure):
@@ -115,26 +116,47 @@ class AudioCheck(QDialog):
         self.temp = tempfile.TemporaryDirectory(prefix='recit-audio-check-')
         self.path = Path(self.temp.name) / 'microphone.wav'
         self.setWindowTitle('Quick audio check')
+        self.setObjectName('audioCheck')
         self.setModal(True)
-        self.resize(480, 280)
-        layout = QVBoxLayout(self)
+        self.resize(420, 560)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(16, 16, 16, 16)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        content = QWidget()
+        scroll.setWidget(content)
+        outer.addWidget(scroll)
+        layout = QVBoxLayout(content)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(14)
         title = QLabel('Quick audio check')
-        title.setObjectName('title')
+        title.setObjectName('checkTitle')
         layout.addWidget(title)
         self.device = QLabel(device_label)
         self.device.setWordWrap(True)
         layout.addWidget(self.device)
-        self.status = QLabel('Record four seconds, then hear your microphone. The sample is temporary and stays out of Recordings.')
+        self.meter = MicrophoneMeter()
+        self.meter.show_status(None, device_label, enabled=bool(selection))
+        layout.addWidget(self.meter)
+        privacy = QLabel('This check uses your microphone. Bluetooth hands-free mode can reduce playback quality. The temporary sample stays out of Recordings.')
+        privacy.setObjectName('muted')
+        privacy.setWordWrap(True)
+        layout.addWidget(privacy)
+        self.status = QLabel('Record four seconds, then choose Play sample to listen. No playback starts automatically.')
+        self.status.setObjectName('checkStatus')
         self.status.setWordWrap(True)
         layout.addWidget(self.status)
-        row = QHBoxLayout()
+        row = QGridLayout()
         self.record = QPushButton('Record sample')
         self.play = QPushButton('Play sample')
         self.stop = QPushButton('Stop')
-        self.done_button = QPushButton('Done')
-        for button in (self.record, self.play, self.stop, self.done_button):
-            row.addWidget(button)
+        self.done_button = QPushButton('Back to setup')
+        self.record.setObjectName('primary')
+        for index, button in enumerate((self.record, self.play, self.stop)):
+            row.addWidget(button, index, 0)
         layout.addLayout(row)
+        layout.addStretch()
+        outer.addWidget(self.done_button)
         self.record.clicked.connect(self.start_check)
         self.play.clicked.connect(self.prepare_playback)
         self.stop.clicked.connect(self.stop_check)
@@ -144,6 +166,9 @@ class AudioCheck(QDialog):
         self.player.setAudioOutput(self.audio)
         self.player.playbackStateChanged.connect(lambda *_: self.update_buttons())
         self.player.errorOccurred.connect(lambda *_: self.status.setText('Could not play this sample. Check your playback device and retry.'))
+        self.meter_timer = QTimer(self)
+        self.meter_timer.setInterval(200)
+        self.meter_timer.timeout.connect(self.update_meter)
         self.summary_timer = QTimer(self)
         self.summary_timer.setInterval(5000)
         self.summary_timer.timeout.connect(self.log_progress)
@@ -154,6 +179,10 @@ class AudioCheck(QDialog):
         self.route_timer.setInterval(200)
         self.route_timer.timeout.connect(self.verify_route)
         self.update_buttons()
+
+    def update_meter(self):
+        if self.capturing:
+            self.meter.show_status(self.engine.audio_status(), self.device.text())
 
     def update_buttons(self):
         working = self.worker is not None
@@ -213,6 +242,8 @@ class AudioCheck(QDialog):
         self.device.setToolTip(source)
         emit(self, 'check.started', source=source)
         self.status.setText('Speak now. Recording four seconds…')
+        self.meter_timer.start()
+        self.update_meter()
         self.summary_timer.start()
         self.log_progress()
         self.timer.start(4000)
@@ -247,6 +278,7 @@ class AudioCheck(QDialog):
             self.pending_finish = error
             return
         self.timer.stop()
+        self.meter_timer.stop()
         self.summary_timer.stop()
         self.route_timer.stop()
         self.capturing = False
@@ -296,13 +328,14 @@ class AudioCheck(QDialog):
             elif sample_error:
                 self.device.setText('Microphone: sample not verified')
                 self.status.setText(sample_error)
+            elif peak == 0:
+                self.status.setText('Only silence detected. The sample contains zero-valued audio. Check mute, input volume and selected device, then retry. This does not identify the Bluetooth cause.')
             elif peak is None or peak < .0001:
-                self.status.setText('No audible microphone signal. Check mute, input volume and selected device, then retry.')
+                self.status.setText('Very quiet sample. Check mute, input volume and selected device, then retry or choose Play sample to listen.')
             elif not restored:
                 self.status.setText('Sample ready. Another app is using the headset. Close its audio stream, then choose Play sample to restore playback safely.')
             else:
-                self.status.setText('Playing your microphone sample. Retry to record again.')
-                self.play_sample()
+                self.status.setText('Sample contains sound. Choose Play sample to review it. Signal does not prove clear speech.')
         self.run_action(finish, finished)
 
     def prepare_playback(self):
