@@ -2,7 +2,7 @@
 import os
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 import unittest
-from PySide6.QtCore import QPoint
+from PySide6.QtGui import QImage
 from PySide6.QtWidgets import QApplication
 from untangle.floating import CameraBubble, ZoomMotion
 
@@ -13,11 +13,16 @@ class FloatingChecks(unittest.TestCase):
     def test_circle_clips_corners(self):
         bubble = CameraBubble()
         bubble.resize(200, 200)
+        frame = QImage(200, 200, QImage.Format_ARGB32_Premultiplied)
+        frame.fill('white')
+        bubble.set_frame(frame)
         bubble.apply_shape('circle')
-        self.assertTrue(bubble.mask().contains(QPoint(100, 100)))
-        self.assertFalse(bubble.mask().contains(QPoint(2, 2)))
+        image = bubble.frame_image(1)
+        self.assertEqual(image.pixelColor(100, 100).alpha(), 255)
+        self.assertEqual(image.pixelColor(2, 2).alpha(), 0)
+        self.assertTrue(bubble.mask().isEmpty())  # Visual alpha must stay fractional.
         bubble.apply_shape('square')
-        self.assertTrue(bubble.mask().isEmpty())  # No clipping for a square.
+        self.assertEqual(bubble.frame_image(1).pixelColor(2, 2).alpha(), 255)
         bubble.close()
 
     def test_bubble_starts_inside_selected_screen_at_bottom(self):

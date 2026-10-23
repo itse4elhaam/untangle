@@ -230,6 +230,19 @@ def _load_obs():
         "obs_display_add_draw_callback": (None, P, _Draw, P),
         "obs_display_remove_draw_callback": (None, P, _Draw, P),
         "obs_render_main_texture": (None,),
+        "obs_add_main_render_callback": (None, _Draw, P),
+        "obs_remove_main_render_callback": (None, _Draw, P),
+        "obs_enter_graphics": (None,), "obs_leave_graphics": (None,),
+        "gs_texrender_create": (P, I, I), "gs_texrender_destroy": (None, P),
+        "gs_texrender_reset": (None, P), "gs_texrender_begin": (B, P, U, U),
+        "gs_texrender_end": (None, P), "gs_texrender_get_texture": (P, P),
+        "gs_stagesurface_create": (P, U, U, I), "gs_stagesurface_destroy": (None, P),
+        "gs_stage_texture": (None, P, P),
+        "gs_stagesurface_map": (B, P, C.POINTER(P), C.POINTER(U)),
+        "gs_stagesurface_unmap": (None, P),
+        "gs_clear": (None, U, P, C.c_float, C.c_uint8),
+        "gs_blend_state_push": (None,), "gs_blend_state_pop": (None,),
+        "gs_blend_function": (None, I, I),
         "gs_viewport_push": (None,), "gs_viewport_pop": (None,),
         "gs_projection_push": (None,), "gs_projection_pop": (None,),
         "gs_set_viewport": (None, I, I, I, I),
@@ -299,6 +312,9 @@ class Engine:
         self._camera_item = None  # Overlay only; borrowed from _scene.
         self._camera_scene_item = None
         self._camera_crop_filter = None  # Borrowed from the camera source.
+        self._camera_mask_filter = None
+        self._camera_mask_shape = None
+        self._camera_mask_size = None
         self._camera_dimensions = None
         self._camera_framing = None
         self._camera_position = None
@@ -306,6 +322,7 @@ class Engine:
         self._camera_display_size = None
         self._camera_mirror = False
         self._camera_preview_enabled = False
+        self._bubble = None
         self._screen_item = None  # Borrowed from _scene.
         self._screen_source = None  # Owned by _sources.
         self._window_id = None
@@ -516,8 +533,8 @@ class Engine:
         o.obs_sceneitem_set_pos(item, C.byref(_Vec2(x + display_width if mirror else x, y)))
 
     def _mask(self, shape, mask_path, width, height):
-        from PySide6.QtCore import Qt, QRectF
-        from PySide6.QtGui import QColor, QImage, QPainter
+        from PySide6.QtGui import QImage
+        from .floating import camera_mask
         if shape == "custom":
             path = Path(mask_path).expanduser() if mask_path else None
             if not path or not path.is_file() or QImage(str(path)).isNull():
@@ -525,19 +542,7 @@ class Engine:
             return str(path.resolve())
         path = Path(self._mask_dir.name) / f"{shape}-{width}-{height}.png"
         if not path.exists():
-            image = QImage(width, height, QImage.Format.Format_ARGB32)
-            image.fill(Qt.GlobalColor.transparent)
-            painter = QPainter(image)
-            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(QColor("white"))
-            rect = QRectF(0, 0, width, height)
-            if shape == "circle":
-                painter.drawEllipse(rect)
-            else:
-                radius = min(width, height) * 0.16
-                painter.drawRoundedRect(rect, radius, radius)
-            painter.end()
+            image = camera_mask(shape, width, height)
             if not image.save(str(path)):
                 raise EngineError("Could not save the camera mask image.")
         return str(path)
@@ -647,6 +652,7 @@ class Engine:
                 self._camera_dimensions = (cw, ch)
                 self._camera_framing = dict(mode=mode, camera_zoom=camera_zoom,
                                             framing=framing, size=size, position=position)
+                self._camera_masked = mode != 'camera' and shape != 'square' and compose_camera
                 crop, placement = camera_composition(
                     self.width, self.height, cw, ch, mode=mode,
                     camera_zoom=camera_zoom, framing=framing, size=size, position=position)
@@ -662,8 +668,14 @@ class Engine:
                     # Desktop floating capture lets Qt own the silhouette.
                     # Window capture excludes that bubble and needs an OBS mask.
                     if shape != "square" and compose_camera:
-                        path = self._mask(shape, mask_path, crop_w, crop_h)
-                        self._filter(source, "mask_filter_v2", "RecIt image mask", {
+                        # Resolve coverage at the final overlay scale. A sharp
+                        # source-sized mask aliases when OBS linearly downsamples.
+                        mw, mh = min(crop_w, max(1, round(dw))), min(crop_h, max(1, round(dh)))
+                        self._camera_mask_size = (mw, mh)
+                        self._camera_mask_shape = shape
+                        path = self._mask(shape, mask_path, *(
+                            (crop_w, crop_h) if shape == 'custom' else (mw, mh)))
+                        self._camera_mask_filter = self._filter(source, "mask_filter_v2", "RecIt image mask", {
                             "image_path": path, "type": "mask_alpha_filter.effect",
                             "opacity": 1.0, "color": 0xFFFFFF, "stretch": True})
                 if item:
@@ -829,6 +841,9 @@ class Engine:
         self._camera_item = None
         self._camera_scene_item = None
         self._camera_crop_filter = None
+        self._camera_mask_filter = None
+        self._camera_mask_shape = None
+        self._camera_mask_size = None
         self._camera_dimensions = None
         self._camera_framing = None
         self._camera_position = None
@@ -928,6 +943,127 @@ class Engine:
         o.obs_display_add_draw_callback(self._camera_display, self._camera_draw_callback, None)
         self.set_camera_preview_enabled(True)
 
+    def attach_bubble(self, bubble):
+        """Render the existing camera into Qt's translucent backing store.
+
+        Readback is capped at 30 FPS / 1024 pixels per edge. Two staging
+        surfaces avoid mapping this frame's GPU transfer. Only one copied
+        frame waits for Qt, so a busy UI never grows a queued-frame backlog.
+        Keep bubble alive until detach_camera_preview() or close().
+        """
+        self._check_open()
+        if not self._camera_source:
+            raise EngineError("Configure a camera before attaching its preview.")
+        self.detach_camera_preview()
+        self._bubble = bubble
+        self._bubble_lock = threading.Lock()
+        self._bubble_frame = None
+        self._bubble_size = None
+        self._bubble_target = None
+        self._bubble_surfaces = []
+        self._bubble_surface_index = 0
+        self._bubble_staged = False
+        self._bubble_next_frame = -math.inf
+        self._bubble_failed = False
+        self._bubble_size_connected = False
+        self._bubble_draw_callback = _Draw(self._draw_bubble)
+        ratio = bubble.devicePixelRatioF()
+        self.resize_camera_preview(round(bubble.width() * ratio), round(bubble.height() * ratio))
+        self._obs.obs_add_main_render_callback(self._bubble_draw_callback, None)
+        try:
+            bubble.pixel_size_changed.connect(self.resize_camera_preview)
+            self._bubble_size_connected = True
+            bubble.set_frame_provider(self._take_bubble_frame, masked=getattr(self, '_camera_masked', False))
+            self.set_camera_preview_enabled(True)
+        except Exception:
+            self.detach_camera_preview()
+            raise
+
+    def _take_bubble_frame(self):
+        """Only Qt's timer calls this; GPU memory has already been copied."""
+        from PySide6.QtGui import QImage
+        with self._bubble_lock:
+            frame, self._bubble_frame = self._bubble_frame, None
+        if frame is None:
+            return None
+        pixels, width, height, stride = frame
+        return QImage(pixels, width, height, stride, QImage.Format_RGBA8888_Premultiplied).copy()
+
+    def _release_bubble_graphics(self):
+        """Call inside the OBS graphics context, after synchronizing callbacks."""
+        o = self._obs
+        for surface in self._bubble_surfaces:
+            o.gs_stagesurface_destroy(surface)
+        self._bubble_surfaces = []
+        if self._bubble_target:
+            o.gs_texrender_destroy(self._bubble_target)
+            self._bubble_target = None
+        self._bubble_size = None
+        self._bubble_staged = False
+
+    def _draw_bubble(self, _param, _cx, _cy):
+        # OBS's graphics thread owns the GPU objects. Never access QWidget,
+        # emit a per-frame queued signal, or retain mapped GPU memory here.
+        if not self._camera_preview_enabled or self._bubble_failed:
+            return
+        now = time.monotonic()
+        if now < self._bubble_next_frame:
+            return
+        # Keep cadence through small timer jitter, without bursts after stalls.
+        self._bubble_next_frame = max(self._bubble_next_frame + 1 / 30, now)
+        if self._bubble_next_frame == now:
+            self._bubble_next_frame += 1 / 30
+        o = self._obs
+        try:
+            width, height = self._bubble_requested_size
+            if self._bubble_size != (width, height):
+                self._release_bubble_graphics()
+                self._bubble_target = o.gs_texrender_create(3, 0)  # GS_RGBA, GS_ZS_NONE
+                for _ in range(2):
+                    surface = o.gs_stagesurface_create(width, height, 3)
+                    if not surface:
+                        raise EngineError("Could not allocate the camera readback surface.")
+                    self._bubble_surfaces.append(surface)
+                if not self._bubble_target:
+                    raise EngineError("Could not allocate the camera texture.")
+                self._bubble_size = (width, height)
+                self._bubble_surface_index = 0
+            o.gs_texrender_reset(self._bubble_target)
+            if not o.gs_texrender_begin(self._bubble_target, width, height):
+                raise EngineError("Could not render the camera texture.")
+            try:
+                clear = (C.c_float * 4)(0, 0, 0, 0)
+                o.gs_clear(1, clear, 0., 0)
+                o.gs_blend_state_push()
+                try:
+                    # OBS filter output is premultiplied RGBA, as is Qt's image.
+                    o.gs_blend_function(1, 5)  # ONE, INVSRCALPHA
+                    self._draw_camera(None, width, height)
+                finally:
+                    o.gs_blend_state_pop()
+            finally:
+                o.gs_texrender_end(self._bubble_target)
+            index = self._bubble_surface_index
+            o.gs_stage_texture(self._bubble_surfaces[index], o.gs_texrender_get_texture(self._bubble_target))
+            if self._bubble_staged:
+                previous = self._bubble_surfaces[1 - index]
+                data, stride = P(), U()
+                if not o.gs_stagesurface_map(previous, C.byref(data), C.byref(stride)):
+                    raise EngineError("Could not read the camera texture.")
+                try:
+                    if not data.value or not width * 4 <= stride.value <= width * 4 + 4096:
+                        raise EngineError("Invalid camera readback layout.")
+                    frame = (C.string_at(data, stride.value * height), width, height, stride.value)
+                    with self._bubble_lock:
+                        self._bubble_frame = frame
+                finally:
+                    o.gs_stagesurface_unmap(previous)
+            self._bubble_staged = True
+            self._bubble_surface_index = 1 - index
+        except Exception as exc:
+            self._bubble_failed = True
+            self.errors.append(f"Camera preview failed: {exc}")
+
     def resize_camera_preview(self, width: int, height: int):
         """Resize the attached camera swapchain in physical pixels, without detach."""
         self._check_open()
@@ -936,9 +1072,34 @@ class Engine:
             raise EngineError("Camera preview requires positive integer dimensions.")
         if self._camera_display:
             self._obs.obs_display_resize(self._camera_display, width, height)
+        if getattr(self, '_bubble', None) is not None:
+            scale = min(1., 1024 / max(width, height))
+            self._bubble_requested_size = (max(1, round(width * scale)), max(1, round(height * scale)))
 
     def detach_camera_preview(self):
         """Synchronize with the render callback before releasing its source."""
+        if getattr(self, '_bubble', None) is not None:
+            bubble, o = self._bubble, self._obs
+            # Stop the Qt consumer first. OBS removal then waits for any draw
+            # under draw_callbacks_mutex; never hold _bubble_lock while waiting.
+            try:
+                bubble.set_frame_provider(None)
+                if self._bubble_size_connected:
+                    bubble.pixel_size_changed.disconnect(self.resize_camera_preview)
+            except RuntimeError:
+                # A deleted Qt window must not strand the OBS callback/resources.
+                pass
+            o.obs_remove_main_render_callback(self._bubble_draw_callback, None)
+            o.obs_enter_graphics()
+            try:
+                self._release_bubble_graphics()
+            finally:
+                o.obs_leave_graphics()
+            self._bubble_frame = None
+            self._bubble = None
+            if self._camera_preview_enabled:
+                o.obs_source_dec_showing(self._camera_source)
+            self._camera_preview_enabled = False
         if not self._camera_display:
             return
         o = self._obs
@@ -956,15 +1117,18 @@ class Engine:
         """Suspend the hidden display and balance its source showing count."""
         self._check_open()
         enabled = bool(enabled)
-        if not self._camera_display or enabled == self._camera_preview_enabled:
+        if (not self._camera_display and getattr(self, '_bubble', None) is None
+                or enabled == self._camera_preview_enabled):
             return
         o = self._obs
         if enabled:
             o.obs_source_inc_showing(self._camera_source)
             self._camera_preview_enabled = True
-            o.obs_display_set_enabled(self._camera_display, True)
+            if self._camera_display:
+                o.obs_display_set_enabled(self._camera_display, True)
         else:
-            o.obs_display_set_enabled(self._camera_display, False)
+            if self._camera_display:
+                o.obs_display_set_enabled(self._camera_display, False)
             self._camera_preview_enabled = False
             o.obs_source_dec_showing(self._camera_source)
 
@@ -1066,12 +1230,22 @@ class Engine:
         if settings['mode'] == 'screen' and normalized is not None:
             x, y = normalized[0] * (self.width - dw), normalized[1] * (self.height - dh)
         mirrored = self._camera_mirror if mirror is None else mirror
+        mask_size = (min(cw, max(1, round(dw))), min(ch, max(1, round(dh))))
+        mask_path = None
+        if (self._camera_mask_filter and self._camera_mask_shape in ('circle', 'rounded')
+                and mask_size != self._camera_mask_size):
+            mask_path = self._mask(self._camera_mask_shape, None, *mask_size)
         data = self._data(dict(relative=False, left=left, top=top, cx=cw, cy=ch))
+        mask_data = None
         item, o = self._camera_scene_item, self._obs
         try:
+            if mask_path is not None:
+                mask_data = self._data(dict(image_path=mask_path))
             if item:
                 o.obs_sceneitem_defer_update_begin(item)
             try:
+                if mask_data:
+                    o.obs_source_update(self._camera_mask_filter, mask_data)
                 o.obs_source_update(self._camera_crop_filter, data)
                 if item:
                     self._place(item, x, y, scale, mirrored, dw)
@@ -1080,9 +1254,12 @@ class Engine:
                     o.obs_sceneitem_defer_update_end(item)
         finally:
             o.obs_data_release(data)
+            if mask_data:
+                o.obs_data_release(mask_data)
         self._camera_framing = settings
         self._camera_mirror = mirrored
         self._camera_position = normalized
+        self._camera_mask_size = mask_size
         if self._camera_item:
             self._camera_display_size = (dw, dh)
 

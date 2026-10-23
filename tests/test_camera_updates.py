@@ -100,6 +100,23 @@ class CameraUpdatesTests(unittest.TestCase):
         self.assertEqual(e._place.call_args.args[0], e._camera_scene_item)
         self.assertFalse(e._place.call_args.args[4])
 
+    def test_builtin_masks_track_output_pixels_without_reopening_sources(self):
+        for shape in ('circle', 'rounded'):
+            e = self.engine('screen', shape=shape, size=.2)
+            e._mask.assert_called_once_with(shape, None, 216, 216)
+            e._obs.reset_mock()
+            e._mask.reset_mock()
+            e.set_camera_framing(camera_zoom=3)
+            e._mask.assert_not_called()  # Same output coverage despite crop zoom.
+            e.set_camera_framing(size=.4)
+            e._mask.assert_called_once_with(shape, None, 360, 360)
+            self.assertEqual(e._obs.obs_source_update.call_args.args[1]['cx'], 360)
+            e._mask.reset_mock()
+            e.set_camera_framing(camera_zoom=1)
+            e._mask.assert_called_once_with(shape, None, 432, 432)
+            self.assertEqual(e._camera_mask_size, (432, 432))
+            self.assert_no_rebuild(e)
+
     def test_fit_fill_bounds_and_overlay_controls_across_canvases(self):
         for mode in ('camera', 'screen'):
             for dims in ((1920, 1080), (1080, 1920), (1080, 1080), (1080, 1350)):
