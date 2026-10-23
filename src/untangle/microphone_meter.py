@@ -1,7 +1,7 @@
 """Compact microphone telemetry display. This widget never opens a device."""
 import math
 
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QProgressBar, QSizePolicy
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QProgressBar, QSizePolicy, QApplication
 
 
 class MicrophoneMeter(QWidget):
@@ -39,10 +39,23 @@ class MicrophoneMeter(QWidget):
                         clipping='Clipping detected')
         peak = status.get('peak_db', -math.inf)
         self.level.setValue(round(max(0, min(60, peak + 60))) if math.isfinite(peak) else 0)
-        color = '#f8957e' if state == 'clipping' else '#dabc72' if state in ('no_packets', 'silent', 'quiet') else '#6cdda6'
-        self.level.setStyleSheet('QProgressBar { border: none; background: #35464c; border-radius: 2px; } '
-                                'QProgressBar::chunk { background: ' + color + '; border-radius: 2px; }')
+        self._state = state
+        self.update_style()
         reading = f' · {peak:.0f} dBFS' if math.isfinite(peak) else ''
         self.message.setText(messages.get(state, 'Microphone status unavailable') + reading)
         self.setToolTip('Signal after microphone processing. Peak is after the volume fader; '
                         'clipping checks the pre-fader peak too. This does not verify the saved file.')
+
+    def update_style(self):
+        """Restyle the current reading without resetting telemetry or opening devices."""
+        from .theme import tokens
+        application = QApplication.instance()
+        colors = tokens(application.property('untangleTheme') if application else 'light')
+        state = getattr(self, '_state', 'idle')
+        token = ('error' if state == 'clipping' else
+                 'warning' if state in ('no_packets', 'silent', 'quiet') else
+                 'success' if state == 'signal' else 'muted')
+        self.level.setStyleSheet(
+            'QProgressBar { border: none; background: ' + colors['meter_track'] +
+            '; border-radius: 2px; } QProgressBar::chunk { background: ' +
+            colors[token] + '; border-radius: 2px; }')
