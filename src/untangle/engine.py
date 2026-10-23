@@ -24,6 +24,7 @@ from pathlib import Path
 import tempfile
 import threading
 import time
+from .composition import camera_composition
 from .audio_telemetry import LevelsCallback, MicrophoneTelemetry
 from .audio_debug import AudioTrace, emit, traced
 from .audio_devices import AudioDevices, AudioStreamPending
@@ -106,10 +107,10 @@ def recording_audio_warning(path, trace=None):
         return 'Saved audio could not be verified. Review the recording before sharing.'
 
 
-def screen_transform(canvasw, canvash, sourcew, sourceh, factor, cx, cy):
+def screen_transform(canvasw, canvash, sourcew, sourceh, factor, cx, cy, framing="fit"):
     """Return top-left x/y and uniform scale, centered on source coordinates.
 
-    Fit the source at 1x. On each axis, keep letterboxing centered until the
+    Fit or center-fill the source at 1x. Keep letterboxing centered until the
     scaled source fills that axis, then clamp panning to its edges.
     """
     values = (canvasw, canvash, sourcew, sourceh, factor, cx, cy)
@@ -117,9 +118,14 @@ def screen_transform(canvasw, canvash, sourcew, sourceh, factor, cx, cy):
         raise EngineError("Screen dimensions and zoom coordinates must be finite.")
     if min(canvasw, canvash, sourcew, sourceh) <= 0:
         raise EngineError("Screen and canvas dimensions must be positive.")
+    if framing not in ("fit", "fill"):
+        raise EngineError("Framing must be 'fit' or 'fill'.")
     factor = max(1.0, min(3.0, factor))
     cx, cy = max(0.0, min(1.0, cx)), max(0.0, min(1.0, cy))
-    scale = min(canvasw / sourcew, canvash / sourceh) * factor
+    base_scale = min if framing == "fit" else max
+    scale = base_scale(canvasw / sourcew, canvash / sourceh) * factor
+    if factor == 1:
+        cx = cy = .5
 
     def offset(canvas, extent, center):
         if extent <= canvas:
@@ -297,6 +303,7 @@ class Engine:
         self._screen_source = None  # Owned by _sources.
         self._window_id = None
         self._screen_dimensions = None
+        self._framing = "fit"
         self._scene = None
         self._sources = []
         self._output = None
@@ -529,7 +536,8 @@ class Engine:
     def configure(self, mode="screen", camera="/dev/video0", microphone="default",
                   desktop_audio=False, shape="circle", mask_path=None, size=.22,
                   position="bottom-right", screen=0, mirror=True, floating_camera=False,
-                  window_id: int | None = None, *, microphone_processing=True):
+                  window_id: int | None = None, *, microphone_processing=True,
+                  camera_zoom=1.0, framing="fit"):
         """Replace the scene and detach any camera display. Reattach afterward.
 
         In screen mode floating_camera omits the camera scene item: XShm captures
@@ -541,12 +549,23 @@ class Engine:
         Microphone processing defaults to verified RNNoise, or gentle Speex,
         followed by a peak limiter. Set microphone_processing=False to bypass.
         Missing optional filters are reported in warnings and never mute audio.
+        Framing fits the entire source or fills the canvas by centered cropping.
+        Pointer zoom multiplies that base framing. Camera zoom is a centered
+        source crop shared by recording and native preview, clamped to 1–3.
+        The caller must hide the desktop bubble and disable floating_camera for
+        nonlandscape canvases or fill framing, using the composited overlay.
         """
         self._check_open()
         if self._output:
             raise EngineError("Stop the recording before changing the scene.")
         if not isinstance(microphone_processing, bool):
             raise EngineError("Microphone processing must be enabled or disabled.")
+        if framing not in ("fit", "fill"):
+            raise EngineError("Framing must be 'fit' or 'fill'.")
+        if (isinstance(camera_zoom, bool) or not isinstance(camera_zoom, (int, float))
+                or not math.isfinite(camera_zoom)):
+            raise EngineError("Camera zoom must be a finite number.")
+        camera_zoom = max(1.0, min(3.0, camera_zoom))
         if mode not in ("screen", "camera") or shape not in ("circle", "square", "rounded", "custom"):
             raise EngineError("Unknown recording mode or camera shape.")
         if position not in ("top-left", "top-right", "bottom-left", "bottom-right", "center"):
@@ -569,6 +588,7 @@ class Engine:
                           and getattr(self, '_microphone_processing', None) == microphone_processing
                           and getattr(self, '_microphone_meter', None))
         self._clear_scene(preserve_audio=keep_audio)
+        self._framing = framing
         self.warnings = [warning for warning in getattr(self, "warnings", [])
                          if keep_audio or not warning.startswith("Microphone processing:")]
         o = self._obs
@@ -597,7 +617,12 @@ class Engine:
                 self._screen_dimensions = (sw, sh)
                 self.restore_screen_zoom()
             if camera:
-                source = self._source("v4l2_input", "RecIt camera", camera_settings(camera, self.width, self.height, self.fps))
+                # Presets retain the quality's short edge. A square/portrait
+                # output must not downgrade a landscape camera's capture mode.
+                capture_h = min(self.width, self.height)
+                capture_w = max(self.width, self.height, round(capture_h * 16 / 9))
+                source = self._source("v4l2_input", "RecIt camera",
+                                      camera_settings(camera, capture_w, capture_h, self.fps))
                 self._sources.append(source)
                 self._camera_source = source
                 self._camera_mirror = bool(mirror)
@@ -608,23 +633,17 @@ class Engine:
                     if not item:
                         raise EngineError("OBS could not add the camera to the scene.")
                 cw, ch = self._dimensions(source, f"Camera {camera}")
-                if mode == "camera":
-                    # Preserve the full camera image, including non-16:9 sources.
-                    crop_w, crop_h = cw, ch
-                    scale = min(self.width / cw, self.height / ch)
-                    dw, dh = cw * scale, ch * scale
-                    x, y = (self.width - dw) / 2, (self.height - dh) / 2
-                else:
-                    crop_w = crop_h = min(cw, ch)
+                crop, placement = camera_composition(
+                    self.width, self.height, cw, ch, mode=mode,
+                    camera_zoom=camera_zoom, framing=framing, size=size, position=position)
+                left, top, crop_w, crop_h = crop
+                x, y, scale = placement
+                dw, dh = crop_w * scale, crop_h * scale
+                if mode != "camera" or (crop_w, crop_h) != (cw, ch):
                     self._filter(source, "crop_filter", "RecIt camera crop", {
-                        "relative": False, "left": (cw-crop_w)//2, "top": (ch-crop_h)//2,
+                        "relative": False, "left": left, "top": top,
                         "cx": crop_w, "cy": crop_h})
-                    dw = dh = round(min(self.width, self.height) * size)
-                    margin = round(min(self.width, self.height) * .025)
-                    x = margin if "left" in position else self.width-dw-margin
-                    y = margin if "top" in position else self.height-dh-margin
-                    if position == "center":
-                        x, y = (self.width-dw)/2, (self.height-dh)/2
+                if mode != "camera":
                     # Desktop floating capture lets Qt own the silhouette.
                     # Window capture excludes that bubble and needs an OBS mask.
                     if shape != "square" and compose_camera:
@@ -991,7 +1010,8 @@ class Engine:
         if dimensions and all(dimensions):
             self._screen_dimensions = dimensions
         x, y, scale = screen_transform(self.width, self.height,
-            *self._screen_dimensions, factor, center_x, center_y)
+            *self._screen_dimensions, factor, center_x, center_y,
+            framing=getattr(self, '_framing', 'fit'))
         o = self._obs
         o.obs_sceneitem_defer_update_begin(self._screen_item)
         try:
@@ -1000,7 +1020,7 @@ class Engine:
             o.obs_sceneitem_defer_update_end(self._screen_item)
 
     def restore_screen_zoom(self):
-        """Restore aspect-fit capture framing. stop() leaves framing unchanged."""
+        """Restore configured fit/fill framing. stop() leaves framing unchanged."""
         self.set_screen_zoom(1.0, .5, .5)
 
     def _create_recording(self, path, encoder_id):

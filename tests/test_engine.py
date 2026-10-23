@@ -26,6 +26,19 @@ from untangle.engine import Engine, EngineError, _DisplayInfo, _Draw, _VideoInfo
 
 
 class ScreenTransformTests(unittest.TestCase):
+    def test_fill_is_centered_and_pointer_zoom_stacks_on_base_scale(self):
+        for pointer in (0, .5, 1):
+            x, y, scale = screen_transform(1080, 1920, 1920, 1080, 1,
+                                           pointer, pointer, 'fill')
+            self.assertAlmostEqual(x, (1080 - 1920 * 1920 / 1080) / 2)
+            self.assertEqual((y, scale), (0, 1920 / 1080))
+        x, y, scale = screen_transform(1080, 1920, 1920, 1080, 2, 0, 1, 'fill')
+        self.assertEqual(scale, 2 * 1920 / 1080)
+        self.assertEqual(x, 0)
+        self.assertEqual(y, -1920)
+        with self.assertRaisesRegex(EngineError, 'Framing'):
+            screen_transform(1080, 1920, 1920, 1080, 1, .5, .5, 'stretch')
+
     def test_fit_and_reset_ignore_pointer_position(self):
         for center in (0, .5, 1):
             self.assertEqual(screen_transform(1920, 1080, 3840, 2160, 1, center, center), (0, 0, .5))
@@ -149,12 +162,118 @@ class CameraPreviewTests(unittest.TestCase):
         with patch('untangle.engine.subprocess.run', return_value=Mock(stdout=formats, returncode=1)):
             self.assertEqual(camera_settings('/dev/test', 1920, 1080), {'device_id': '/dev/test', 'buffering': False})
 
+    def test_all_canvases_keep_landscape_camera_capture_quality(self):
+        from untangle.composition import canvas_dimensions
+        formats = """[0]: 'MJPG'
+            Size: Discrete 640x480
+                Interval: Discrete 0.033s (30.000 fps)
+            Size: Discrete 1920x1080
+                Interval: Discrete 0.033s (30.000 fps)
+            Size: Discrete 3840x2160
+                Interval: Discrete 0.033s (30.000 fps)
+        """
+        for quality in ((1920, 1080), (3840, 2160)):
+            for preset in ('landscape', 'portrait', 'square', 'portrait45'):
+                with self.subTest(quality=quality, preset=preset):
+                    self.setUp()
+                    self.engine.width, self.engine.height = canvas_dimensions(quality, preset)
+                    with patch('untangle.engine.subprocess.run',
+                               return_value=Mock(stdout=formats, returncode=0)):
+                        self.configure(mode='camera')
+                    settings = self.engine._source.call_args.args[2]
+                    self.assertEqual(settings['resolution'], (quality[0] << 16) | quality[1])
+
     def test_full_camera_preserves_entire_four_by_three_image(self):
         self.engine._dimensions.return_value = (640, 480)
         self.engine._place = Mock()
         self.configure(mode="camera", mirror=True)
         self.engine._filter.assert_not_called()
         self.engine._place.assert_called_once_with(201, 240, 0, 2.25, True, 1440)
+
+    def test_camera_only_fit_zoom_uses_centered_crop_and_preserves_letterbox(self):
+        e = self.engine
+        e._dimensions.return_value = (640, 480)
+        e._place = Mock()
+        self.configure(mode='camera', camera_zoom=2)
+        e._filter.assert_called_once_with(301, 'crop_filter', 'RecIt camera crop', {
+            'relative': False, 'left': 160, 'top': 120, 'cx': 320, 'cy': 240})
+        e._place.assert_called_once_with(201, 240, 0, 4.5, True, 1440)
+
+    def test_camera_only_fill_crops_to_portrait_and_shares_source_with_preview(self):
+        e = self.engine
+        e.width, e.height = 1080, 1920
+        e._dimensions.return_value = (1920, 1080)
+        e._place = Mock()
+        self.configure(mode='camera', camera_zoom=2, framing='fill', mirror=False)
+        e._filter.assert_called_once_with(301, 'crop_filter', 'RecIt camera crop', {
+            'relative': False, 'left': 808, 'top': 270, 'cx': 304, 'cy': 540})
+        item, x, y, scale, mirror, dw = e._place.call_args.args
+        self.assertEqual((item, mirror), (201, False))
+        self.assertLessEqual(x, 0)
+        self.assertLessEqual(y, 0)
+        self.assertGreaterEqual(304 * scale, e.width)
+        self.assertGreaterEqual(540 * scale, e.height)
+        self.assertAlmostEqual(dw, 304 * scale)
+        e.attach_camera_preview(20, 200, 200)
+        e._obs.obs_source_get_width.return_value = 304
+        e._obs.obs_source_get_height.return_value = 540
+        e._draw_camera(None, 200, 200)
+        e._obs.obs_source_video_render.assert_called_once_with(301)
+        e._obs.gs_ortho.assert_called_once_with(0, 304, 0, 540, -100, 100)
+
+    def test_overlay_zoom_retains_square_mask_and_uniform_scale_on_all_canvases(self):
+        from untangle.composition import canvas_dimensions
+        for preset in ('landscape', 'portrait', 'square', 'portrait45'):
+            with self.subTest(preset=preset):
+                self.setUp()
+                e = self.engine
+                e.width, e.height = canvas_dimensions((1920, 1080), preset)
+                e._place = Mock()
+                self.configure(camera_zoom=3, framing='fill', floating_camera=False)
+                self.assertEqual(e._obs.obs_scene_add.call_count, 2)
+                crop, mask = e._filter.call_args_list
+                self.assertEqual(crop.args[3], {
+                    'relative': False, 'left': 780, 'top': 360, 'cx': 360, 'cy': 360})
+                e._mask.assert_called_once_with('circle', None, 360, 360)
+                self.assertEqual(mask.args[1], 'mask_filter_v2')
+                _, x, y, scale, mirror, dw = e._place.call_args.args
+                self.assertEqual(scale, dw / 360)
+                self.assertTrue(mirror)
+                self.assertTrue(0 <= x <= e.width - dw)
+                self.assertTrue(0 <= y <= e.height - dw)
+
+    def test_invalid_framing_and_zoom_preserve_existing_scene(self):
+        self.configure()
+        e = self.engine
+        e._obs.reset_mock()
+        for kwargs in ({'framing': 'stretch'}, *({'camera_zoom': value} for value in
+                       (float('nan'), float('inf'), -float('inf'), None, '2', True))):
+            with self.subTest(kwargs=kwargs), self.assertRaises(EngineError):
+                self.configure(**kwargs)
+        e._obs.obs_scene_release.assert_not_called()
+
+    def test_finite_camera_zoom_is_clamped_and_tiny_sources_keep_safe_crop(self):
+        for zoom, expected in ((-1, 1080), (9, 360)):
+            self.setUp()
+            self.configure(camera_zoom=zoom)
+            self.assertEqual(self.engine._filter.call_args_list[0].args[3]['cx'], expected)
+        self.setUp()
+        self.engine._dimensions.return_value = (1, 1)
+        self.configure(camera_zoom=3)
+        self.assertEqual(self.engine._filter.call_args_list[0].args[3], {
+            'relative': False, 'left': 0, 'top': 0, 'cx': 1, 'cy': 1})
+
+    def test_fill_reset_retains_base_framing_and_camera_stays_fixed(self):
+        e = self.engine
+        e.width, e.height = 1080, 1920
+        self.configure(framing='fill')
+        e._place = Mock()
+        e.set_screen_zoom(2, .5, .5)
+        e.restore_screen_zoom()
+        base = 1920 / 1080
+        self.assertEqual(e._place.call_args_list, [
+            call(201, (1080 - 1920 * base * 2) / 2, -960, base * 2),
+            call(201, (1080 - 1920 * base) / 2, 0, base)])
 
     def test_floating_camera_is_filtered_but_not_composited(self):
         self.configure(floating_camera=True)

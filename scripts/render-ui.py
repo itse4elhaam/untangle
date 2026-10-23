@@ -29,8 +29,8 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(REPO / 'src'), str(REPO / 'tests')]
 
 from PySide6 import __version__ as pyside_version
-from PySide6.QtCore import QRect, Qt, QUrl, Signal, qVersion
-from PySide6.QtGui import QColor, QFontInfo, QIcon, QPainter, QPen, QPixmap
+from PySide6.QtCore import QRect, QRectF, Qt, QUrl, Signal, qVersion
+from PySide6.QtGui import QColor, QFontInfo, QIcon, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtMultimedia import QMediaPlayer
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QWidget
@@ -44,6 +44,10 @@ faulthandler.enable()
 
 def paint_scene(painter, rect, mode):
     """Only the unavailable capture content is painted, never app chrome."""
+    painter.save()
+    painter.translate(rect.topLeft())
+    painter.scale(rect.width() / 640, rect.height() / 360)
+    rect = QRect(0, 0, 640, 360)
     painter.fillRect(rect, QColor('#223349'))
     painter.setPen(QPen(QColor('#526780'), 1))
     for fraction in (1 / 3, 2 / 3):
@@ -65,6 +69,7 @@ def paint_scene(painter, rect, mode):
         painter.drawText(area, Qt.AlignCenter, text)
     painter.setPen(QPen(QColor('#f1cf63'), 2))
     painter.drawRect(rect.adjusted(1, 1, -2, -2))
+    painter.restore()
 
 
 class SoftwarePreview(QWidget):
@@ -80,7 +85,70 @@ class SoftwarePreview(QWidget):
 
     def paintEvent(self, event):
         painter = QPainter(self)
-        paint_scene(painter, self.rect(), self.mode)
+        w = self.window()
+        width, height = w.output_dimensions()
+        scale = min(self.width() / width, self.height() / height)
+        target = QRectF((self.width() - width * scale) / 2,
+                        (self.height() - height * scale) / 2,
+                        width * scale, height * scale)
+        painter.fillRect(self.rect(), QColor('#10151d'))
+        painter.setClipRect(target)
+        painter.translate(target.topLeft())
+        painter.scale(scale, scale)
+        painter.fillRect(QRectF(0, 0, width, height), Qt.black)
+        # Source pixels are synthetic; crop/placement follows production helpers.
+        source = QPixmap(1280, 720)
+        source_painter = QPainter(source)
+        paint_scene(source_painter, source.rect(), self.mode)
+        source_painter.end()
+        def draw_camera(destination, canvas_width, canvas_height, mode):
+            from untangle.composition import camera_composition
+            crop, (x, y, camera_scale) = camera_composition(
+                canvas_width, canvas_height, source.width(), source.height(),
+                mode=mode, camera_zoom=w.camera_zoom.value() / 100,
+                framing=w.framing.currentData(), size=w.size.value() / 100,
+                position=w.position.currentData())
+            left, top, crop_width, crop_height = crop
+            destination.save()
+            destination.translate(x, y)
+            destination.scale(camera_scale, camera_scale)
+            if mode == 'screen' and w.shape.currentData() != 'square':
+                mask = QPainterPath()
+                rect = QRectF(0, 0, crop_width, crop_height)
+                if w.shape.currentData() == 'circle':
+                    mask.addEllipse(rect)
+                else:
+                    mask.addRoundedRect(rect, crop_width * .16, crop_height * .16)
+                destination.setClipPath(mask, Qt.IntersectClip)
+            if w.mirror.isChecked():
+                destination.translate(crop_width, 0)
+                destination.scale(-1, 1)
+            destination.drawPixmap(QRectF(0, 0, crop_width, crop_height), camera_source,
+                                   QRectF(left, top, crop_width, crop_height))
+            destination.restore()
+
+        camera_source = QPixmap(1280, 720)
+        camera_painter = QPainter(camera_source)
+        paint_scene(camera_painter, camera_source.rect(), 'camera')
+        camera_painter.end()
+        if self.mode == 'camera':
+            draw_camera(painter, width, height, 'camera')
+        else:
+            from untangle.engine import screen_transform
+            if w.camera.currentData() and w.uses_floating_camera():
+                # XShm includes the physical bubble in the screen source. Paint
+                # its synthetic equivalent before the screen transform too.
+                source_painter = QPainter(source)
+                draw_camera(source_painter, source.width(), source.height(), 'screen')
+                source_painter.end()
+            x, y, source_scale = screen_transform(
+                width, height, source.width(), source.height(), 1, .5, .5,
+                framing=w.framing.currentData())
+            painter.drawPixmap(QRectF(x, y, source.width() * source_scale,
+                                      source.height() * source_scale), source,
+                               QRectF(source.rect()))
+            if w.camera.currentData() and not w.uses_floating_camera():
+                draw_camera(painter, width, height, 'screen')
         painter.end()
 
     def resizeEvent(self, event):
@@ -156,11 +224,35 @@ def prepare(case, scene):
                              pos=page.files.visualItemRect(item).center())
             assert page.player.source().isEmpty()
             disclosure.append('Metadata-only MP4/MKV placeholders, fixed year-2000 mtimes; injected software thumbnail cache; no media decoding or playback.')
+    elif scene.startswith('screen-canvas-') or scene.startswith('canvas-') or scene in ('camera-zoom', 'camera-reset', 'framing-fit', 'framing-fill'):
+        screen_canvas = scene.startswith('screen-canvas-')
+        case.click(w.screen_button if screen_canvas else w.camera_button)
+        QTest.qWait(220)
+        canvas = (scene.removeprefix('screen-canvas-').removesuffix('-fill') if screen_canvas else
+                  scene.removeprefix('canvas-') if scene.startswith('canvas-') else 'portrait')
+        case.choose_output(w.canvas, canvas)
+        if screen_canvas and scene.endswith('-fill'):
+            case.choose(w.framing, 'fill')
+        if scene.startswith('framing-'):
+            case.choose(w.framing, scene.removeprefix('framing-'))
+        if scene in ('camera-zoom', 'camera-reset'):
+            case.click(w.camera_zoom)
+            QTest.keyClick(w.camera_zoom, Qt.Key_End)
+            QTest.qWait(220)
+            if scene == 'camera-reset':
+                case.click(w.camera_zoom_reset)
+                QTest.qWait(220)
+        disclosure.append(f'Production canvas {w.canvas.currentData()}, output {w.output_dimensions()}, '
+                          f'framing {w.framing.currentData()}, camera zoom {w.camera_zoom.value()}%. '
+                          'Synthetic 1280×720 source cropped and placed with production composition helpers; '
+                          'output is letterboxed within the real preview widget.')
     elif scene == 'advanced':
         case.click(w.screen_button)
         QTest.qWait(220)
+        w.controls_panel.ensureWidgetVisible(w.setup_sections[0])
+        QTest.qWait(20)
         case.click(w.setup_sections[0])
-        disclosure.append('More options opened by QTest; scroll position starts at top. Content below the viewport remains scrollable.')
+        disclosure.append('More options opened by QTest; production disclosure automatically scrolls its body into view.')
     elif scene == 'expanded':
         case.click(w.focus_button)
     elif scene == 'audio-silence':
@@ -218,8 +310,8 @@ def prepare(case, scene):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, default=Path('/tmp/untangle-ui-render'))
-    parser.add_argument('--scenes', nargs='+', choices=('recorder', 'library', 'audio', 'advanced', 'states', 'expanded'),
-                        default=['recorder', 'library', 'audio', 'advanced', 'states', 'expanded'])
+    parser.add_argument('--scenes', nargs='+', choices=('recorder', 'library', 'audio', 'advanced', 'states', 'expanded', 'canvas'),
+                        default=['recorder', 'library', 'audio', 'advanced', 'states', 'expanded', 'canvas'])
     parser.add_argument('--single-scene', help=argparse.SUPPRESS)
     parser.add_argument('--single-size', help=argparse.SUPPRESS)
     parser.add_argument('--single-theme', choices=('light', 'dark'), help=argparse.SUPPRESS)
@@ -231,7 +323,8 @@ def main():
     qt.setQuitOnLastWindowClosed(False)
     qt.setStyle('Fusion')
     source_paths = [REPO / 'src/untangle' / name for name in
-                    ('app.py', 'theme.py', 'audio_check.py', 'recordings.py', 'microphone_meter.py')]
+                    ('app.py', 'engine.py', 'composition.py', 'theme.py', 'audio_check.py', 'recordings.py', 'microphone_meter.py')]
+    source_paths += [Path(__file__).resolve(), REPO / 'tests/test_ui_clickthrough.py']
     source_paths += sorted((REPO / 'assets').rglob('*.svg'))
     source_paths += sorted((REPO / 'assets/fonts').glob('*.ttf'))
     manifest_path = output / 'manifest.json'
@@ -256,9 +349,13 @@ def main():
     for group, names in (
         ('audio', ('audio-silence',)), ('advanced', ('advanced',)),
         ('expanded', ('expanded',)), ('states', ('recording', 'paused', 'saving', 'error')),
+        ('canvas', ('canvas-landscape', 'canvas-portrait', 'canvas-square', 'canvas-portrait45',
+                    'camera-zoom', 'camera-reset', 'framing-fit', 'framing-fill',
+                    'screen-canvas-portrait', 'screen-canvas-portrait-fill', 'screen-canvas-square')),
     ):
         if group in args.scenes:
-            scenes += [(scene, (960, 760)) for scene in names]
+            scenes += [(scene, size) for scene in names
+                       for size in (((960, 760), (1120, 840)) if group == 'canvas' else ((960, 760),))]
     if not args.single_scene:
         # Qt native surfaces and media widgets should not survive into the next
         # baseline. A fresh offscreen process per image also resets global style.
