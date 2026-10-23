@@ -3,15 +3,15 @@
   "sources": {
     "src/untangle/naming_dialog.py": "57378e8a623adbdfece86d70378ee7695994f25312d9041049bc9acc5519d69a",
     "src/untangle/naming.py": "4c8fd8b49d5152a198384a194483b00c91a34907ef4fc1ddba686c9d0a9b1af7",
-    "src/untangle/theme.py": "fc0fbfd92ce9a0f5ec9d166d79fdc1451bf70a9837eb528afd714548bbf24462",
+    "src/untangle/theme.py": "e03cffae019c586eac51dba7b98733628f3347cc621d491b24196abdece94778",
     "scripts/render-naming-ui.py": "386f68368bd088cf4292f2a5d8504e327d35b10e047b95ea9927006a7e1cb763"
   },
   "images": {
-    "finished-light.png": "6b66dd48d25edf8922e3085114f4c478afd9b317d8c094841448c2d9e4771900",
-    "rename-light.png": "5e2ad11a8a39a9fdbacf4345f3a1c9a732f2c53dd11bbbbecdb6eafffd27bd09",
-    "error-light.png": "8fae840269130c7a37606effc8e2f1da6349c03a3e8b42259c7a976351de916a",
-    "finished-dark.png": "c0d7a38cbf165c4bddade54b438d732dfa5a714cbf8a5ab9d54dc52a2d5a2a3f",
-    "rename-dark.png": "656dabc024afc0e5da84edb52a2b4dbb2e243ba557a51e6193634a0280a8216e",
-    "error-dark.png": "105d61f4c676ba05bf412b8fe39b922c67eb2d191183dbc43e5727acdc268765"
+    "finished-light.png": "354f04e28bbcef9414b713516766d4bb77c6dc4c0a0c84ccc111eca21d0a2f54",
+    "rename-light.png": "82137ff390d6660252f5aa774ed039ba395eceef77ef8c047e9ee65cb3a81d1e",
+    "error-light.png": "0b8f699f6e766e35cf4b11900524681edc123a3fc828de234fd7d6e7d390a1b6",
+    "finished-dark.png": "a4be0464be0e92b4097a46690270d4a56734166d1a7b019ed5c303c5fe41f764",
+    "rename-dark.png": "91b2ee8e2531a7e1469142f408108dd064a74e0b9801aed80bfd52ec72e04073",
+    "error-dark.png": "a5e5be8311d239ba25e40775e5055cac43e1101eea490987a7eea9e1fea225e9"
   }
 }

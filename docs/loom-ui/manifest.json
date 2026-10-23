@@ -1,17 +1,17 @@
 {
-  "generated_at_utc": "2026-10-23T08:43:20.480866+00:00",
+  "generated_at_utc": "2026-10-23T09:28:16.810111+00:00",
   "qt": "6.11.1",
   "pyside": "6.11.1",
   "platform": "offscreen",
   "style": "fusion",
   "source_sha256": {
-    "src/untangle/app.py": "da7548e99a73fb11214d67919f6cdd4bf19ca7dc592f00fa02e6406ce33569f3",
+    "src/untangle/app.py": "3a41c3af0093f6562828ee4d8c925305fbb90e8108a741298bb0df76bf93bf4e",
     "src/untangle/loom.py": "02f0e7e64c370cf71ea9387181f008445f13dadbffca2b7a8be65dd0edc24967",
     "src/untangle/upload_store.py": "e089e8be0030e60229c702506058ed53cfc21220f4476c7e641d901d09839de9",
-    "src/untangle/theme.py": "fc0fbfd92ce9a0f5ec9d166d79fdc1451bf70a9837eb528afd714548bbf24462",
-    "src/untangle/recordings.py": "ba86c2358487f3575df4a6f6d834baa01eaf0865ad0dbbed0eea8663b2c06e51",
+    "src/untangle/theme.py": "e03cffae019c586eac51dba7b98733628f3347cc621d491b24196abdece94778",
+    "src/untangle/recordings.py": "6b806a2447a46a1e502a97139d97c224f5fd97088af58408c5714b1d930cc434",
     "tests/test_loom_workflow.py": "b6d5a5e42b286d3ff05dc783cdf26c3b0075b528a83389e88dfc7696e0e69560",
-    "tests/test_app.py": "714079d275a59ab265b879ec70e4546de7e6cf79fa676651b2bab5eb2fccd78e",
+    "tests/test_app.py": "5077ba458fed1515b21017efba9732bd5397c76b654d7168df55a9bd16dbefc2",
     "scripts/render-loom-ui.py": "a19ea408c19853c5a7fbb350616360a7ba8191e80c38e391271592206615e576",
     "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05"
   },
@@ -20,7 +20,7 @@
     "recorder-uploading-dark-960x760.png": {
       "width": 960,
       "height": 760,
-      "sha256": "a66f4a47aa07bf77fb3ff9a2e9b1976d88bd01c24a3f89b9ee40844e48497062",
+      "sha256": "a8f5380027a1adf4b78bd4bd213a4911206b28086cc5c31c60fb43209ec20b72",
       "details": [
         "Production upload/help/progress handlers driven with inert Qt process signals, split text chunks and synthetic 42% progress. Elapsed time pinned to 43 seconds."
       ],
@@ -30,7 +30,7 @@
     "recorder-success-light-960x760.png": {
       "width": 960,
       "height": 760,
-      "sha256": "2f379963b7c00b16b31d215d1ae6e01acf70752cd4f8d65f770508ced4a39996",
+      "sha256": "38553741d43352bf3e48b5a58e96f560f79b32ccb0893be1a15e9299ec82918c",
       "details": [
         "Production upload completion parses data.video.name/isComplete and saves a synthetic Loom URL in temporary metadata. Offscreen clipboard only."
       ],
@@ -40,7 +40,7 @@
     "recorder-failure-dark-960x760.png": {
       "width": 960,
       "height": 760,
-      "sha256": "f3ac15babf18a161e5a735668c4dc28145fa172d1409e5bb93e5f51fb935220f",
+      "sha256": "709872c54aefe42f89d6a15dcd4e88997e36bca20dc2323dff93bdc5cd3efc3d",
       "details": [
         "Structured synthetic auth failure through production completion handler. No real account is inspected or changed."
       ],
@@ -50,7 +50,7 @@
     "sharing-connected-light-960x760.png": {
       "width": 960,
       "height": 760,
-      "sha256": "1a6b883a273c946576b8af65a093486f61cfd5ded632d9d3ba5dbbd642a3d3cb",
+      "sha256": "d86c2dd8dde6a8f92adaf7d66403600b0e7f7a176be96a67c02844442539a40a",
       "dialog_size": [
         700,
         700
@@ -71,7 +71,7 @@
       "title_preference_checked": false,
       "width": 960,
       "height": 760,
-      "sha256": "0410a6e172fec79f00a52571409b97b3dc597435634bb4d46ae84cd8a818159e",
+      "sha256": "055767c2e2cae9ea40d08193d659160fb497ba634c151d6d323ee911f4fd89c1",
       "dialog_size": [
         700,
         700
@@ -91,7 +91,7 @@
     "library-uploaded-light-960x760.png": {
       "width": 960,
       "height": 760,
-      "sha256": "e6caed6eb33c8751019359f2ff70da1b5e632a95967250380ade79f7dc559e3a",
+      "sha256": "6bfbf43297a3a8b7d8b9d7167c0bd41193f05d752fc21aabdf409ead32d94648",
       "upstream_title": "Loom title: Synthetic Loom title",
       "upload_status": "Uploaded to Loom",
       "saved_url": "https://www.loom.com/share/abc123",
@@ -108,7 +108,7 @@
     "library-uploaded-dark-960x760.png": {
       "width": 960,
       "height": 760,
-      "sha256": "bda7a65550678ce6a854f49aadefb38ac9878f961d2db3bd9121c9bc65b965fe",
+      "sha256": "a656d6bc37062b69327386d82872e38b5ad810387226676d9717f428e14f77fe",
       "upstream_title": "Loom title: Synthetic Loom title",
       "upload_status": "Uploaded to Loom",
       "saved_url": "https://www.loom.com/share/abc123",

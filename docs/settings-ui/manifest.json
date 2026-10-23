@@ -1,0 +1,19 @@
+{
+  "disclosure": "Actual Qt UI. Capture, media, subprocesses, account calls, transcription and inference mocked; synthetic files/preferences only.",
+  "source_sha256": {
+    "src/untangle/app.py": "3a41c3af0093f6562828ee4d8c925305fbb90e8108a741298bb0df76bf93bf4e",
+    "src/untangle/theme.py": "e03cffae019c586eac51dba7b98733628f3347cc621d491b24196abdece94778",
+    "src/untangle/recordings.py": "6b806a2447a46a1e502a97139d97c224f5fd97088af58408c5714b1d930cc434",
+    "scripts/render-settings-ui.py": "04dfb84a737dffbd3883131640f1cdf304a01a6344d0b7467e352fb5f9ab9f06"
+  },
+  "images": {
+    "recorder-light.png": "ddc0bf3a31961694f30bf7596742ab07bae1054d3558409eefbb6a3720463bdb",
+    "collapsed-light.png": "4643a63bb076097c943b5e0fa34e7a49be563c1fb4cc4c40ff1dd7bc8da1e010",
+    "settings-light.png": "2f2e64d1c9182168bf7dbeea71a8bf56718794595667212fa5ad1c40b136e9b7",
+    "library-light.png": "bb06dfb0db6695faa6d7fd0aef85aa3d6afcbecb9f2e7d2835fb80467f10286f",
+    "recorder-dark.png": "a4939096bb81dfef35eabc84e82a54f90ba8cf5a60eee6e189cf9a885728c4c9",
+    "collapsed-dark.png": "4288acc147b80072cab96e641af7755e39dda82eb25614c5aff13c9275d03b95",
+    "settings-dark.png": "86d13e89dcc82726c2a6578d86fec913a49d78db2b0b28b562b29fae12d4fae5",
+    "library-dark.png": "7985d93ce424a01deb0390bcab3778d2aa2c5e7700dae011174329e110cba992"
+  }
+}
