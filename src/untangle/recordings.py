@@ -4,6 +4,7 @@ from datetime import datetime
 import shutil
 from pathlib import Path
 from .naming import recording_title, recording_files, rename_recording
+from .loom import valid_share_url
 
 from PySide6.QtCore import Qt, QUrl, Signal, QSize, QSignalBlocker, QProcess, QTimer, QEvent
 from PySide6.QtGui import QDesktopServices, QIcon, QPixmap
@@ -42,12 +43,14 @@ class Recordings(QWidget):
     recording_deleted = Signal(str)
     recording_renamed = Signal(str, str)
     upload_requested = Signal(str)
+    check_remote_requested = Signal(str)
     theme_requested = Signal(str)
 
-    def __init__(self, directory, parent=None, deletion_blocked=None):
+    def __init__(self, directory, parent=None, deletion_blocked=None, upload_store=None):
         super().__init__(parent)
         self.directory = Path(directory)
         self.deletion_blocked = deletion_blocked or (lambda path: False)
+        self.upload_store = upload_store
         self.setObjectName('recordingsPage')
         self.thumbnail_cache = OrderedDict()
         self.thumbnail_queue = []
@@ -165,6 +168,30 @@ class Recordings(QWidget):
         self.message.setTextFormat(Qt.PlainText)
         self.message.setMinimumWidth(0)
         preview_layout.addWidget(self.message)
+        self.loom_status = QLabel()
+        self.loom_status.setObjectName('libraryLoomStatus')
+        self.loom_status.setTextFormat(Qt.PlainText)
+        self.loom_status.setWordWrap(True)
+        preview_layout.addWidget(self.loom_status)
+        self.loom_title = QLabel()
+        self.loom_title.setTextFormat(Qt.PlainText)
+        self.loom_title.setWordWrap(True)
+        preview_layout.addWidget(self.loom_title)
+        loom_actions = QHBoxLayout()
+        self.open_loom = QPushButton('Open in Loom')
+        self.open_loom.clicked.connect(self.open_selected_loom)
+        loom_actions.addWidget(self.open_loom)
+        self.copy_loom = QPushButton('Copy Loom link')
+        self.copy_loom.clicked.connect(self.copy_selected_loom)
+        loom_actions.addWidget(self.copy_loom)
+        self.check_loom = QPushButton('Check Loom link')
+        self.check_loom.clicked.connect(self.check_selected_loom)
+        loom_actions.addWidget(self.check_loom)
+        self.forget_loom = QPushButton('Forget Loom link')
+        self.forget_loom.setToolTip('Clear the saved link on this computer. The recording on Loom is unchanged.')
+        self.forget_loom.clicked.connect(self.forget_selected_loom)
+        loom_actions.addWidget(self.forget_loom)
+        preview_layout.addLayout(loom_actions)
         controls = QHBoxLayout()
         self.toggle = QPushButton('Play')
         self.toggle.setObjectName('playRecording')
@@ -270,6 +297,7 @@ class Recordings(QWidget):
             elif len(self.thumbnail_queue) < 48:
                 self.thumbnail_queue.append(key)
             item.setData(Qt.UserRole, str(path))
+            item.setData(Qt.UserRole + 2, item.text())
             item.setToolTip(str(path))
             self.files.addItem(item)
         self.start_thumbnail()
@@ -288,7 +316,7 @@ class Recordings(QWidget):
         visible = 0
         for index in range(self.files.count()):
             item = self.files.item(index)
-            hidden = text.casefold() not in (item.text() + ' ' + Path(item.data(Qt.UserRole)).name).casefold()
+            hidden = text.casefold() not in (item.data(Qt.UserRole + 2) + ' ' + Path(item.data(Qt.UserRole)).name).casefold()
             item.setHidden(hidden)
             visible += not hidden
         current = self.files.currentItem()
@@ -329,13 +357,122 @@ class Recordings(QWidget):
         return Path(item.data(Qt.UserRole)) if item is not None and not item.isHidden() else None
 
     def update_actions(self):
+        for index in range(self.files.count()):
+            item = self.files.item(index)
+            row_path = Path(item.data(Qt.UserRole))
+            state = self.upload_metadata(row_path)
+            text = item.data(Qt.UserRole + 2) + '\n' + self.upload_state_text(state)
+            if item.text() != text:
+                item.setText(text)
         path = self.selected_path()
         exists = path is not None and path.is_file()
-        self.upload.setText('Prepare MP4' if path and path.suffix == '.mkv' else 'Upload to Loom')
-        self.upload.setEnabled(exists and not self.deletion_blocked(path))
+        state = self.upload_metadata(path) if exists else {}
+        status = state.get('status')
+        blocked = exists and self.deletion_blocked(path)
+        upload_text = 'Prepare MP4' if path and path.suffix.lower() == '.mkv' else 'Upload to Loom'
+        if status == 'uploading':
+            upload_text = 'Uploading…'
+        elif status == 'processing':
+            upload_text = 'Processing in Loom…'
+        elif status == 'uploaded':
+            upload_text = 'Upload again to Loom'
+        elif status in ('failed', 'uncertain'):
+            upload_text = 'Retry upload'
+        elif status == 'deleted':
+            upload_text = 'Upload to Loom again'
+        self.upload.setText(upload_text)
+        self.upload.setEnabled(exists and not blocked and status not in ('uploading', 'processing'))
         self.copy.setEnabled(exists)
-        self.rename.setEnabled(exists and not self.deletion_blocked(path))
-        self.delete.setEnabled(exists and not self.deletion_blocked(path))
+        self.rename.setEnabled(exists and not blocked)
+        self.delete.setEnabled(exists and not blocked)
+        url = self.loom_url(state)
+        for button in (self.open_loom, self.copy_loom):
+            button.setVisible(bool(url))
+            button.setEnabled(bool(url))
+        self.check_loom.setVisible(bool(url))
+        self.check_loom.setEnabled(bool(url) and not blocked)
+        self.forget_loom.setVisible(bool(state))
+        self.forget_loom.setEnabled(bool(state) and not blocked)
+        details = self.upload_state_text(state) if exists else ''
+        if exists and status == 'uncertain':
+            details += '\nCheck Loom before retrying. Another upload may create a duplicate.'
+        if exists and status == 'uploaded' and not url:
+            details += '\nNo usable Loom link is saved. Check Loom before uploading another copy.'
+        if exists and status == 'deleted':
+            details += '\nYour local recording is still on this computer.'
+        for field in ('error', 'visibility_warning'):
+            if state.get(field):
+                details += '\n' + str(state[field])
+        self.loom_status.setText(details)
+        self.loom_status.setVisible(bool(details))
+        title = state.get('title')
+        self.loom_title.setText(f'Loom title: {title}' if title else '')
+        self.loom_title.setVisible(bool(title))
+
+    def upload_metadata(self, path):
+        return self.upload_store.get(path) if self.upload_store is not None else {}
+
+    @staticmethod
+    def upload_state_text(state):
+        return {
+            'uploading': 'Uploading to Loom',
+            'processing': 'Processing in Loom',
+            'uploaded': 'Uploaded to Loom',
+            'failed': 'Loom upload failed',
+            'uncertain': 'Loom upload needs checking',
+            'deleted': 'Deleted from Loom',
+        }.get(state.get('status'), 'Not uploaded to Loom')
+
+    @staticmethod
+    def loom_url(state):
+        if state.get('status') == 'deleted':
+            return ''
+        return valid_share_url(state.get('url'))
+
+    def selected_loom_url(self):
+        path = self.selected_path()
+        self.update_actions()
+        return self.loom_url(self.upload_metadata(path)) if path is not None and path.is_file() else ''
+
+    def open_selected_loom(self):
+        url = self.selected_loom_url()
+        if url:
+            QDesktopServices.openUrl(QUrl(url))
+
+    def copy_selected_loom(self):
+        url = self.selected_loom_url()
+        if url:
+            QApplication.clipboard().setText(url)
+            self.message.setText('Loom link copied.')
+
+    def check_selected_loom(self):
+        url = self.selected_loom_url()
+        path = self.selected_path()
+        if url and not self.deletion_blocked(path):
+            self.check_remote_requested.emit(str(path))
+
+    def forget_selected_loom(self):
+        path = self.selected_path()
+        self.update_actions()
+        if path is None or not path.is_file() or self.deletion_blocked(path) or not self.upload_metadata(path):
+            return
+        answer = QMessageBox.question(self, 'Forget Loom link?',
+            'Clear the saved Loom link and upload status on this computer?\n\n'
+            'The recording on Loom is unchanged. Your local recording is kept.',
+            QMessageBox.Yes | QMessageBox.Cancel, QMessageBox.Cancel)
+        if answer != QMessageBox.Yes:
+            return
+        if not path.is_file() or self.deletion_blocked(path):
+            self.message.setText('This recording is missing or in use. Refresh or wait for the upload to finish.')
+            self.update_actions()
+            return
+        try:
+            self.upload_store.remove(path)
+        except OSError as exc:
+            self.message.setText(f'Could not forget Loom link: {exc}')
+            return
+        self.update_actions()
+        self.message.setText('Saved Loom link cleared on this computer. The recording on Loom is unchanged.')
 
     def rename_selected(self):
         path = self.selected_path()
@@ -360,17 +497,39 @@ class Recordings(QWidget):
             self.update_actions()
             return
         if renamed != path:
+            metadata_error = None
+            if self.upload_store is not None:
+                try:
+                    self.upload_store.rename(path, renamed)
+                except OSError as exc:
+                    metadata_error = exc
             self.recording_renamed.emit(str(path), str(renamed))
+        else:
+            metadata_error = None
         # Keep the result visible if the old search no longer matches its title.
         if self.search.text().casefold() not in (recording_title(renamed) + ' ' + renamed.name).casefold():
             self.search.clear()
         self.refresh(renamed)
-        self.message.setText(recording_title(renamed))
+        self.message.setText(f'Renamed local file, but could not move its Loom details: {metadata_error}'
+            if metadata_error else recording_title(renamed))
 
     def upload_selected(self):
         path = self.selected_path()
         self.update_actions()
-        if path is not None and path.is_file() and not self.deletion_blocked(path):
+        if not self.upload.isEnabled():
+            return
+        state = self.upload_metadata(path)
+        if state.get('status') in ('uploaded', 'uncertain') or self.loom_url(state):
+            answer = QMessageBox.question(self, 'Upload another copy to Loom?',
+                'This recording may already be on Loom. Check the saved Loom link first if available.\n\n'
+                'Uploading again creates another copy. Any existing Loom recording is unchanged. Continue?',
+                QMessageBox.Yes | QMessageBox.Cancel, QMessageBox.Cancel)
+            if answer != QMessageBox.Yes:
+                return
+        # Confirmation can process events that start an automatic upload.
+        self.update_actions()
+        if (path.is_file() and self.selected_path() == path
+                and self.upload.isEnabled() and not self.deletion_blocked(path)):
             self.upload_requested.emit(str(path))
 
     def copy_selected_path(self):
@@ -386,7 +545,8 @@ class Recordings(QWidget):
         if path is None or not path.is_file() or self.deletion_blocked(path):
             return
         answer = QMessageBox.question(self, 'Delete recording?',
-            f'Permanently delete this recording?\n\n{path}\n\nThis cannot be undone.',
+            f'Permanently delete this recording?\n\n{path}\n\nThis cannot be undone. '
+            'Any recording on Loom is unchanged. Its saved link will be removed from this computer.',
             QMessageBox.Yes | QMessageBox.Cancel, QMessageBox.Cancel)
         if answer != QMessageBox.Yes:
             return
@@ -402,8 +562,15 @@ class Recordings(QWidget):
             self.message.setText(f'Could not delete {path.name}: {exc}')
             self.update_actions()
             return
+        metadata_error = None
+        if self.upload_store is not None:
+            try:
+                self.upload_store.remove(path)
+            except OSError as exc:
+                metadata_error = exc
         self.refresh()
-        self.message.setText(f'Deleted {path.name}.')
+        self.message.setText(f'Deleted {path.name}, but could not clear its saved Loom details: {metadata_error}'
+            if metadata_error else f'Deleted {path.name}.')
         self.recording_deleted.emit(str(path))
 
     def reject(self):
@@ -436,7 +603,7 @@ class Recordings(QWidget):
             del self.thumbnail_queue[48:]
             self.start_thumbnail()
         self.selected_title.setText(recording_title(path))
-        self.metadata.setText(item.text().split('\n', 1)[-1])
+        self.metadata.setText(item.data(Qt.UserRole + 2).split('\n', 1)[-1])
         self.show_selected_preview()
         self.toggle.setEnabled(True)
 
