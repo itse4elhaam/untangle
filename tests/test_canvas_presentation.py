@@ -49,7 +49,8 @@ class CanvasPresentationTests(unittest.TestCase):
     def test_explicit_fit_survives_preference_restore(self):
         w = self.window
         self.case.choose_output(w.canvas, 'portrait')
-        self.case.choose(w.framing, 'fit')
+        w.framing.setCurrentIndex(w.framing.findData('fit'))
+        w.framing_selected()
         w.save_preferences()
         w.restore_preferences()
         self.assertEqual(w.framing.currentData(), 'fit')

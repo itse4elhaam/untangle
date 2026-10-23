@@ -20,6 +20,7 @@ from .recordings import Recordings
 from .naming import next_recording_path, recording_files
 from .naming import recording_title, rename_recording
 from .naming_dialog import prompt_recording_name
+from .local_titles import LocalTitleJob, local_title_capability
 from .upload_store import UploadStore
 from .loom import (parse_account_status, parse_video_info, parse_upload_result,
                    parse_upload_progress, valid_share_url, video_id)
@@ -256,6 +257,7 @@ class Window(QMainWindow):
         self._upload_output = ''
         self._upload_errors = ''
         self._upload_active = False
+        self._title_job = None
         self.build()
         self.set_theme(self.prefs.value('theme', 'light'))
         self.setup_tray()
@@ -318,7 +320,61 @@ class Window(QMainWindow):
         self.theme_choice.addItem('Light', 'light')
         self.theme_choice.addItem('Dark', 'dark')
         self.theme_choice.currentIndexChanged.connect(lambda: self.set_theme(self.theme_choice.currentData()))
-        header.addWidget(self.theme_choice)
+        self.settings_dialog = QDialog(self)
+        self.settings_dialog.setWindowTitle('Settings')
+        self.settings_dialog.resize(560, 640)
+        settings_outer = QVBoxLayout(self.settings_dialog)
+        settings_outer.setContentsMargins(24, 24, 24, 20)
+        settings_outer.addWidget(label('Settings', 'title'))
+        settings_scroll = QScrollArea()
+        settings_scroll.setWidgetResizable(True)
+        settings_body = QWidget()
+        settings_scroll.setWidget(settings_body)
+        settings_outer.addWidget(settings_scroll, 1)
+        self.settings_layout = QVBoxLayout(settings_body)
+        self.settings_layout.setContentsMargins(0, 12, 8, 12)
+        self.settings_layout.setSpacing(12)
+        self.settings_layout.addWidget(label('Appearance', 'section'))
+        self.settings_layout.addWidget(self.theme_choice)
+        self.settings_layout.addWidget(label('Recording names', 'section'))
+        self.auto_titles = QCheckBox('Generate a name from the recording')
+        self.auto_titles.setChecked(self.prefs.value('auto_titles', True, type=bool))
+        self.auto_titles.toggled.connect(lambda value: self.prefs.setValue('auto_titles', value))
+        self.settings_layout.addWidget(self.auto_titles)
+        self.title_capability = label('', 'muted')
+        self.title_capability.setWordWrap(True)
+        self.settings_layout.addWidget(self.title_capability)
+        title_privacy = label('Speech is transcribed on this computer. Codex receives transcript text to generate a title using Luna, Medium, Fast. The video stays local.', 'muted')
+        title_privacy.setWordWrap(True)
+        self.settings_layout.addWidget(title_privacy)
+        settings_done = QPushButton('Done')
+        settings_done.setAutoDefault(False)
+        settings_done.setDefault(False)
+        settings_done.clicked.connect(self.settings_dialog.accept)
+        settings_outer.addWidget(settings_done, 0, Qt.AlignRight)
+        self.settings_dialog.finished.connect(lambda _: self.save_preferences())
+        self.sidebar_button = QPushButton('Sidebar')
+        self.sidebar_button.setObjectName('quiet')
+        self.sidebar_button.setCheckable(True)
+        self.sidebar_button.setChecked(True)
+        self.sidebar_button.setToolTip('Show or hide recording controls')
+        self.sidebar_button.toggled.connect(self.set_sidebar_visible)
+        header.addWidget(self.sidebar_button)
+        self.settings_button = QPushButton('Settings')
+        self.settings_button.setObjectName('quiet')
+        self.settings_button.clicked.connect(self.open_settings)
+        header.addWidget(self.settings_button)
+        self.pause_button = QPushButton('Pause')
+        self.pause_button.hide()
+        self.pause_button.clicked.connect(self.toggle_pause)
+        header.addWidget(self.pause_button)
+        self.record_button = RecordButton('●  Start recording')
+        self.record_button.setObjectName('record')
+        self.record_button.setEnabled(False)
+        self.record_button.setFixedWidth(190)
+        self.record_button.clicked.connect(self.toggle_record)
+        self.record_button.setMinimumHeight(36)
+        header.addWidget(self.record_button)
         layout.addLayout(header)
 
         content = QGridLayout()
@@ -355,20 +411,9 @@ class Window(QMainWindow):
             body_layout = QVBoxLayout(body)
             body_layout.setContentsMargins(0, 0, 0, 0)
             body_layout.setSpacing(6)
-            if advanced:
-                edit = QPushButton(title + '  ▾')
-                edit.setObjectName('setupHeading')
-                edit.setCheckable(True)
-                edit.toggled.connect(body.setVisible)
-                edit.toggled.connect(lambda opened, target=body: QTimer.singleShot(
-                    0, lambda: self.controls_panel.ensureWidgetVisible(target, 0, 12)) if opened else None)
-                outer.addWidget(edit)
-                body.hide()
-                self.setup_sections.append(edit)
-            else:
-                outer.addWidget(label(title, 'muted'))
+            outer.addWidget(label('Recording' if advanced else title, 'section'))
             outer.addWidget(body)
-            summary.addWidget(frame)
+            (self.settings_layout if advanced else summary).addWidget(frame)
             return body_layout
 
         controls = self.capture_setup = section('Record')
@@ -435,13 +480,14 @@ class Window(QMainWindow):
         self.live_microphone.setChecked(True)
         self.live_microphone.setToolTip('Uses your microphone while the recorder is visible. Bluetooth headsets use hands-free audio. Turn off to release the microphone.')
         self.live_microphone.toggled.connect(lambda _: self.idle_audio.reconcile())
-        controls.addWidget(self.live_microphone)
+        self.settings_layout.addWidget(label('Audio', 'section'))
+        self.settings_layout.addWidget(self.live_microphone)
         self.microphone_meter = MicrophoneMeter()
         self.clean_microphone = QCheckBox('Clean microphone')
         self.clean_microphone.setChecked(True)
         self.clean_microphone.setToolTip('Reduce background microphone noise and control loud peaks. Turn off to record the microphone without processing. Computer sound is unchanged.')
         self.desktop_audio = QCheckBox('Include computer sound')
-        controls.addWidget(self.desktop_audio)
+        self.settings_layout.addWidget(self.desktop_audio)
         controls.addSpacing(4)
 
         self.widget_panel = QFrame()
@@ -499,21 +545,22 @@ class Window(QMainWindow):
         right.addLayout(preview_top)
         self.capture_caption = label('', 'muted')
         self.capture_caption.setWordWrap(True)
-        right.addWidget(self.capture_caption)
+        self.capture_caption.hide()
         canvas_row = QHBoxLayout()
         canvas_row.addWidget(label('Canvas', 'muted'))
         self.canvas = QComboBox()
         self.canvas.setAccessibleName('Recording canvas')
         for title, value in [('Landscape · 16:9', 'landscape'), ('Reels / Shorts · 9:16', 'portrait'),
-                             ('Square · 1:1', 'square'), ('Portrait · 4:5', 'portrait45')]:
+                             ('Square · 1:1', 'square'), ('Portrait · 4:5', 'portrait45'),
+                             ('Raw · source size', 'raw')]:
             self.canvas.addItem(title, value)
         canvas_row.addWidget(self.canvas, 1)
-        self.framing = QComboBox()
+        self.framing = QComboBox(self)
         self.framing.setAccessibleName('Source framing')
         self.framing.addItem('Fit · whole image', 'fit')
         self.framing.addItem('Fill · crop center', 'fill')
         self.framing.setToolTip('Fit keeps the whole source with black bars. Fill crops the center to cover the canvas. Camera widgets always crop to a square.')
-        canvas_row.addWidget(self.framing, 1)
+        self.framing.hide()
         self.canvas_panel = QWidget()
         canvas_row.setContentsMargins(0, 0, 0, 0)
         self.canvas_panel.setLayout(canvas_row)
@@ -521,7 +568,7 @@ class Window(QMainWindow):
         self.camera_zoom_panel = QWidget()
         camera_zoom_layout = QVBoxLayout(self.camera_zoom_panel)
         camera_zoom_layout.setContentsMargins(0, 0, 0, 0)
-        camera_zoom_layout.setSpacing(2)
+        camera_zoom_layout.setSpacing(12)
         camera_zoom_header = QHBoxLayout()
         camera_zoom_header.addWidget(label('Zoom', 'muted'))
         camera_zoom_header.addStretch()
@@ -550,6 +597,7 @@ class Window(QMainWindow):
         self.camera_zoom_value = label('100%')
         self.camera_zoom_value.setMinimumWidth(42)
         camera_zoom_header.addWidget(self.camera_zoom_value)
+        camera_zoom_header.addSpacing(16)
         self.camera_zoom_reset = QPushButton('Reset')
         self.camera_zoom_reset.setObjectName('cameraZoomReset')
         self.camera_zoom_reset.setAccessibleName('Reset camera zoom')
@@ -585,6 +633,10 @@ class Window(QMainWindow):
         self.status.setWordWrap(True)
         self.status.setMinimumHeight(38)
         right.addWidget(self.status)
+        self.cancel_title_button = QPushButton('Name manually')
+        self.cancel_title_button.hide()
+        self.cancel_title_button.clicked.connect(self.cancel_automatic_title)
+        right.addWidget(self.cancel_title_button, 0, Qt.AlignLeft)
         self.upload_panel = QFrame()
         self.upload_panel.setObjectName('panel')
         upload_layout = QVBoxLayout(self.upload_panel)
@@ -620,20 +672,6 @@ class Window(QMainWindow):
         upload_layout.addLayout(upload_actions)
         self.upload_panel.hide()
         right.addWidget(self.upload_panel)
-        actions = QHBoxLayout()
-        self.record_button = RecordButton('●  Start recording')
-        self.record_button.setObjectName('record')
-        self.record_button.setEnabled(False)
-        self.record_button.clicked.connect(self.toggle_record)
-        actions.addStretch()
-        self.record_button.setFixedWidth(210)
-        self.record_button.setMinimumHeight(44)
-        self.pause_button = QPushButton('Pause')
-        self.pause_button.setVisible(False)
-        self.pause_button.clicked.connect(self.toggle_pause)
-        actions.addWidget(self.pause_button)
-        actions.addWidget(self.record_button)
-        right.addLayout(actions)
         shortcuts = self.shortcuts = label('Ctrl+Shift+F9  record / stop  ·  Ctrl+Shift+F10  pause  ·  Ctrl+Shift+F8  zoom', 'muted')
         shortcuts.setWordWrap(True)
         right.addWidget(shortcuts)
@@ -681,6 +719,23 @@ class Window(QMainWindow):
         for combo in (self.screen, self.capture_window, self.capture_kind, self.camera, self.microphone):
             combo.currentIndexChanged.connect(self.update_setup_summary)
 
+    def open_settings(self):
+        if self.busy or self.recording or self.counting:
+            return
+        available, reason = local_title_capability()
+        self.title_capability.setText('Local transcription is ready. Codex access is checked when naming a recording.' if available else reason)
+        self.settings_dialog.show()
+        self.settings_dialog.raise_()
+        self.settings_dialog.activateWindow()
+
+    def set_sidebar_visible(self, visible):
+        if not hasattr(self, 'controls_panel'):
+            return
+        self.controls_panel.setVisible(visible and not self.focus_button.isChecked())
+        self.navigation_footer.setVisible(visible)
+        self.sidebar_button.setText('Hide sidebar' if visible else 'Show sidebar')
+        self.prefs.setValue('sidebar_visible', visible)
+
     def set_theme(self, name):
         name = name if name in ('light', 'dark') else 'light'
         apply_theme(QApplication.instance(), name)
@@ -704,20 +759,30 @@ class Window(QMainWindow):
             self.preview_frame.set_canvas(width, height)
         self.capture_caption.setText(f'{capture} · {width} × {height}')
         self.capture_caption.setToolTip(f'{capture} · {width} × {height} · 30 fps')
+        self.preview_title.setText(f'{"Camera" if self.mode == "camera" else "Screen"} · {width} × {height}')
+        self.preview_title.setToolTip(self.capture_caption.toolTip())
         self.camera_zoom_value.setText(f'{self.camera_zoom.value()}%')
         self.update_camera_controls()
         for combo in (self.camera, self.microphone, self.screen, self.capture_window):
             combo.setToolTip(combo.currentText())
 
     def output_dimensions(self):
+        if self.mode == 'camera' and self.canvas.currentData() == 'raw':
+            dimensions = getattr(self.engine, '_camera_dimensions', None) if self.engine else None
+            if (isinstance(dimensions, tuple) and len(dimensions) == 2
+                    and all(type(n) is int and n >= 16 for n in dimensions)):
+                return dimensions[0] // 4 * 4, dimensions[1] // 2 * 2
+            return self.quality.currentData()
         return (canvas_dimensions(self.quality.currentData(), self.canvas.currentData())
                 if self.mode == 'camera' else self.quality.currentData())
 
     def effective_framing(self):
+        if self.canvas.currentData() == 'raw':
+            return 'fit'
         return self.framing.currentData() if self.mode == 'camera' else 'fit'
 
     def recommended_framing(self):
-        return 'fill' if self.mode == 'camera' and self.canvas.currentData() != 'landscape' else 'fit'
+        return 'fill' if self.mode == 'camera' and self.canvas.currentData() not in ('landscape', 'raw') else 'fit'
 
     def select_default_framing(self):
         self._framing_explicit = False
@@ -747,6 +812,10 @@ class Window(QMainWindow):
 
     def apply_camera_framing(self, **changes):
         self.update_setup_summary()
+        if self.in_library():
+            self._configure_pending = True
+            self.configuration_valid = False
+            return
         if (not self.engine or not self.configuration_valid or not self.camera.currentData()
                 or self.in_library() or self.recording or self.busy or self.counting):
             return
@@ -832,6 +901,7 @@ class Window(QMainWindow):
         self.mirror.setChecked(self.prefs.value('mirror', True, type=bool))
         self.clean_microphone.setChecked(self.prefs.value('clean_microphone', True, type=bool))
         self.desktop_audio.setChecked(self.prefs.value('desktop_audio', False, type=bool))
+        self.live_microphone.setChecked(self.prefs.value('live_microphone', True, type=bool))
         for name, default in (('canvas', 'landscape'), ('framing', 'fit')):
             widget = getattr(self, name)
             widget.blockSignals(True)
@@ -844,11 +914,13 @@ class Window(QMainWindow):
             zoom = 100
         self.camera_zoom.setValue(max(100, min(300, zoom)))
         self.set_mode(self.prefs.value('mode', 'camera'), configure=False)
+        self.sidebar_button.setChecked(self.prefs.value('sidebar_visible', True, type=bool))
+        self.set_sidebar_visible(self.sidebar_button.isChecked())
         # The first canvas release saved the inherited Fit as if it were a user
         # choice. Correct that camera-preset default once; later explicit Fit
         # choices are tagged and survive restarts.
         if (not self.prefs.contains('framing_explicit') and self.mode == 'camera'
-                and self.canvas.currentData() != 'landscape' and self.framing.currentData() == 'fit'):
+                and self.canvas.currentData() not in ('landscape', 'raw') and self.framing.currentData() == 'fit'):
             self.select_default_framing()
             self.update_setup_summary()
         files = recording_files(VIDEOS)
@@ -856,6 +928,7 @@ class Window(QMainWindow):
             self.set_last(files[0])
 
     def save_preferences(self):
+        self.prefs.setValue('live_microphone', self.live_microphone.isChecked())
         for name in ('camera', 'microphone', 'shape', 'position', 'quality'):
             self.prefs.setValue(name, getattr(self, name).currentText())
         self.prefs.setValue('microphone_id', self.microphone.currentData() or '')
@@ -890,6 +963,10 @@ class Window(QMainWindow):
     def quality_changed(self):
         self.update_setup_summary()
         if self.recording or self.busy or self.counting:
+            return
+        if self.in_library():
+            self._configure_pending = True
+            self.configuration_valid = False
             return
         # A canvas retry can recover a failed live edit, but cannot validate a
         # pending device change or a source configuration that never succeeded.
@@ -944,7 +1021,8 @@ class Window(QMainWindow):
             self.schedule_configure()
 
     def focus_camera(self, expanded):
-        self.controls_panel.setVisible(not expanded)
+        self.controls_panel.setVisible(not expanded and self.sidebar_button.isChecked())
+        self.navigation_footer.setVisible(self.sidebar_button.isChecked())
         self.canvas_panel.setVisible(self.mode == 'camera' and not expanded)
         self.recorder_content.removeItem(self.preview_column)
         if expanded:
@@ -1035,6 +1113,9 @@ class Window(QMainWindow):
                 position=self.position.currentData(), screen=self.screen.currentData() or 0,
                 mirror=self.mirror.isChecked(), floating_camera=self.uses_floating_camera(), window_id=window_id,
                 camera_zoom=self.camera_zoom.value() / 100, framing=self.effective_framing())
+            if self.mode == 'camera' and self.canvas.currentData() == 'raw':
+                self.engine.set_canvas(*self.output_dimensions())
+                self.update_setup_summary()
             if self.mode == 'screen' and camera and (self.uses_floating_camera() or window_id):
                 self.show_bubble()
             self.record_button.setEnabled(True)
@@ -1451,18 +1532,69 @@ class Window(QMainWindow):
         self.lock_controls(False)
         if path and path.exists():
             self.set_last(path)
-            if not error and not self.quit_after_save and not self._closing:
-                self.busy = True
-                self.lock_controls(True)
-                self.notice('Saved safely. Give your recording a name.')
+            if (not error and not self.quit_after_save and not self._closing
+                    and self.auto_titles.isChecked() and local_title_capability()[0]):
+                self.start_automatic_title(path)
+                return
+        self.complete_saved_video(path, error)
+
+    def start_automatic_title(self, path):
+        self.busy = True
+        self.lock_controls(True)
+        self.record_button.setEnabled(False)
+        self.cancel_title_button.show()
+        self.notice('Saved. Generating a name from the transcript…')
+        identity = self.upload_store.file_identity(path)
+        job = self._title_job = LocalTitleJob(self)
+        def finished(title, error):
+            if self._title_job is not job:
+                return
+            self._title_job = None
+            job.deleteLater()
+            self.cancel_title_button.hide()
+            self.busy = False
+            self.lock_controls(False)
+            self.record_button.setEnabled(self.configuration_valid)
+            if self._closing:
+                return
+            if identity is None or self.upload_store.file_identity(path) != identity:
+                self.complete_saved_video(path, 'The saved file changed while naming. Its name was left unchanged. Check it before sharing.', prompt=False)
+                return
+            if title:
                 try:
-                    renamed = prompt_recording_name(self, path,
-                        lambda title: rename_recording(path, title), new_recording=True)
-                    if renamed is not None:
-                        self.set_last(renamed)
-                finally:
-                    self.busy = False
-                    self.lock_controls(False)
+                    renamed = rename_recording(path, title)
+                except (OSError, ValueError):
+                    error = 'The generated name could not be saved. Choose a name manually.'
+                else:
+                    self.set_last(renamed)
+                    self.complete_saved_video(renamed, '', prompt=False)
+                    return
+            self.title_capability.setText(error or 'Automatic naming did not return a title.')
+            self.complete_saved_video(path, '', prompt=True)
+        job.finished.connect(finished)
+        job.start(path)
+
+    def cancel_automatic_title(self):
+        if self._title_job is not None:
+            self.cancel_title_button.setEnabled(False)
+            self._title_job.cancel()
+
+    def complete_saved_video(self, path, error, *, prompt=True):
+        self.cancel_title_button.setEnabled(True)
+        if path and path.exists():
+            if not error and not self.quit_after_save and not self._closing:
+                if prompt:
+                    self.busy = True
+                    self.lock_controls(True)
+                    self.notice('Saved safely. Give your recording a name.')
+                    try:
+                        renamed = prompt_recording_name(self, path,
+                            lambda title: rename_recording(path, title), new_recording=True)
+                        if renamed is not None:
+                            self.set_last(renamed)
+                    finally:
+                        self.busy = False
+                        self.lock_controls(False)
         self.notice(error or 'Saved. Play it back, or upload to Loom when you are ready.')
         if not error and self.prefs.value('auto_upload', False, type=bool):
             self.upload()
@@ -1653,6 +1785,7 @@ class Window(QMainWindow):
                 self.stop()
 
     def lock_controls(self, locked):
+        self.settings_button.setEnabled(not locked)
         self.focus_button.setEnabled(not locked)
         self.live_microphone.setEnabled(not locked)
         self.audio_check_button.setEnabled(not locked)
@@ -1688,8 +1821,8 @@ class Window(QMainWindow):
         self.refresh_upload_link()
         self.preview.show()
         self.tray_record.setEnabled(True)
-        if self.engine:
-            self.configure()
+        if self.engine and (not self.configuration_valid or self._configure_pending):
+            self.configure_timer.start(0)
         # Qt must finish showing/resizing the native parent before GLX creates
         # its child. A later navigation invalidates this queued restoration.
         generation = self._preview_generation = getattr(self, '_preview_generation', 0) + 1
@@ -1706,6 +1839,9 @@ class Window(QMainWindow):
             ratio = self.preview.devicePixelRatioF()
             self.engine.attach_preview(int(self.preview.winId()),
                 round(self.preview.width() * ratio), round(self.preview.height() * ratio))
+            if self.mode == 'screen' and self.camera.currentData() and self.configuration_valid:
+                if self.uses_floating_camera() or self.capture_kind.currentData() == 'window':
+                    self.show_bubble()
         except Exception as exc:
             self.notice(f'Could not restore the preview: {exc}')
 
@@ -1722,6 +1858,7 @@ class Window(QMainWindow):
             self.recordings.check_remote_requested.connect(self.check_loom_video)
             self.recordings.back_requested.connect(self.back_to_recorder)
             self.recordings.theme_requested.connect(self.set_theme)
+            self.recordings.settings_requested.connect(self.open_settings)
             self.pages.addWidget(self.recordings)
         self.configure_timer.stop()
         self.start_timer.stop()
@@ -2384,11 +2521,21 @@ class Window(QMainWindow):
                 self.quit_after_save = True
                 self.stop()
             return
+        if self._title_job is not None:
+            self._closing = True
+            job, self._title_job = self._title_job, None
+            job.cancel()
+            job.deleteLater()
+            self.busy = False
         if self.busy and not self.preparing_audio:
             self.notice('Finishing your video. Untangle will stay open until it is safe to close.')
             event.ignore()
             return
         self._closing = True
+        if self._title_job is not None:
+            job, self._title_job = self._title_job, None
+            job.cancel()
+            job.deleteLater()
         for process in tuple(self.loom_probes):
             process.kill()
             process.waitForFinished(1000)

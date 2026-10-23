@@ -46,6 +46,7 @@ class Recordings(QWidget):
     upload_requested = Signal(str)
     check_remote_requested = Signal(str)
     theme_requested = Signal(str)
+    settings_requested = Signal()
 
     def __init__(self, directory, parent=None, deletion_blocked=None, upload_store=None):
         super().__init__(parent)
@@ -86,7 +87,11 @@ class Recordings(QWidget):
             QApplication.instance().property('untangleTheme') or 'light'))
         self.theme_choice.currentIndexChanged.connect(
             lambda: self.theme_requested.emit(self.theme_choice.currentData()))
-        header.addWidget(self.theme_choice)
+        self.theme_choice.setParent(self)
+        self.theme_choice.hide()
+        self.settings_button = QPushButton('Settings')
+        self.settings_button.clicked.connect(self.settings_requested.emit)
+        header.addWidget(self.settings_button)
         layout.addLayout(header)
         title = QLabel('Your recordings')
         title.setObjectName('title')
@@ -650,7 +655,8 @@ class Recordings(QWidget):
         self.player.play()
 
     def start_thumbnail(self):
-        if not self.ffmpeg or self.thumbnail_key is not None or not self.thumbnail_queue:
+        if (not self.ffmpeg or self.thumbnail_key is not None or not self.thumbnail_queue
+                or self.thumbnail_process.state() != QProcess.NotRunning):
             return
         self.thumbnail_key = self.thumbnail_queue.pop(0)
         self.thumbnail_process.setStandardErrorFile(QProcess.nullDevice())
@@ -694,8 +700,9 @@ class Recordings(QWidget):
         self.thumbnail_key = None
         self.thumbnail_timer.stop()
         if self.thumbnail_process.state() != QProcess.NotRunning:
+            # Completion is delivered asynchronously. Keep navigation responsive;
+            # start_thumbnail waits for this child before using the process again.
             self.thumbnail_process.kill()
-            self.thumbnail_process.waitForFinished(1000)
 
     def eventFilter(self, watched, event):
         if (watched is self.stage and event.type() == QEvent.Resize

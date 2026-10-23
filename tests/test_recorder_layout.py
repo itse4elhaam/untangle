@@ -44,8 +44,6 @@ class RecorderLayoutChecks(unittest.TestCase):
                     self.assertLessEqual(side.width(), viewport.width())
                     self.assertGreaterEqual(side.width(), viewport.width() - 2)
                     self.assertGreater(viewport.width(), 240)
-                    if mode == 'screen' and height == 760:
-                        self.assertTrue(panel.verticalScrollBar().isVisible())
                     for control in side.findChildren(QWidget):
                         if not isinstance(control, (QComboBox, QPushButton, QCheckBox, QSlider)):
                             continue

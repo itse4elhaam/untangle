@@ -11,7 +11,7 @@ from unittest.mock import MagicMock, patch
 
 from PySide6.QtCore import QCoreApplication, QEvent, QPoint, QSettings, Qt
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QPushButton, QScrollArea
 from untangle import app as glint
 
 qt = QApplication.instance() or QApplication([])
@@ -35,6 +35,7 @@ class ClearlineClickthrough(unittest.TestCase):
             patch.object(glint, 'cameras', return_value=[
                 ('Test camera', '/dev/video-test'), ('Second camera', '/dev/video-second')]),
             patch.object(glint, 'microphones', return_value=[('Test microphone', 'test-microphone')]),
+            patch.object(glint, 'local_title_capability', return_value=(False, 'Synthetic title fixture')),
             patch.object(glint, 'VIDEOS', self.root),
             patch.object(glint, 'STATE', self.root),
             patch.object(glint, 'QSettings', return_value=QSettings(
@@ -57,6 +58,7 @@ class ClearlineClickthrough(unittest.TestCase):
         QTest.qWait(30)
 
     def close_window(self):
+        self.window.settings_dialog.close()
         dialog = getattr(self.window, 'audio_check_dialog', None)
         if dialog:
             dialog.close()
@@ -67,15 +69,19 @@ class ClearlineClickthrough(unittest.TestCase):
         QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
 
     def test_primary_setup_is_available_without_expanding_sections(self):
-        for name in ('screen_button', 'camera_button', 'canvas', 'framing', 'canvas_note',
-                     'camera', 'camera_zoom', 'camera_zoom_value', 'camera_zoom_reset', 'microphone'):
+        for name in ('screen_button', 'camera_button', 'canvas', 'preview_title',
+                     'camera', 'camera_zoom', 'camera_zoom_value', 'camera_zoom_reset',
+                     'microphone', 'audio_check_button', 'settings_button', 'sidebar_button'):
             with self.subTest(control=name):
                 self.assertTrue(getattr(self.window, name).isVisible(),
                     f'{name} must be visible without opening a setup accordion')
+        self.assertEqual(self.window.setup_sections, [])
+        self.assertFalse(self.window.framing.isVisible())
+        self.assertFalse(self.window.settings_dialog.isVisible())
 
     def test_canvas_is_above_preview_and_camera_zoom_stays_with_camera(self):
         w = self.window
-        for control in (w.canvas, w.framing):
+        for control in (w.canvas,):
             self.visible_control(control)
             self.assertFalse(w.controls_panel.isAncestorOf(control))
             self.assertLess(self.bounds(control).bottom(), self.bounds(w.preview).top())
@@ -101,17 +107,48 @@ class ClearlineClickthrough(unittest.TestCase):
 
     def bounds(self, widget):
         from PySide6.QtCore import QRect
-        return QRect(widget.mapTo(self.window, QPoint(0, 0)), widget.size())
+        return QRect(widget.mapTo(widget.window(), QPoint(0, 0)), widget.size())
 
     def visible_control(self, widget):
         self.assertTrue(widget.isVisible(), f'{widget.objectName() or type(widget).__name__} is hidden')
         rect = self.bounds(widget)
-        self.assertTrue(self.window.rect().contains(rect), f'Control outside window: {rect}')
+        top = widget.window()
+        self.assertTrue(top.rect().contains(rect), f'Control outside window: {rect}')
         parent = widget.parentWidget()
-        while parent and parent is not self.window:
+        while parent and parent is not top:
             self.assertTrue(self.bounds(parent).contains(rect),
                             f'Control clipped by {parent.objectName() or type(parent).__name__}')
             parent = parent.parentWidget()
+
+    def open_settings(self, button=None):
+        self.click(button if button is not None else self.window.settings_button)
+        self.wait_for(self.window.settings_dialog.isVisible, 'Settings did not open')
+        return self.window.settings_dialog
+
+    def reveal_setting(self, widget):
+        dialog = self.window.settings_dialog
+        self.assertTrue(dialog.isVisible(), 'Open Settings before using its controls')
+        self.assertIs(widget.window(), dialog, 'Setting must belong to the Settings dialog')
+        scroll = dialog.findChild(QScrollArea)
+        self.assertIsNotNone(scroll)
+        scroll.ensureWidgetVisible(widget)
+        QTest.qWait(20)
+        self.visible_control(widget)
+
+    def close_settings(self):
+        dialog = self.window.settings_dialog
+        done = next(button for button in dialog.findChildren(QPushButton)
+                    if button.text() == 'Done')
+        self.click(done)
+        self.wait_for(lambda: not dialog.isVisible(), 'Done did not close Settings')
+        self.window.activateWindow()
+        QTest.qWait(20)
+
+    def choose_theme(self, theme, button=None):
+        self.open_settings(button)
+        self.reveal_setting(self.window.theme_choice)
+        self.choose(self.window.theme_choice, theme)
+        self.close_settings()
 
     def click(self, widget):
         self.visible_control(widget)
@@ -120,7 +157,7 @@ class ClearlineClickthrough(unittest.TestCase):
         QTest.qWait(20)
 
     def choose(self, combo, data):
-        index = combo.findData(data)
+        index = next((i for i in range(combo.count()) if combo.itemData(i) == data), -1)
         self.assertGreaterEqual(index, 0, f'Missing option {data!r}')
         self.click(combo)
         QTest.keyClick(combo, Qt.Key_Home)
@@ -158,13 +195,13 @@ class ClearlineClickthrough(unittest.TestCase):
                 engine.set_canvas.assert_called_with(*w.output_dimensions())
                 width, height = w.output_dimensions()
                 self.assertAlmostEqual(width / height, ratio, places=2)
-                self.assertIn(str(width), w.canvas_note.text())
-                self.assertIn(str(height), w.canvas_note.text())
+                self.assertIn(str(width), w.preview_title.text())
+                self.assertIn(str(height), w.preview_title.text())
                 self.assertEqual(w.quality.currentData(), (3840, 2160))
                 self.assertTrue(w.record_button.isEnabled())
         self.assertIn('9:16', w.canvas.itemText(w.canvas.findData('portrait')))
 
-    def test_camera_zoom_keyboard_reset_framing_and_camera_off(self):
+    def test_camera_zoom_keyboard_reset_and_camera_off(self):
         w = self.window
         self.assertEqual((w.camera_zoom.minimum(), w.camera_zoom.maximum()), (100, 300))
         self.assertEqual(w.camera_zoom.value(), 100)
@@ -175,10 +212,6 @@ class ClearlineClickthrough(unittest.TestCase):
         self.assertEqual(w.camera_zoom.value(), 300)
         self.assertEqual(w.camera_zoom_value.text(), '300%')
         self.assertEqual(w.engine.set_camera_framing.call_args.kwargs['camera_zoom'], 3.0)
-        self.choose(w.framing, 'fill')
-        self.assertEqual(w.engine.set_camera_framing.call_args.kwargs['framing'], 'fill')
-        self.choose(w.framing, 'fit')
-        self.assertEqual(w.engine.set_camera_framing.call_args.kwargs['framing'], 'fit')
         self.click(w.camera_zoom_reset)
         self.assertEqual(w.camera_zoom.value(), 100)
         self.assertEqual(w.camera_zoom_value.text(), '100%')
@@ -191,10 +224,11 @@ class ClearlineClickthrough(unittest.TestCase):
         self.choose(w.camera, '/dev/video-test')
         self.assertTrue(w.camera_zoom.isEnabled())
 
-    def test_canvas_zoom_and_framing_preferences_round_trip(self):
+    def test_canvas_zoom_and_automatic_framing_preferences_round_trip(self):
         w = self.window
         self.choose_output(w.canvas, 'portrait45')
-        self.choose(w.framing, 'fill')
+        self.assertFalse(w.framing.isVisible())
+        self.assertEqual(w.framing.currentData(), 'fill')
         self.click(w.camera_zoom)
         QTest.keyClick(w.camera_zoom, Qt.Key_End)
         QTest.qWait(220)
@@ -213,33 +247,26 @@ class ClearlineClickthrough(unittest.TestCase):
         self.assertEqual(w.camera_zoom.value(), 300)
         self.assertEqual(w.camera_zoom_value.text(), '300%')
 
-    def test_more_options_scrolls_fields_into_view_at_minimum_size(self):
+    def test_settings_scrolls_fields_into_view_at_minimum_size(self):
         w = self.window
         w.resize(960, 760)
         for theme in ('light', 'dark'):
-            self.choose(w.theme_choice, theme)
+            self.choose_theme(theme)
             for mode in ('camera', 'screen'):
                 with self.subTest(theme=theme, mode=mode):
                     self.click(getattr(w, mode + '_button'))
                     QTest.qWait(220)
-                    disclosure = w.setup_sections[0]
-                    w.controls_panel.ensureWidgetVisible(disclosure)
-                    QTest.qWait(20)
-                    self.click(disclosure)
-                    self.wait_for(lambda: w.quality.isVisible(), 'More options did not open')
-                    QTest.qWait(30)
-                    fields = [w.mirror, w.clean_microphone, w.quality]
+                    dialog = self.open_settings()
+                    dialog.resize(560, 480)
+                    fields = [w.theme_choice, w.live_microphone, w.desktop_audio,
+                              w.mirror, w.clean_microphone, w.quality]
                     if mode == 'screen':
                         fields += [w.shape, w.size, w.position]
                     for control in fields:
-                        self.visible_control(control)
-                    self.assertEqual(w.controls_panel.horizontalScrollBar().maximum(), 0)
-                    # Scroll back to the actual disclosure before closing it.
-                    w.controls_panel.ensureWidgetVisible(disclosure)
-                    QTest.qWait(20)
-                    self.click(disclosure)
-                    w.controls_panel.verticalScrollBar().setValue(0)
-                    QTest.qWait(20)
+                        self.reveal_setting(control)
+                        self.assert_primary_geometry([control])
+                    self.assertEqual(dialog.findChild(QScrollArea).horizontalScrollBar().maximum(), 0)
+                    self.close_settings()
 
     def test_modes_and_camera_device_changes_use_visible_controls(self):
         w = self.window
@@ -264,8 +291,11 @@ class ClearlineClickthrough(unittest.TestCase):
         w = self.window
         self.choose(w.microphone, 'test-microphone')
         self.assertTrue(w.microphone_meter.isVisible())
+        self.open_settings()
+        self.reveal_setting(w.live_microphone)
         self.click(w.live_microphone)
         self.assertFalse(w.live_microphone.isChecked())
+        self.close_settings()
         self.wait_for(lambda: 'off' in w.microphone_meter.message.text().lower(),
                       'Turning live monitoring off needs an explicit visible status')
         self.choose(w.microphone, None)
@@ -273,20 +303,26 @@ class ClearlineClickthrough(unittest.TestCase):
                       'Microphone off must be distinguished from live monitoring off')
         self.visible_control(w.microphone_meter.message)
         self.choose(w.microphone, 'test-microphone')
+        self.open_settings()
+        self.reveal_setting(w.live_microphone)
         self.click(w.live_microphone)
         self.assertTrue(w.live_microphone.isChecked())
+        self.close_settings()
         self.wait_for(lambda: 'off' not in w.microphone_meter.message.text().lower(),
                       'Enabling live monitoring must clear the stale off status')
 
     def assert_composition_locked(self):
         w = self.window
-        controls = (w.canvas, w.framing, w.camera_zoom, w.camera_zoom_reset)
+        controls = (w.canvas, w.camera_zoom, w.camera_zoom_reset)
         before = (w.canvas.currentData(), w.framing.currentData(), w.camera_zoom.value())
         for control in controls:
             self.assertIn(control, w.config_controls)
             self.assertFalse(control.isEnabled())
             QTest.keyClick(control, Qt.Key_End)
             QTest.mouseClick(control, Qt.LeftButton)
+        self.assertFalse(w.framing.isVisible())
+        self.assertFalse(w.framing.isEnabled())
+        self.assertFalse(w.settings_button.isEnabled())
         self.assertEqual((w.canvas.currentData(), w.framing.currentData(),
                           w.camera_zoom.value()), before)
         # Queued signals must also respect the state guard after inputs lock.
@@ -377,12 +413,13 @@ class ClearlineClickthrough(unittest.TestCase):
     def test_light_dark_switch_in_recorder_and_library(self):
         w = self.window
         for theme in ('dark', 'light'):
-            self.choose(w.theme_choice, theme)
+            self.choose_theme(theme)
             self.assertEqual(qt.property('untangleTheme'), theme)
             self.assertEqual(w.prefs.value('theme'), theme)
         page = self.open_synthetic_library()
         for theme in ('dark', 'light'):
-            self.choose(page.theme_choice, theme)
+            self.assertFalse(page.theme_choice.isVisible())
+            self.choose_theme(theme, page.settings_button)
             self.assertEqual(qt.property('untangleTheme'), theme)
             self.assertEqual(w.prefs.value('theme'), theme)
             self.assertEqual(w.theme_choice.currentData(), theme)
@@ -414,6 +451,8 @@ class ClearlineClickthrough(unittest.TestCase):
             self.assertGreaterEqual(content.height(), widget.fontMetrics().height(),
                                     f'Clipped text height: {text!r}')
         for first, second in combinations(widgets, 2):
+            if first.window() is not second.window():
+                continue
             self.assertFalse(self.bounds(first).intersects(self.bounds(second)),
                              f'Overlapping controls: {getattr(first, "text", lambda: type(first).__name__)()} / '
                              f'{getattr(second, "text", lambda: type(second).__name__)()}')
@@ -425,17 +464,17 @@ class ClearlineClickthrough(unittest.TestCase):
             QTest.qWait(20)
             self.assertEqual((w.width(), w.height()), (width, height))
             for theme in ('light', 'dark'):
-                self.choose(w.theme_choice, theme)
+                self.choose_theme(theme)
                 for mode in ('camera', 'screen'):
                     with self.subTest(size=(width, height), theme=theme, mode=mode):
                         self.click(getattr(w, mode + '_button'))
                         QTest.qWait(220)
                         self.assert_primary_geometry([
-                            w.screen_button, w.camera_button, w.canvas_note,
-                            *([w.canvas, w.framing] if mode == 'camera' else []),
+                            w.screen_button, w.camera_button, w.preview_title,
+                            *([w.canvas] if mode == 'camera' else []),
                             w.camera, w.camera_zoom, w.camera_zoom_value, w.camera_zoom_reset, w.microphone,
-                            w.theme_choice, w.library_button, w.sharing_button,
-                            w.record_button, w.live_microphone, w.audio_check_button,
+                            w.settings_button, w.sidebar_button, w.library_button, w.sharing_button,
+                            w.record_button, w.audio_check_button,
                             w.microphone_meter,
                         ])
 
@@ -462,9 +501,9 @@ class ClearlineClickthrough(unittest.TestCase):
             self.assertEqual((self.window.width(), self.window.height()), (width, height))
             for theme in ('light', 'dark'):
                 with self.subTest(size=(width, height), theme=theme):
-                    self.choose(page.theme_choice, theme)
+                    self.choose_theme(theme, page.settings_button)
                     self.assert_primary_geometry([
-                        page.back, page.theme_choice, page.search, page.files,
+                        page.back, page.settings_button, page.search, page.files,
                         page.toggle, page.seek, page.mute, page.volume,
                         page.upload, page.copy, page.rename, page.delete,
                     ])
@@ -476,9 +515,9 @@ class ClearlineClickthrough(unittest.TestCase):
         self.click(w.camera_zoom)
         QTest.keyClick(w.camera_zoom, Qt.Key_End)
         QTest.qWait(220)
-        required = {w.screen_button, w.camera_button, w.canvas, w.framing,
+        required = {w.screen_button, w.camera_button, w.canvas,
                     w.camera_zoom, w.camera_zoom_reset, w.camera, w.microphone,
-                    w.theme_choice, w.library_button, w.record_button}
+                    w.settings_button, w.sidebar_button, w.library_button, w.record_button}
         visited = set()
         for _ in range(80):
             focused = qt.focusWidget()
@@ -519,7 +558,7 @@ class ClearlineClickthrough(unittest.TestCase):
         w.resize(960, 760)
         for theme in ('light', 'dark'):
             with self.subTest(theme=theme):
-                self.choose(w.theme_choice, theme)
+                self.choose_theme(theme)
                 selected = (w.camera.currentData(), w.microphone.currentData())
                 self.wait_for(lambda: not w.audio_worker or not w.audio_worker.isRunning(),
                               'Synthetic audio worker did not finish')
@@ -547,7 +586,7 @@ class ClearlineClickthrough(unittest.TestCase):
         w.audio_devices.prepare.return_value = None
         w.engine.stats.return_value = {'recording': True, 'encoder': 'ffmpeg_vaapi'}
         original = self.bounds(w.record_button)
-        self.assertEqual(original.width(), 210)
+        self.assert_primary_geometry([w.record_button, w.settings_button, w.sidebar_button])
         self.click(w.record_button)
         self.assertTrue(w.counting)
         self.assertEqual(self.bounds(w.record_button), original, 'Countdown moved the main action')

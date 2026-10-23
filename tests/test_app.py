@@ -23,6 +23,7 @@ class AppChecks(unittest.TestCase):
         self.patches = [patch.object(glint, 'AudioDevices', return_value=devices),
             patch.object(glint.Window, 'initialize'), patch.object(glint.Hotkeys, 'start'),
             patch.object(glint, 'prompt_recording_name', return_value=None),
+            patch.object(glint, 'local_title_capability', return_value=(False, 'Synthetic transcription unavailable.')),
             patch.object(glint, 'cameras', return_value=[('Test camera', '/dev/video-test')]),
             patch.object(glint, 'microphones', return_value=[]), patch.object(glint, 'VIDEOS', self.root),
             patch.object(glint, 'STATE', self.root), patch.object(glint, 'QSettings', return_value=QSettings(str(self.root/'prefs.ini'), QSettings.IniFormat))]
