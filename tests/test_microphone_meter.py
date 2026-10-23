@@ -105,6 +105,19 @@ class MeterUiChecks(unittest.TestCase):
         self.window.update_microphone_meter()
         self.assertEqual(meter.message.text(), 'Microphone off')
 
+    def test_off_selections_override_stale_signal_and_monitor_errors(self):
+        window = self.window
+        window.engine.audio_status.return_value = dict(state='signal', source='old-input', peak_db=-18)
+        window.idle_audio.error = 'Previous input disconnected'
+        window.microphone.setCurrentIndex(1)
+        window.update_microphone_meter()
+        self.assertEqual(window.microphone_meter.message.text(), 'Microphone off')
+        self.assertEqual(window.microphone_meter.level.value(), 0)
+        window.microphone.setCurrentIndex(0)
+        window.live_microphone.setChecked(False)
+        window.update_microphone_meter()
+        self.assertEqual(window.microphone_meter.message.text(), 'Live monitoring off')
+
     def test_active_name_states_and_long_name_sidebar_fit(self):
         window = self.window
         name = 'A long selected microphone name ' * 10

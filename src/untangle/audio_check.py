@@ -10,7 +10,7 @@ import wave
 from .audio_debug import AudioTrace, emit
 from .microphone_meter import MicrophoneMeter
 
-from PySide6.QtCore import QThread, QTimer, QUrl, Signal
+from PySide6.QtCore import Qt, QThread, QTimer, QUrl, Signal
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtWidgets import QDialog, QLabel, QPushButton, QVBoxLayout, QGridLayout, QScrollArea, QWidget
 
@@ -102,7 +102,7 @@ class CheckWorker(QThread):
 
 
 class AudioCheck(QDialog):
-    def __init__(self, engine, devices, selection, processing, device_label, parent=None):
+    def __init__(self, engine, devices, selection, processing, device_label, parent=None, *, inline=False):
         super().__init__(parent)
         self.engine, self.devices = engine, devices
         self.selection, self.processing = selection, processing
@@ -117,10 +117,17 @@ class AudioCheck(QDialog):
         self.path = Path(self.temp.name) / 'microphone.wav'
         self.setWindowTitle('Quick audio check')
         self.setObjectName('audioCheck')
-        self.setModal(True)
-        self.resize(420, 560)
+        self.setModal(not inline)
+        if inline:
+            self.setWindowFlags(Qt.Widget)
+            self.resize(610, 230)
+        else:
+            self.resize(420, 560)
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(16, 16, 16, 16)
+        margin = 8 if inline else 16
+        outer.setContentsMargins(margin, margin, margin, margin)
+        if inline:
+            outer.setSpacing(6)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         content = QWidget()
@@ -128,35 +135,63 @@ class AudioCheck(QDialog):
         outer.addWidget(scroll)
         layout = QVBoxLayout(content)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(14)
+        layout.setSpacing(6 if inline else 14)
         title = QLabel('Quick audio check')
         title.setObjectName('checkTitle')
-        layout.addWidget(title)
         self.device = QLabel(device_label)
         self.device.setWordWrap(True)
-        layout.addWidget(self.device)
         self.meter = MicrophoneMeter()
         self.meter.show_status(None, device_label, enabled=bool(selection))
-        layout.addWidget(self.meter)
         privacy = QLabel('This check uses your microphone. Bluetooth hands-free mode can reduce playback quality. The temporary sample stays out of Recordings.')
         privacy.setObjectName('muted')
         privacy.setWordWrap(True)
-        layout.addWidget(privacy)
         self.status = QLabel('Record four seconds, then choose Play sample to listen. No playback starts automatically.')
         self.status.setObjectName('checkStatus')
         self.status.setWordWrap(True)
-        layout.addWidget(self.status)
         row = QGridLayout()
         self.record = QPushButton('Record sample')
         self.play = QPushButton('Play sample')
         self.stop = QPushButton('Stop')
         self.done_button = QPushButton('Back to setup')
         self.record.setObjectName('primary')
-        for index, button in enumerate((self.record, self.play, self.stop)):
-            row.addWidget(button, index, 0)
-        layout.addLayout(row)
-        layout.addStretch()
-        outer.addWidget(self.done_button)
+        if inline:
+            # Keep the exits and sample controls outside the scrolling details.
+            # Long device names or errors must not displace recovery actions.
+            header = QGridLayout()
+            header.addWidget(title, 0, 0)
+            header.setColumnStretch(0, 1)
+            header.addWidget(self.done_button, 0, 1)
+            outer.insertLayout(0, header)
+            self.meter.name.hide()  # The selected/resolved device is just above.
+            privacy.setText('This check uses your microphone. Temporary sample stays out of Recordings. '
+                            'Bluetooth hands-free can reduce playback quality.')
+            details = QGridLayout()
+            details.setHorizontalSpacing(12)
+            details.addWidget(self.meter, 0, 0)
+            details.addWidget(privacy, 0, 1)
+            details.setColumnStretch(0, 2)
+            details.setColumnStretch(1, 3)
+            layout.addWidget(self.device)
+            layout.addLayout(details)
+            layout.addWidget(self.status)
+            layout.addStretch()
+            self.change_input_button = QPushButton('Change microphone')
+            self.change_input_requested = False
+            def change_input():
+                self.change_input_requested = True
+                self.reject()
+            self.change_input_button.clicked.connect(change_input)
+            for index, button in enumerate((self.record, self.play, self.stop, self.change_input_button)):
+                row.addWidget(button, 0, index)
+            outer.addLayout(row)
+        else:
+            for widget in (title, self.device, self.meter, privacy, self.status):
+                layout.addWidget(widget)
+            for index, button in enumerate((self.record, self.play, self.stop)):
+                row.addWidget(button, index, 0)
+            layout.addLayout(row)
+            layout.addStretch()
+            outer.addWidget(self.done_button)
         self.record.clicked.connect(self.start_check)
         self.play.clicked.connect(self.prepare_playback)
         self.stop.clicked.connect(self.stop_check)
@@ -282,6 +317,8 @@ class AudioCheck(QDialog):
         self.summary_timer.stop()
         self.route_timer.stop()
         self.capturing = False
+        self.meter.show_status(None, self.device.text(), enabled=bool(self.selection))
+        self.meter.message.setText('Live input stopped. Review the sample result below.')
         emit(self, 'check.stopped', reason='cancelled' if self.closing else 'finished')
         self.status.setText('Releasing microphone and restoring playback…')
         def finish():

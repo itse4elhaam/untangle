@@ -25,7 +25,7 @@ Untangle currently targets x86-64 Linux, X11, and OBS 27. Wayland capture isn't 
 
 Bluetooth audio still needs work. A OnePlus test produced silence through native PulseAudio, PipeWire, and OBS capture. We haven't established why that happened or why the reported Meet/Loom path worked. Microphone checks and visible levels help detect failures. They don't prove audio quality. See the [diagnostic evidence](docs/testing.md).
 
-Browser-tab and region capture are outside this baseline. The separate [capture-selection PR](https://github.com/itse4elhaam/dotfiles/pull/29) remains unmerged. Companion is the selected visual direction, with light and dark themes.
+Browser-tab and region capture are outside this baseline. The separate [capture-selection PR](https://github.com/itse4elhaam/dotfiles/pull/29) remains unmerged. The Clearline interface has light and dark themes, visible device controls, and a large preview.
 
 ## Set up development
 
@@ -55,14 +55,14 @@ For Loom, open Sharing and choose Connect Loom account. Complete Atlassian's sig
 
 ## Recording controls
 
-Use the preparation summary on the right to change Capture, Camera, or Microphone. Choose Camera for the full camera frame, or Screen for screen and camera recording. In screen mode, choose your display or a specific window. Check the microphone, then start recording.
+Use the visible setup controls on the left to choose the recording mode, capture source, camera, and microphone. Less frequent settings are under More options. Choose Camera for the full camera frame, or Screen for screen and camera recording. In screen mode, choose your display or a specific window. Check the microphone, then start recording.
 
 - `Ctrl + Shift + F9` starts recording or stops and saves.
 - `Ctrl + Shift + F10` pauses or resumes.
 - `Ctrl + Shift + F8` toggles pointer zoom during screen recording.
 - `Escape` cancels a pending start.
 
-The Light/Dark selector changes the whole app and remembers your choice. Quick audio check opens a side sheet; it records only after you choose Record sample and plays only after you choose Play sample.
+The Light/Dark selector changes the whole app and remembers your choice. Quick audio check opens below the preview; it records only after you choose Record sample and plays only after you choose Play sample.
 
 Recordings opens the local library with thumbnails. Select a video, then choose Play to watch it, rename it, copy its path, delete it, or upload it to Loom.
 

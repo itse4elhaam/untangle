@@ -1,64 +1,76 @@
-# Untangle Companion
+# Untangle Clearline
 
-Companion is Untangle's blue identity. Two offset white speech tiles share an edge inside a blue rounded square. The lower tile has an open corner. Use the same mark in the recorder, library, tray and desktop launcher.
+Clearline uses a neutral canvas, slate text, white panels and a burnt-orange action color. Dark mode uses charcoal surfaces and a lighter warm orange. The product name remains Untangle.
 
-The tagline is "Ready when you have something to show."
+The mark is a pair of offset focus brackets joined by a straight line. White strokes sit inside an opaque orange tile so the icon keeps its shape on light and dark desktop menus. The mark stays orange in both themes. Keep the brackets open and the center line horizontal. Do not animate or pulse the logo.
 
 ## Assets
 
-- `assets/untangle-mark.svg`: 512 × 512 editable vector icon. It remains legible at 32 px.
-- `assets/untangle-icon.png`: 512 × 512 raster export of the mark.
-- `assets/untangle-wordmark.svg`: 760 × 176 transparent horizontal lockup for light surfaces.
-- `assets/untangle-banner.svg`: 1280 × 480 light banner with the tagline.
+- `assets/untangle-mark.svg` is the editable master, with a 32-unit viewBox and 512 × 512 nominal size. The installer can rasterize this file directly.
+- `assets/untangle-icon.png` is the 512 × 512 raster export. `untangle-icon-16.png`, `untangle-icon-24.png` and `untangle-icon-48.png` are direct renders of the same vector for small-icon inspection and reuse.
+- `assets/untangle-wordmark.svg` is the transparent 760 × 176 lockup for light backgrounds. `assets/untangle-wordmark-dark.svg` has light lettering for dark backgrounds.
+- `assets/untangle-banner.svg` is a 1280 × 480 neutral light banner with the line "One clear take."
+- `assets/clearline-chevron-{light,dark}.svg`, `clearline-check-{light,dark}.svg` and `clearline-radio-{light,dark}.svg` supply Qt control indicators.
 
-The mark uses native SVG shapes. Lettering in the wordmark and banner is outlined from bundled Manrope Bold and Inter Regular, so rendering does not depend on installed fonts. Keep at least one white stroke width of clear space around the blue tile. Preserve the open corner and the white strokes. The mark stays blue in both app themes.
-
-The SVGs and PNG were rendered with installed librsvg and Cairo libraries. The 32 px mark, wordmark and banner were inspected independently of the app.
+The wordmarks and banner contain outlined Inter lettering. They render without installed fonts. Keep at least four viewBox units of clear space outside the app tile when placing a lockup. Small PNG exports preserve the whole tile and its open brackets. Do not crop into it or replace it with transparent white strokes alone.
 
 ## Color
 
-| Token | Companion light | Companion dark |
+| Token | Light | Dark |
 | --- | --- | --- |
-| Canvas | `#EDF3FC` | `#101C2D` |
-| Panel | `#FFFFFF` | `#192A40` |
-| Text | `#1B304F` | `#EAF1FC` |
-| Muted | `#50617A` | `#B0C1D9` |
-| Action | `#2454B8` | `#A6C5FF` |
-| On action | `#FFFFFF` | `#102A50` |
-| Selection | `#DFE9FF` | `#29476E` |
-| Border | `#B7C8E2` | `#526B8B` |
-| Warning ink / background | `#754500` / `#FFF0C2` | `#FFD78B` / `#483618` |
-| Error ink / background | `#A02528` / `#FDECEE` | `#FFB3BA` / `#4A2634` |
-| Microphone signal | `#236345` | `#91D5B1` |
+| Canvas | `#F6F7F9` | `#191B1F` |
+| Panel | `#FFFFFF` | `#23262B` |
+| Text | `#202936` | `#F1F2F4` |
+| Muted | `#586373` | `#B6BDC7` |
+| Action and focus | `#C33C0A` | `#FF995F` |
+| Action hover | `#A93208` | `#FFB080` |
+| On action | `#FFFFFF` | `#281A12` |
+| Selection | `#FFF0E8` | `#473026` |
+| Divider border | `#D5DAE1` | `#41464F` |
+| Control border | `#858E9A` | `#78818E` |
+| Hover | `#ECEFF3` | `#30343B` |
+| Disabled text | `#657080` | `#9DA5B0` |
+| Disabled background | `#E9ECF0` | `#2D3138` |
+| Warning ink / background | `#805000` / `#FFF1CF` | `#F6CE80` / `#42351E` |
+| Error ink / background | `#B42332` / `#FFF0F1` | `#FFA6AE` / `#46262D` |
+| Signal | `#24704B` | `#8CD4AB` |
+| Recording | `#B42332` | `#FFA6AE` |
+| Meter track | `#D5DAE1` | `#41464F` |
 
-Warnings and errors need explicit text as well as color. A microphone signal color reports telemetry, not a saved-file or speech-quality check. The focus color matches the action color and remains visible on panels and selected rows.
+Divider borders separate surfaces. The stronger `control_border` token identifies editable controls. Text, secondary text, action labels and selected mode labels meet 4.5:1 contrast on their intended backgrounds. Control outlines meet 3:1 against both panel and canvas. Focus uses dashed borders without changing border width or control geometry. Primary actions use the contrasting action-label color for their focus border.
 
-## Type and licenses
+Selected modes use orange text, heavier lettering, an orange outline and a tinted background. Checkboxes use explicit SVG checkmarks; radio buttons use an explicit center dot. Disabled selections retain their mark on a muted fill. Combo boxes have explicit theme-aware chevrons instead of platform-dependent arrows.
 
-The app loads bundled Inter for controls and Manrope for headings with Qt's application-font API. It does not install fonts on the desktop. Controls use 14 px, ordinary labels 15 px, metadata 13 px, page headings 26 px, and compact sheet/review headings 18 px. Use compact spacing to preserve room for the preview and the 304 px preparation sidebar.
+Warnings and errors require explicit text as well as color. A microphone signal reports live telemetry; it does not establish that a saved file contains usable audio.
 
-Both families use SIL Open Font License 1.1. Full copyright notices and licenses ship beside the unmodified TTFs in `assets/fonts/Inter-OFL.txt` and `assets/fonts/Manrope-OFL.txt`.
+## Typography and layout
 
-Inter Regular, Medium, SemiBold and Bold come from the official [Inter 4.1 release](https://github.com/rsms/inter/releases/tag/v4.1), under `extras/ttf/` in the release archive. Manrope Regular, Medium, SemiBold and Bold come from the official [Manrope repository](https://github.com/googlefonts/manrope/tree/master/fonts/ttf). File hashes and source paths are recorded in `assets/fonts/README.md`.
+Use bundled Inter throughout the app. Controls and ordinary labels use 14 px, secondary text uses at least 13 px, page titles use 24 px semibold, and review/check headings use 18 px. Buttons use semibold; checked modes use bold. Standard buttons and inputs have a minimum 36 px total height. Mode buttons named `mode` or carrying `mode="true"` and the `record` action have a minimum 42 px total height. Checkboxes and radio buttons have at least a 36 px content area.
 
-The research-cache variable TTFs were verified byte for byte against Google's official Fonts repository. In the installed Qt version, stylesheet weight requests left those variable fonts at their default weight. Production therefore bundles official static TTFs, without conversion or subsetting, so 400, 500, 600 and 700 resolve to the correct faces.
+Use a 276 px setup allocation on the left, including padding, with one vertical divider. Keep essential source and device controls visible. Appearance and output details belong in one secondary disclosure. The right side holds the large preview and a fixed lower action row. Recordings and Sharing stay at the lower left. Layout ownership remains with `app.py`; the theme does not position widgets or decide which controls are visible.
+
+The font loader registers the existing unmodified bundled fonts through Qt and sets Inter as the app font. It does not install desktop fonts. Existing Manrope files remain available for compatibility; Clearline styles do not request Manrope.
+
+Both bundled families use SIL Open Font License 1.1. Notices and licenses remain beside the unmodified TTFs in `assets/fonts/Inter-OFL.txt` and `assets/fonts/Manrope-OFL.txt`. Sources, file hashes and static-font details remain in `assets/fonts/README.md`. No fonts or licenses were changed for Clearline.
 
 ## Shared Qt API
 
-`src/untangle/theme.py` owns the colors and widget styling. Call `apply_theme(application, 'light')` after creating the QApplication. Call it again with `'dark'` when the user changes the theme. The caller owns preference persistence.
+`src/untangle/theme.py` owns colors, fonts and widget styling. Keep calls on the Qt UI thread. The caller owns preference persistence.
 
-- `THEMES` contains the light and dark token dictionaries.
+- `THEMES` contains light and dark token dictionaries. Existing meter and semantic keys remain available; `control_border` adds a stronger outline for inputs.
 - `tokens(name='light')` returns a copy. Unknown names fall back to light.
-- `stylesheet(name='light')` returns the full application stylesheet.
-- `load_fonts(application)` registers bundled fonts once and sets the application font to 14 px Inter.
-- `apply_theme(application, name='light')` loads fonts, sets the `untangleTheme` application property, applies the QPalette and stylesheet, and refreshes existing MicrophoneMeter widgets without resetting their readings.
+- `stylesheet(name='light')` returns the application stylesheet, including absolute bundled vector paths resolved relative to `theme.py`.
+- `load_fonts(application)` registers bundled fonts once and sets 14 px Inter.
+- `apply_theme(application, name='light')` applies the palette and stylesheet, sets `untangleTheme`, and refreshes existing MicrophoneMeter widgets without resetting readings.
 
-Repeated `apply_theme` calls with the same theme property and identical stylesheet return immediately. New widgets inherit the current style, and new meters read the current theme themselves. If another caller replaces the stylesheet, `apply_theme` restores it even when the theme property already matches.
+Repeated theme application returns immediately when both the theme property and stylesheet already match. If another caller replaces the stylesheet, applying the theme restores it. New widgets inherit the stylesheet; new meters read the current tokens. Keep root `assets` beside the package in installed layouts. Asset resolution never depends on the working directory.
 
-Call these functions on the Qt UI thread. Assets resolve from `theme.py` through the repository or installed package root, never the working directory. Keep `assets/fonts` alongside the other installed assets.
+The existing named selectors remain supported, including `title`, `eyebrow`, `muted`, `section`, `panel`, `sidebar`, `setupSection`, `setupHeading`, `setupDetails`, `summaryValue`, `record`, `playRecording`, `footerNavigation`, `quiet`, `audioCheck`, `checkTitle`, `checkStatus` and the library selectors. `setupColumn` supplies a plain left divider when used on the full setup container. Apply that divider to one container to avoid duplicate lines. The `recordingFiles` list retains 112 × 64 icons and compact item padding.
 
-The stylesheet preserves `title`, `eyebrow`, `muted`, `section`, `panel`, `sidebar`, `record`, `playRecording`, `footerNavigation` and `quiet`. It also covers `setupSection`, `setupHeading`, `setupDetails`, `summaryValue`, `audioCheck`, `checkTitle`, `checkStatus`, `libraryBrowser`, `libraryReview`, `libraryStage`, `libraryPoster`, `libraryPlaceholder`, `librarySelectedTitle`, `libraryMetadata`, `libraryMessage`, `libraryCount`, `recordingFiles`, `librarySplitter` and `deleteRecording`.
+Use `warning`, `error`, `success` or `recording` as a QLabel object name or `status` property. Repolish a label after changing a dynamic status property. Avoid per-widget color stylesheets, which override the shared theme. Named panels, dialogs and controls supply backgrounds; ordinary child widgets stay transparent.
 
-Use `warning`, `error`, `success` or `recording` as a QLabel object name or its `status` property for semantic feedback. When changing a dynamic `status` property after display, repolish the label or reapply the stylesheet so Qt updates the selector. Avoid per-widget color stylesheets, which override the application theme. Transparent child widgets inherit their containing surface; the stylesheet paints named cards, dialogs and list/input surfaces rather than every QWidget.
+## Verification boundary
 
-The `recordingFiles` list gets 112 × 64 icons and compact item padding. Its owner sets 96 px row size hints and supplies thumbnails. The theme does not open media, capture devices or playback resources.
+Clearline assets were rendered and inspected at 16, 24 and 48 px. Both themes were checked with an offscreen Qt control fixture, including checked modes, combo arrows, checkboxes, radio buttons, disabled selections and a synthetic microphone meter. Palette contrast, minimum input/action heights, stable focus geometry, token-copy/fallback behavior, repeated application and meter-reading preservation were checked without opening capture or playback resources.
+
+These checks establish theme and asset behavior only. Full recorder/library layout, native OBS previews, hardware, recording and playback require the owning implementation's separate verification. No production Window was instantiated for this theme work.
