@@ -122,9 +122,9 @@ class AppChecks(unittest.TestCase):
             self.assertEqual(path.read_bytes(), b'private video')
 
     def test_loom_unknown_help_and_failed_start_unlock_controls(self):
+        self.prepare_upload_snapshot()
         self.window.busy = True
         self.window.process = MagicMock()
-        self.window._upload_file = self.root / 'video.mp4'
         self.window._upload_visibility = 'owner'
         self.window._upload_auto_title = True
         self.window.process.readAllStandardOutput.return_value = b'Usage: unsupported grammar'
@@ -139,11 +139,13 @@ class AppChecks(unittest.TestCase):
         self.assertIn('sharing command could not start', self.window.status.text())
 
     def test_loom_visibility_success_copies_only_after_confirmation(self):
+        self.prepare_upload_snapshot()
         self.window._upload_url = 'https://www.loom.com/share/abc123'
         self.window.visibility_done(0, QProcess.NormalExit)
         self.assertEqual(qt.clipboard().text(), self.window._upload_url)
 
     def test_loom_error_does_not_expose_cli_secrets(self):
+        self.prepare_upload_snapshot()
         self.window.process = MagicMock()
         self.window.process.readAllStandardOutput.return_value = b''
         self.window.process.readAllStandardError.return_value = b'OAuth token secret-private-value expired'
@@ -268,6 +270,7 @@ class AppChecks(unittest.TestCase):
         path = self.root/'video.mp4'
         path.write_bytes(b'video')
         self.window.set_last(path)
+        self.prepare_upload_snapshot(path)
         self.window.process = MagicMock()
         self.window.process.readAllStandardOutput.return_value = b''
         self.window.process.readAllStandardError.return_value = b'account needs login'
@@ -277,6 +280,7 @@ class AppChecks(unittest.TestCase):
         self.assertIn('local recording is safe', self.window.status.text())
 
     def test_upload_completion_cannot_enable_invalid_camera_setup(self):
+        self.prepare_upload_snapshot()
         self.window.camera.setCurrentIndex(0)
         self.window.set_mode('camera')
         self.window.configure_timer.stop()
@@ -284,6 +288,13 @@ class AppChecks(unittest.TestCase):
         self.assertFalse(self.window.configuration_valid)
         self.window.upload_end('Upload complete')
         self.assertFalse(self.window.record_button.isEnabled())
+
+    def prepare_upload_snapshot(self, path=None):
+        if path is None:
+            path = self.root / 'video.mp4'
+            path.write_bytes(b'synthetic video')
+        self.window._upload_file = path
+        self.window._upload_identity = self.window.upload_store.file_identity(path)
 
     def test_cancel_stops_pending_start_timer(self):
         self.window.toggle_record()

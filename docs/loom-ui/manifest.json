@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2026-10-23T08:14:18.869963+00:00",
+  "generated_at_utc": "2026-10-23T08:16:31.231478+00:00",
   "qt": "6.11.1",
   "pyside": "6.11.1",
   "platform": "offscreen",
@@ -11,7 +11,7 @@
     "src/untangle/theme.py": "fc0fbfd92ce9a0f5ec9d166d79fdc1451bf70a9837eb528afd714548bbf24462",
     "src/untangle/recordings.py": "bdadadd319eaa5fde1dc4d6a3acda23394f42b0660417f24b8ff6767fc850554",
     "tests/test_loom_workflow.py": "b6d5a5e42b286d3ff05dc783cdf26c3b0075b528a83389e88dfc7696e0e69560",
-    "tests/test_app.py": "dd7f08f7712d4373ecc77f374585676524c3ac0b0568cb82a7f8a76c6d828e11",
+    "tests/test_app.py": "64f4309ae872a74162825a2acf8ddf0dba18cf278b836b2e1c86c32a0e32b177",
     "scripts/render-loom-ui.py": "a19ea408c19853c5a7fbb350616360a7ba8191e80c38e391271592206615e576",
     "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05"
   },
@@ -91,7 +91,7 @@
     "library-uploaded-light-960x760.png": {
       "width": 960,
       "height": 760,
-      "sha256": "a4b5733c8847eddd8248f76e6306d3e89108756bde294c213e62b35e0d520c00",
+      "sha256": "dca1dea63de28612f3cbf45d2ff194ece55d4cad111574d695a395173043a1c5",
       "upstream_title": "Loom title: Synthetic Loom title",
       "upload_status": "Uploaded to Loom",
       "saved_url": "https://www.loom.com/share/abc123",
@@ -108,7 +108,7 @@
     "library-uploaded-dark-960x760.png": {
       "width": 960,
       "height": 760,
-      "sha256": "315f8895026bd8c1e9fe3982cb9dded187a55a62913ce55f7513d57d32b239b3",
+      "sha256": "b81107d0233a01bc67a578030b1e4ff263832ce9db35f5f6e8d371384408ca80",
       "upstream_title": "Loom title: Synthetic Loom title",
       "upload_status": "Uploaded to Loom",
       "saved_url": "https://www.loom.com/share/abc123",
