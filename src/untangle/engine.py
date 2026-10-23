@@ -548,6 +548,13 @@ class Engine:
         return str(path)
 
     @traced('configure')
+    def clear_video(self):
+        """Release video sources while keeping a prepared microphone route."""
+        self._check_open()
+        if self._output:
+            raise EngineError('Stop the recording before turning off its camera.')
+        self._clear_scene(preserve_audio=True)
+
     def configure(self, mode="screen", camera="/dev/video0", microphone="default",
                   desktop_audio=False, shape="circle", mask_path=None, size=.22,
                   position="bottom-right", screen=0, mirror=True, floating_camera=False,

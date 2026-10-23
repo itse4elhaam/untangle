@@ -217,9 +217,9 @@ class AppChecks(unittest.TestCase):
         self.assertEqual(self.window.engine.configure.call_args.kwargs['mode'], 'camera')
         self.assertFalse(self.window.widget_panel.isVisible())
         self.window.camera.setCurrentIndex(0)
-        self.window.configure()
         self.assertFalse(self.window.record_button.isEnabled())
-        self.assertIn('Choose a camera', self.window.status.text())
+        self.assertIn('Camera off', self.window.status.text())
+        self.window.engine.clear_video.assert_called_once_with()
 
     def test_countdown_cancel_never_records(self):
         self.window.toggle_record()

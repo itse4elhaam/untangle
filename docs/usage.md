@@ -44,6 +44,13 @@ Open **Settings** from the recorder or library to choose **Light** or **Dark**. 
 
 **Start recording** stays at the top right. **Hide sidebar** gives the preview more room; **Show sidebar** restores the recording controls. The preference survives restart. Camera zoom Reset has separate spacing from the slider. Canvas presets choose fitting automatically; the Fit/Fill picker is no longer shown. **Raw · source size** uses the camera's active source resolution and aspect ratio, aligned to the encoder’s four-pixel width and even height requirements. Raw describes the canvas, not an uncompressed codec or bypass of microphone cleanup.
 
+The **On / Off** button beside the camera selector turns the camera off in one
+click and remembers the selected device for turning it back on. Screen mode
+continues without the camera overlay. In Camera mode, Off releases the video
+source and disables recording until a camera is on; it never switches to screen
+capture automatically. Camera selection remains locked during countdown,
+recording, and saving. The **Camera off** dropdown entry remains available.
+
 Back from Recordings reuses a valid recorder scene and restores the preview on the next Qt event-loop turn. Thumbnail cancellation is asynchronous; it does not wait for child processes on the UI thread.
 
 Setup stays on the left and the large preview stays on the right. Mode, source and device controls are visible immediately. **Settings** contains camera appearance, microphone processing and output quality. Microphone levels remain below the preview even when camera controls are expanded. Recordings and Sharing remain at the lower left.

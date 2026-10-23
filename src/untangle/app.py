@@ -465,7 +465,17 @@ class Window(QMainWindow):
             self.camera.addItem(name, path)
         if self.camera.count() > 1:
             self.camera.setCurrentIndex(1)
-        controls.addWidget(self.camera)
+        camera_row = QHBoxLayout()
+        camera_row.setSpacing(8)
+        camera_row.addWidget(self.camera, 1)
+        self.camera_toggle = QPushButton('On')
+        self.camera_toggle.setCheckable(True)
+        self.camera_toggle.setAccessibleName('Camera enabled')
+        self.camera_toggle.setFixedWidth(48)
+        self.camera_toggle.clicked.connect(self.toggle_camera)
+        camera_row.addWidget(self.camera_toggle)
+        controls.addLayout(camera_row)
+        self._last_camera_device = self.camera.currentData()
         controls = self.microphone_setup = section('Microphone')
         self.microphone = QComboBox()
         self.microphone.addItem('Automatic microphone', 'default')
@@ -700,9 +710,10 @@ class Window(QMainWindow):
             navigation.addWidget(button, 1)
         content.addWidget(self.navigation_footer, 1, 0, Qt.AlignLeft | Qt.AlignBottom)
         layout.addLayout(content, 1)
-        self.config_controls = [self.screen_button, self.camera_button, self.capture_kind, self.capture_window, self.refresh_button, self.screen, self.camera, self.microphone, self.clean_microphone, self.desktop_audio, self.shape, self.size, self.position, self.mask_button, self.mirror, self.quality, self.canvas, self.framing, self.camera_zoom, self.camera_zoom_reset, self.camera_zoom_minus, self.camera_zoom_plus]
-        for combo in (self.screen, self.capture_window, self.camera, self.microphone):
+        self.config_controls = [self.screen_button, self.camera_button, self.capture_kind, self.capture_window, self.refresh_button, self.screen, self.camera, self.camera_toggle, self.microphone, self.clean_microphone, self.desktop_audio, self.shape, self.size, self.position, self.mask_button, self.mirror, self.quality, self.canvas, self.framing, self.camera_zoom, self.camera_zoom_reset, self.camera_zoom_minus, self.camera_zoom_plus]
+        for combo in (self.screen, self.capture_window, self.microphone):
             combo.currentIndexChanged.connect(self.schedule_configure)
+        self.camera.currentIndexChanged.connect(self.camera_changed)
         self.capture_kind.currentIndexChanged.connect(self.capture_changed)
         self.shape.currentIndexChanged.connect(self.shape_changed)
         self.size.valueChanged.connect(self.camera_size_changed)
@@ -805,10 +816,36 @@ class Window(QMainWindow):
 
     def update_camera_controls(self):
         enabled = bool(self.camera.currentData()) and not (self.recording or self.busy or self.counting)
+        camera_on = bool(self.camera.currentData())
+        self.camera_toggle.setChecked(camera_on)
+        self.camera_toggle.setText('On' if camera_on else 'Off')
+        self.camera_toggle.setToolTip('Turn camera off' if camera_on else 'Turn camera on')
+        self.camera_toggle.setEnabled(self.camera.count() > 1 and not (self.recording or self.busy or self.counting))
         self.camera_zoom.setEnabled(enabled)
         self.camera_zoom_minus.setEnabled(enabled and self.camera_zoom.value() > 100)
         self.camera_zoom_plus.setEnabled(enabled and self.camera_zoom.value() < 300)
         self.camera_zoom_reset.setEnabled(enabled and self.camera_zoom.value() != 100)
+
+    def toggle_camera(self, enabled):
+        if self.recording or self.busy or self.counting:
+            self.update_camera_controls()
+            return
+        if not enabled:
+            self.camera.setCurrentIndex(0)
+        else:
+            index = self.camera.findData(self._last_camera_device) if self._last_camera_device else -1
+            if index <= 0:
+                index = 1 if self.camera.count() > 1 else 0
+            self.camera.setCurrentIndex(index)
+
+    def camera_changed(self):
+        if self.camera.currentData():
+            self._last_camera_device = self.camera.currentData()
+        self.schedule_configure()
+        if (not self.camera.currentData() and self.engine and not self.in_library()
+                and not (self.recording or self.busy or self.counting)):
+            self.configure_timer.stop()
+            self.configure()
 
     def apply_camera_framing(self, **changes):
         self.update_setup_summary()
@@ -1104,7 +1141,10 @@ class Window(QMainWindow):
                 if not window_id or not self.window_catalog.geometry(window_id):
                     raise ValueError('Select an open window. Refresh the list if needed.')
             if self.mode == 'camera' and not camera:
-                raise ValueError('Choose a camera to use Camera mode.')
+                self.engine.clear_video()
+                self.save_preferences()
+                self.notice('Camera off. Turn it on to record in Camera mode.')
+                return
             self.engine.set_canvas(*self.output_dimensions())
             self.engine.configure(mode=self.mode, camera=camera, microphone=microphone,
                 microphone_processing=self.clean_microphone.isChecked(),
