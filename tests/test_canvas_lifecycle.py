@@ -121,3 +121,19 @@ class CanvasLifecycleTests(unittest.TestCase):
         w.focus_button.setChecked(False)
         test_app.qt.processEvents()
         self.assertTrue(w.canvas_panel.isVisible())
+
+    def test_legacy_quality_and_invalid_new_preferences_restore_safely(self):
+        w = self.window
+        w.timer.stop()
+        w.engine = None
+        w.prefs.setValue('quality', '1080p · 30 fps')
+        w.prefs.setValue('canvas', 'unknown')
+        w.prefs.setValue('framing', 'stretch')
+        for saved_zoom, expected in (('nan', 100), (-50, 100), (999, 300)):
+            with self.subTest(saved_zoom=saved_zoom):
+                w.prefs.setValue('camera_zoom', saved_zoom)
+                w.restore_preferences()
+                self.assertEqual(w.canvas.currentData(), 'landscape')
+                self.assertEqual(w.framing.currentData(), 'fit')
+                self.assertEqual(w.camera_zoom.value(), expected)
+                self.assertEqual(w.output_dimensions(), (1920, 1080))
