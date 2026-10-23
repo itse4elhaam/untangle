@@ -70,7 +70,7 @@ There is no gate, automatic gain, or separate compressor. Suppression helps with
 
 ## Camera shapes
 
-Circle, rounded square, square, and a custom image mask. For a custom mask, use a PNG with transparent areas where the camera should be hidden and opaque areas where it should show. The desktop widget uses a binary silhouette, so partially transparent custom edges become a hard boundary. The existing camera source renders directly into this native widget; it does not open the camera a second time.
+Circle, rounded square, square, and a custom image mask. For a custom mask, use a PNG with transparent areas where the camera should be hidden and opaque areas where it should show. The desktop widget preserves fractional alpha on smooth edges, including soft custom masks, and renders at the display's device scale. It reads back the existing OBS camera source without opening the camera again. Preview readback is capped at 30 fps and 1024 pixels per edge; actual GPU performance still needs a device check. Recorded window overlays use alpha masks rasterized for their output size.
 
 ## Pointer zoom
 
@@ -90,7 +90,15 @@ The verified official CLI binary is installed at `~/.local/share/glint/twg`. It 
 
 Loom does not currently publish an open API for local-file uploads. The Loom recording SDK records inside an integrated app; it is not a public MP4 upload API. Untangle therefore uses the official CLI's OAuth 2.1 flow, not custom OAuth credentials or private endpoints. No app registration or secret is needed in Untangle. Connecting only signs in; it does not upload a video. Installation alone does not mean an account is connected.
 
-On 2026-10-22, read-only help checks of installed TWG 1.3.6 confirmed `loom video upload <file>`, optional `--title`, and `loom video visibility set <id> --visibility owner|workspace|public`. This version has no upload-time visibility flag. Untangle keeps the selected file, CLI, and visibility fixed for each upload. It copies the link only after the visibility command succeeds. A failed upload can leave a remote video; check the Loom library before retrying. A successful CLI response does not prove Loom has finished processing the video. Raw CLI errors are not displayed because they can contain account details or credentials.
+Untangle checks the installed CLI's upload syntax before sending the video and keeps the file, visibility, and title preference fixed for that attempt. The upload panel shows activity and elapsed time. If the CLI reports a percentage, Untangle displays it; the currently inspected CLI does not provide byte progress. A successful command does not prove Loom has finished processing the video.
+
+The resulting link and upstream title are saved in `~/.local/state/glint/uploads.json` and displayed in Recordings across restarts. A sharing-permission failure keeps the uploaded link with a warning. Automatic clipboard copying waits for confirmed sharing permissions. Failed or interrupted uploads preserve the local video; check Loom before retrying because another attempt may create a duplicate. Raw CLI errors are not displayed because they can contain credentials.
+
+Sharing checks the actual signed-in Atlassian account and hides Connect when connected. Disconnect signs out the selected TWG profile for all Atlassian products after confirmation. It does not delete videos or saved links. After browser sign-in, use Check connection to refresh the account.
+
+The default **Let Loom generate titles when available** preference sends no title override and preserves Loom's returned title separately from the local filename. This does not enable or verify an upstream AI setting. Automatic AI titles on imported videos are not confirmed; Atlassian's related feature request is unresolved. Sharing links to Loom's title guidance and workspace settings. [Verified capability details and official sources](loom-integration.md) explain these limits.
+
+Recordings offers **Check Loom link** to refresh the title. The current CLI cannot prove deletion or processing completion when its response omits that evidence. Offline, private, and not-found responses leave the saved link unchanged with an explanation. **Forget Loom link** removes it locally after confirmation, leaving the local video and Loom video untouched. Explicit deletion evidence clears the remote link while retaining the local recording. Deleting a local recording removes its local metadata; renaming it moves the metadata. A replacement file with the same name does not inherit the old link.
 
 Complete consent and browser sign-in yourself through **Connect Loom account** using the Atlassian account/site with access to your Loom workspace. The CLI owns credential storage and refresh. Then, when you want to send a particular recording, open **Recordings**, select that video, and choose **Upload to Loom**. Upload progress and results appear in the recorder; successful uploads copy the link to your clipboard. Account sign-in, workspace access, plan eligibility, and a real upload remain unverified; tests mock all CLI processes and never authenticate or transmit recordings.
 

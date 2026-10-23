@@ -1,0 +1,134 @@
+{
+  "generated_at_utc": "2026-10-23T08:14:18.869963+00:00",
+  "qt": "6.11.1",
+  "pyside": "6.11.1",
+  "platform": "offscreen",
+  "style": "fusion",
+  "source_sha256": {
+    "src/untangle/app.py": "10431f40c483be00b00f12d0cb23a7bc75c337bf9822c2ff26a39347086d0314",
+    "src/untangle/loom.py": "02f0e7e64c370cf71ea9387181f008445f13dadbffca2b7a8be65dd0edc24967",
+    "src/untangle/upload_store.py": "e089e8be0030e60229c702506058ed53cfc21220f4476c7e641d901d09839de9",
+    "src/untangle/theme.py": "fc0fbfd92ce9a0f5ec9d166d79fdc1451bf70a9837eb528afd714548bbf24462",
+    "src/untangle/recordings.py": "bdadadd319eaa5fde1dc4d6a3acda23394f42b0660417f24b8ff6767fc850554",
+    "tests/test_loom_workflow.py": "b6d5a5e42b286d3ff05dc783cdf26c3b0075b528a83389e88dfc7696e0e69560",
+    "tests/test_app.py": "dd7f08f7712d4373ecc77f374585676524c3ac0b0568cb82a7f8a76c6d828e11",
+    "scripts/render-loom-ui.py": "a19ea408c19853c5a7fbb350616360a7ba8191e80c38e391271592206615e576",
+    "scripts/render-ui.py": "1778b960051f7367bae668f340d79f9a9f7c6ffe85f3a87fdddb825e2f258f05"
+  },
+  "disclosure": "Actual production widgets, layouts, styles, signal handlers and local UploadStore. Offscreen Fusion at scale 1 and 96 DPI. AppChecks fixture is delegated, not subclassed. Only synthetic temporary files and INI preferences are used. OBS, devices, hotkeys, initialization, subprocess/account/network actions and media backends are mocked. QProcess is replaced with a QObject that emits real Qt signals and cannot run commands. Native Preview is replaced with the software synthetic frame from render-ui.py. No normal app launch, capture, playback, login, upload, installation or speech setting changes.",
+  "images": {
+    "recorder-uploading-dark-960x760.png": {
+      "width": 960,
+      "height": 760,
+      "sha256": "a66f4a47aa07bf77fb3ff9a2e9b1976d88bd01c24a3f89b9ee40844e48497062",
+      "details": [
+        "Production upload/help/progress handlers driven with inert Qt process signals, split text chunks and synthetic 42% progress. Elapsed time pinned to 43 seconds."
+      ],
+      "upload_heading": "Uploading to Loom \u00b7 42%",
+      "upload_detail": "Your local recording stays safe. \u00b7 Elapsed 0:43"
+    },
+    "recorder-success-light-960x760.png": {
+      "width": 960,
+      "height": 760,
+      "sha256": "2f379963b7c00b16b31d215d1ae6e01acf70752cd4f8d65f770508ced4a39996",
+      "details": [
+        "Production upload completion parses data.video.name/isComplete and saves a synthetic Loom URL in temporary metadata. Offscreen clipboard only."
+      ],
+      "upload_heading": "Uploaded to Loom",
+      "upload_detail": "Uploaded to Loom. Link copied. Loom may still be processing the video."
+    },
+    "recorder-failure-dark-960x760.png": {
+      "width": 960,
+      "height": 760,
+      "sha256": "f3ac15babf18a161e5a735668c4dc28145fa172d1409e5bb93e5f51fb935220f",
+      "details": [
+        "Structured synthetic auth failure through production completion handler. No real account is inspected or changed."
+      ],
+      "upload_heading": "Upload could not finish",
+      "upload_detail": "Loom upload failed. Your local recording is safe. Open Sharing and connect your Loom account again."
+    },
+    "sharing-connected-light-960x760.png": {
+      "width": 960,
+      "height": 760,
+      "sha256": "1a6b883a273c946576b8af65a093486f61cfd5ded632d9d3ba5dbbd642a3d3cb",
+      "dialog_size": [
+        700,
+        700
+      ],
+      "text": [
+        "LOOM",
+        "Recordings save locally first. Connect through browser OAuth using Atlassian\u2019s official Teamwork Graph CLI.",
+        "Connected as Synthetic User \u00b7 user@example.invalid. Loom uploads still require an eligible workspace plan.",
+        "Who can watch uploaded videos?",
+        "Enabled here: no title override is sent. The CLI cannot read or enable Loom\u2019s AI setting. Automatic titles for imported videos are not confirmed. Loom requires a transcript of at least 30 seconds.",
+        "Your Loom defaults apply during upload. Untangle then applies the selected sharing setting. Uploads require Business, Business + AI, or Enterprise, excluding trials."
+      ],
+      "details": [
+        "Actual production Sharing dialog, synthetic successful whoami, temporary preferences. The connected account hides the connect action. AI preference is local; the UI discloses remote availability and import limitations."
+      ]
+    },
+    "sharing-ai-settings-dark-960x760.png": {
+      "title_preference_checked": false,
+      "width": 960,
+      "height": 760,
+      "sha256": "0410a6e172fec79f00a52571409b97b3dc597435634bb4d46ae84cd8a818159e",
+      "dialog_size": [
+        700,
+        700
+      ],
+      "text": [
+        "LOOM",
+        "Recordings save locally first. Connect through browser OAuth using Atlassian\u2019s official Teamwork Graph CLI.",
+        "Connected as Synthetic User \u00b7 user@example.invalid. Loom uploads still require an eligible workspace plan.",
+        "Who can watch uploaded videos?",
+        "Untangle will request your local recording title when the installed CLI supports it.",
+        "Your Loom defaults apply during upload. Untangle then applies the selected sharing setting. Uploads require Business, Business + AI, or Enterprise, excluding trials."
+      ],
+      "details": [
+        "Actual production Sharing dialog, synthetic successful whoami, temporary preferences. The connected account hides the connect action. AI preference is local; the UI discloses remote availability and import limitations."
+      ]
+    },
+    "library-uploaded-light-960x760.png": {
+      "width": 960,
+      "height": 760,
+      "sha256": "a4b5733c8847eddd8248f76e6306d3e89108756bde294c213e62b35e0d520c00",
+      "upstream_title": "Loom title: Synthetic Loom title",
+      "upload_status": "Uploaded to Loom",
+      "saved_url": "https://www.loom.com/share/abc123",
+      "visible_link_actions": [
+        "Open in Loom",
+        "Copy Loom link",
+        "Check Loom link",
+        "Forget Loom link"
+      ],
+      "details": [
+        "Production upload completion and library navigation using the existing synthetic fixture file. Upstream data.video.name/isComplete and saved link drive real library labels and visible enabled link actions. Thumbnail processes and media backends remain mocked; no media is loaded."
+      ]
+    },
+    "library-uploaded-dark-960x760.png": {
+      "width": 960,
+      "height": 760,
+      "sha256": "315f8895026bd8c1e9fe3982cb9dded187a55a62913ce55f7513d57d32b239b3",
+      "upstream_title": "Loom title: Synthetic Loom title",
+      "upload_status": "Uploaded to Loom",
+      "saved_url": "https://www.loom.com/share/abc123",
+      "visible_link_actions": [
+        "Open in Loom",
+        "Copy Loom link",
+        "Check Loom link",
+        "Forget Loom link"
+      ],
+      "details": [
+        "Production upload completion and library navigation using the existing synthetic fixture file. Upstream data.video.name/isComplete and saved link drive real library labels and visible enabled link actions. Thumbnail processes and media backends remain mocked; no media is loaded."
+      ]
+    }
+  },
+  "camera": {
+    "file": "camera-edges.png",
+    "sha256": "fc75d5fdc01ad40e343d6b1f9b5d76815b355a9835b03f13d295dd63c83f54b9",
+    "source_sha256": {
+      "src/untangle/floating.py": "130d50c1bdd73bb9de22318d8120ed270d087eab7e41e3799c26b81d34708c04",
+      "scripts/render-camera-edges.py": "15b0b2b3c85f6111499c7bf0765fae0cffa2c5125cd55c5abb2fb536f98a2f04"
+    }
+  }
+}
