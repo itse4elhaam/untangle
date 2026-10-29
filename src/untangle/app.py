@@ -236,6 +236,7 @@ class Window(QMainWindow):
         self.pause_started = 0
         self.paused_duration = 0
         self.quit_after_save = False
+        self._restarting = False
         self._discarding = False
         self._discard_path = None
         self._configure_pending = False
@@ -374,6 +375,12 @@ class Window(QMainWindow):
         self.discard_button.hide()
         self.discard_button.clicked.connect(self.discard_recording)
         header.addWidget(self.discard_button)
+        self.restart_button = QPushButton('Restart')
+        self.restart_button.setObjectName('quiet')
+        self.restart_button.setToolTip('Discard this take and immediately start a new recording')
+        self.restart_button.hide()
+        self.restart_button.clicked.connect(self.restart_recording)
+        header.addWidget(self.restart_button)
         self.pause_button = QPushButton('Pause')
         self.pause_button.hide()
         self.pause_button.clicked.connect(self.toggle_pause)
@@ -1491,6 +1498,8 @@ class Window(QMainWindow):
             self.record_button.setText('■  Stop and save')
             self.pause_button.setVisible(True)
             self.pause_button.setText('Pause')
+            self.restart_button.setVisible(True)
+            self.restart_button.setEnabled(True)
             self.discard_button.setVisible(True)
             self.discard_button.setEnabled(True)
             self.discard_saved_button.hide()
@@ -1520,6 +1529,7 @@ class Window(QMainWindow):
         self.tray_zoom.setEnabled(False)
         self.record_button.setEnabled(False)
         self.pause_button.setEnabled(False)
+        self.restart_button.setEnabled(False)
         self.discard_button.setEnabled(False)
         self.tray_record.setEnabled(False)
         self.tray_pause.setEnabled(False)
@@ -1536,6 +1546,8 @@ class Window(QMainWindow):
             self.pause_button.setEnabled(True)
             self.tray_record.setEnabled(True)
             self.tray_pause.setEnabled(True)
+            self.restart_button.setEnabled(True)
+            self._restarting = False
             self.discard_button.setEnabled(True)
             self.tray_discard.setEnabled(True)
             self._discarding = False
@@ -1560,6 +1572,7 @@ class Window(QMainWindow):
         self.tray.setToolTip('Untangle · Saving recording')
         self.restore_capture_window()
         self.pause_button.setVisible(False)
+        self.restart_button.setVisible(False)
         self.discard_button.setVisible(False)
         if self._discarding:
             self._discarding = False
@@ -1600,6 +1613,19 @@ class Window(QMainWindow):
                 target.unlink()
             self.finish_save(source, f'MP4 preparation failed. Your MKV is safe. {details}')
 
+    def restart_recording(self):
+        if not self.recording or self.busy:
+            return
+        answer = QMessageBox.question(self, 'Restart this recording?',
+            'Delete this take and immediately start a new recording with the same settings? '
+            'The current take cannot be recovered.',
+            QMessageBox.Yes | QMessageBox.Cancel, QMessageBox.Cancel)
+        if answer != QMessageBox.Yes or not self.recording or self.busy:
+            return
+        self._restarting = True
+        self._discarding = True
+        self.stop()
+
     def discard_recording(self):
         """Stop the current take and delete it instead of saving."""
         if not self.recording or self.busy:
@@ -1613,6 +1639,8 @@ class Window(QMainWindow):
         self.stop()
 
     def finish_discard(self, path):
+        restart = self._restarting
+        self._restarting = False
         emit(self, 'save.result', outcome='discarded')
         self.ready_after_save()
         try:
@@ -1622,6 +1650,9 @@ class Window(QMainWindow):
             self.notice(f'Could not discard the recording: {exc}. It is still at {path}.')
         else:
             self.notice('Recording discarded. Nothing was saved.')
+            if restart and not self.quit_after_save and not self._closing:
+                self.counting = True
+                self.start()
         if self.quit_after_save:
             self.close()
 
