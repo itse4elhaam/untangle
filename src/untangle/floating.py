@@ -262,6 +262,13 @@ class CameraBubble(QWidget):
             super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
+        # A release can be lost when a menu or another window takes the grab.
+        # Never continue moving the camera after the physical button is up.
+        if self._drag_offset is not None and not event.buttons() & Qt.LeftButton:
+            self._drag_offset = None
+            self.setCursor(Qt.OpenHandCursor)
+            if QWidget.mouseGrabber() is self:
+                self.releaseMouse()
         if self._drag_offset is not None:
             point = event.globalPosition().toPoint() - self._drag_offset
             if self._screen:
