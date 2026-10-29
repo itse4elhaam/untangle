@@ -252,6 +252,10 @@ class Recordings(QWidget):
         self.delete_unnamed_button.clicked.connect(self.delete_unnamed)
         library_layout.addWidget(self.delete_unnamed_button)
 
+        self.drive = QPushButton('Google Drive…')
+        self.drive.clicked.connect(self.open_drive)
+        library_tools.addWidget(self.drive)
+
         self.upload = QPushButton('Upload to Loom')
         self.upload.clicked.connect(self.upload_selected)
         actions.addWidget(self.upload)
@@ -566,6 +570,15 @@ class Recordings(QWidget):
         if path is not None and path.is_file():
             QApplication.clipboard().setText(str(path))
             self.message.setText('File path copied. This file is on your computer.')
+
+    def open_drive(self):
+        from .drive_dialog import DriveDialog
+        paths = self.checked_paths()
+        if any(self.deletion_blocked(path) for path in paths):
+            self.message.setText('Wait until the selected recordings are no longer busy.')
+            return
+        dialog = DriveDialog(paths, self)
+        dialog.exec()
 
     def checked_paths(self):
         """Visible selected recordings in list order, or the current one."""
