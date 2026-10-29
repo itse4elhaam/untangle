@@ -3,7 +3,7 @@ from collections import OrderedDict
 from datetime import datetime
 import shutil
 from pathlib import Path
-from .naming import recording_title, recording_files, rename_recording
+from .naming import has_automatic_name, recording_title, recording_files, rename_recording
 from .naming_dialog import prompt_recording_name
 from .loom import valid_share_url
 
@@ -12,7 +12,7 @@ from PySide6.QtGui import QDesktopServices, QIcon, QPixmap, QShortcut, QKeySeque
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtMultimediaWidgets import QVideoWidget
 from PySide6.QtWidgets import (
-    QWidget, QFrame, QSplitter, QStackedWidget, QLineEdit, QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
+    QAbstractItemView, QWidget, QFrame, QSplitter, QStackedWidget, QLineEdit, QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
     QPushButton, QComboBox, QSizePolicy, QSlider, QVBoxLayout, QApplication, QMessageBox, QStyle, QStyleOptionSlider,
 )
 
@@ -125,6 +125,12 @@ class Recordings(QWidget):
         self.files.setAccessibleName('Recordings, newest first')
         self.files.setTextElideMode(Qt.ElideMiddle)
         self.files.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        # Shift/Ctrl-click or Ctrl+A select several recordings for one deletion.
+        self.files.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        self.files.itemSelectionChanged.connect(self.update_actions)
+        delete_shortcut = QShortcut(QKeySequence.Delete, self.files)
+        delete_shortcut.setContext(Qt.WidgetShortcut)
+        delete_shortcut.activated.connect(self.delete_selected)
         library_layout.addWidget(self.files, 1)
         body.addWidget(library)
         preview = QFrame()
@@ -240,6 +246,11 @@ class Recordings(QWidget):
         folder.clicked.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.directory))))
         library_tools.addWidget(folder)
         library_layout.addLayout(library_tools)
+        self.delete_unnamed_button = QPushButton('Delete unnamed…')
+        self.delete_unnamed_button.setObjectName('deleteRecording')
+        self.delete_unnamed_button.setToolTip('Delete every recording that still has its automatic, dated name')
+        self.delete_unnamed_button.clicked.connect(self.delete_unnamed)
+        library_layout.addWidget(self.delete_unnamed_button)
 
         self.upload = QPushButton('Upload to Loom')
         self.upload.clicked.connect(self.upload_selected)
@@ -394,7 +405,13 @@ class Recordings(QWidget):
         self.upload.setEnabled(exists and not blocked and status not in ('uploading', 'processing'))
         self.copy.setEnabled(exists)
         self.rename.setEnabled(exists and not blocked)
-        self.delete.setEnabled(exists and not blocked)
+        targets = [target for target in self.checked_paths() if target.is_file()]
+        self.delete.setText(f'Delete {len(targets)}' if len(targets) > 1 else 'Delete')
+        self.delete.setEnabled(bool(targets) and not any(self.deletion_blocked(target) for target in targets))
+        if hasattr(self, 'delete_unnamed_button'):
+            unnamed = len(self.unnamed_paths())
+            self.delete_unnamed_button.setText(f'Delete unnamed ({unnamed})…' if unnamed else 'Delete unnamed…')
+            self.delete_unnamed_button.setEnabled(bool(unnamed))
         url = self.loom_url(state)
         for button in (self.open_loom, self.copy_loom):
             button.setVisible(bool(url))
@@ -550,39 +567,96 @@ class Recordings(QWidget):
             QApplication.clipboard().setText(str(path))
             self.message.setText('File path copied. This file is on your computer.')
 
+    def checked_paths(self):
+        """Visible selected recordings in list order, or the current one."""
+        items = sorted((item for item in self.files.selectedItems() if not item.isHidden()), key=self.files.row)
+        paths = [Path(item.data(Qt.UserRole)) for item in items]
+        current = self.selected_path()
+        return paths or ([current] if current is not None else [])
+
+    def unnamed_paths(self):
+        """Every listed recording, search or not, that nobody has named yet."""
+        paths = (Path(self.files.item(index).data(Qt.UserRole)) for index in range(self.files.count()))
+        return [path for path in paths if has_automatic_name(path) and path.is_file()]
+
+    @staticmethod
+    def listing(paths, limit=8):
+        names = [path.name for path in paths[:limit]]
+        if len(paths) > limit:
+            names.append(f'…and {len(paths) - limit} more')
+        return '\n'.join(names)
+
     def delete_selected(self):
-        path = self.selected_path()
-        self.update_actions()
-        if path is None or not path.is_file() or self.deletion_blocked(path):
+        paths = [path for path in self.checked_paths() if path.is_file()]
+        if len(paths) == 1:
+            self.delete_paths(paths, 'Delete recording?',
+                f'Permanently delete this recording?\n\n{paths[0]}\n\nThis cannot be undone. '
+                'Any recording on Loom is unchanged. Its saved link will be removed from this computer.')
+        elif paths:
+            self.delete_paths(paths, f'Delete {len(paths)} recordings?',
+                f'Permanently delete these {len(paths)} recordings?\n\n{self.listing(paths)}\n\n'
+                'This cannot be undone. Any recordings on Loom are unchanged.')
+        else:
+            self.update_actions()
+
+    def delete_unnamed(self):
+        paths = self.unnamed_paths()
+        if not paths:
+            self.message.setText('Every recording has a name. Nothing to clean up.')
+            self.update_actions()
             return
-        answer = QMessageBox.question(self, 'Delete recording?',
-            f'Permanently delete this recording?\n\n{path}\n\nThis cannot be undone. '
-            'Any recording on Loom is unchanged. Its saved link will be removed from this computer.',
+        count = f'{len(paths)} recording{"s" if len(paths) != 1 else ""}'
+        self.delete_paths(paths, 'Delete unnamed recordings?',
+            f'Permanently delete {count} you never named?\n\n{self.listing(paths)}\n\n'
+            'Recordings you named are kept. This cannot be undone. Any recordings on Loom are unchanged.')
+
+    def delete_paths(self, paths, title, question):
+        self.update_actions()
+        if not paths or any(self.deletion_blocked(path) for path in paths):
+            return
+        answer = QMessageBox.question(self, title, question,
             QMessageBox.Yes | QMessageBox.Cancel, QMessageBox.Cancel)
         if answer != QMessageBox.Yes:
             return
         # Recheck after the modal dialog, which can process application events.
-        if self.deletion_blocked(path):
-            self.message.setText('This recording is in use. Try again when saving or uploading finishes.')
+        if any(self.deletion_blocked(path) for path in paths):
+            self.message.setText('A recording is in use. Try again when saving or uploading finishes.'
+                if len(paths) > 1 else 'This recording is in use. Try again when saving or uploading finishes.')
             self.update_actions()
             return
         self.release()
-        try:
-            path.unlink()
-        except OSError as exc:
+        deleted, failures, metadata_errors = [], [], []
+        for path in paths:
+            try:
+                path.unlink()
+            except OSError as exc:
+                failures.append((path, exc))
+                continue
+            deleted.append(path)
+            if self.upload_store is not None:
+                try:
+                    self.upload_store.remove(path)
+                except OSError as exc:
+                    metadata_errors.append(exc)
+        if not deleted:
+            path, exc = failures[0]
             self.message.setText(f'Could not delete {path.name}: {exc}')
             self.update_actions()
             return
-        metadata_error = None
-        if self.upload_store is not None:
-            try:
-                self.upload_store.remove(path)
-            except OSError as exc:
-                metadata_error = exc
         self.refresh()
-        self.message.setText(f'Deleted {path.name}, but could not clear its saved Loom details: {metadata_error}'
-            if metadata_error else f'Deleted {path.name}.')
-        self.recording_deleted.emit(str(path))
+        if len(paths) == 1:
+            path = deleted[0]
+            self.message.setText(f'Deleted {path.name}, but could not clear its saved Loom details: {metadata_errors[0]}'
+                if metadata_errors else f'Deleted {path.name}.')
+        else:
+            text = f'Deleted {len(deleted)} recording{"s" if len(deleted) != 1 else ""}.'
+            if failures:
+                text += f' Could not delete {len(failures)}: {failures[0][0].name}: {failures[0][1]}'
+            if metadata_errors:
+                text += f' Some saved Loom details could not be cleared: {metadata_errors[0]}'
+            self.message.setText(text)
+        for path in deleted:
+            self.recording_deleted.emit(str(path))
 
     def reject(self):
         self.stop_thumbnails()
