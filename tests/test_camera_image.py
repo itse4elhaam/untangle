@@ -28,8 +28,13 @@ class FakeCamera:
     def __call__(self, args, **kwargs):
         self.calls.append(args)
         if '--set-ctrl' in args:
-            for pair in args[args.index('--set-ctrl') + 1].split(','):
-                name, value = pair.split('=')
+            pairs = [pair.split('=') for pair in args[args.index('--set-ctrl') + 1].split(',')]
+            values = {name: control.value for name, control in self.controls.items()}
+            for name, _ in pairs:
+                # Like some uvcvideo kernels: an inactive control fails the whole call.
+                if not camera_image.manual_allowed(name, values):
+                    return completed(returncode=1, stderr='Permission denied')
+            for name, value in pairs:
                 self.controls[name].value = int(value)
             return completed()
         lines = []
@@ -77,7 +82,23 @@ class ParserTests(unittest.TestCase):
         with patch.object(camera_image.subprocess, 'run', return_value=completed()) as run:
             write_controls('/dev/video9', {'exposure_time_absolute': 200, 'auto_exposure': 1, 'contrast': 40})
         settings = [c.args[0][-1] for c in run.call_args_list]
-        self.assertEqual(settings, ['auto_exposure=1', 'exposure_time_absolute=200,contrast=40'])
+        self.assertEqual(settings, ['auto_exposure=1', 'contrast=40', 'exposure_time_absolute=200'])
+
+    def test_manual_values_are_dropped_while_automatic_stays_on(self):
+        with patch.object(camera_image.subprocess, 'run', return_value=completed()) as run:
+            write_controls('/dev/video9', {'focus_absolute': 50, 'brightness': 10},
+                           {'focus_automatic_continuous': 1})
+        self.assertEqual([c.args[0][-1] for c in run.call_args_list], ['brightness=10'])
+
+    def test_a_rejected_manual_batch_keeps_picture_values(self):
+        fake = FakeCamera(BRIO)
+        fake.controls['focus_automatic_continuous'].value = 1
+        with patch.object(camera_image.subprocess, 'run', side_effect=fake):
+            # Stale current state claims auto is off; the camera disagrees.
+            with self.assertRaises(camera_image.CameraControlError):
+                write_controls('/dev/video5', {'focus_absolute': 50, 'brightness': 10},
+                               {'focus_automatic_continuous': 0})
+        self.assertEqual(fake.controls['brightness'].value, 10)
 
     def test_failures_raise_camera_control_error(self):
         with patch.object(camera_image.subprocess, 'run', return_value=completed(returncode=1, stderr='busy')):
@@ -90,9 +111,10 @@ class ParserTests(unittest.TestCase):
     def test_restore_clamps_saved_values_to_this_camera(self):
         fake = FakeCamera(HP)
         with patch.object(camera_image.subprocess, 'run', side_effect=fake):
-            applied = restore_saved('/dev/video0', {'brightness': 200, 'zoom_absolute': 300, 'contrast': True})
+            applied = restore_saved('/dev/video0', {'brightness': 200, 'zoom_absolute': 300, 'contrast': True,
+                                                    'white_balance_temperature': 3000})
         self.assertEqual(applied, {'brightness': 64})
-        self.assertEqual(fake.sets(), ['brightness=64'])
+        self.assertEqual(fake.sets(), ['brightness=64'], 'Stale manual value is skipped while auto is on')
 
     def test_restore_without_saved_values_runs_nothing(self):
         with patch.object(camera_image.subprocess, 'run') as run:
@@ -193,6 +215,18 @@ class CameraPageTests(unittest.TestCase):
         self.flush()
         self.assertEqual(self.fake.sets()[0], 'white_balance_automatic=0,focus_automatic_continuous=0,auto_exposure=1')
 
+    def test_reset_after_manual_focus_still_resets_picture(self):
+        self.open_page()
+        self.control('focus_automatic_continuous').setChecked(False)
+        self.flush()
+        self.control('focus_absolute').setValue(90)
+        self.control('contrast').setValue(10)
+        self.flush()
+        self.case.click(self.window.camera_adjustments.reset_button)
+        self.assertEqual(self.fake.controls['contrast'].value, 128)
+        self.assertEqual(self.fake.controls['focus_automatic_continuous'].value, 1)
+        self.assertNotIn('Permission denied', self.window.camera_adjustments.message.text())
+
     def test_reset_restores_defaults_but_keeps_regional_anti_flicker(self):
         w = self.window
         self.open_page()
@@ -208,13 +242,17 @@ class CameraPageTests(unittest.TestCase):
         w = self.window
         name = w.camera.currentText()
         w.prefs.setValue('camera_image', '{"%s": {"saturation": 999}}' % name)
-        w._camera_image_applied = None
         w.camera.setItemData(w.camera.currentIndex(), '/dev/video-moved')
         w.configure()
         self.assertEqual(self.fake.sets(), ['saturation=255'])
         self.assertTrue(any('/dev/video-moved' in args for args in self.fake.calls))
         w.configure()
-        self.assertEqual(len(self.fake.sets()), 1, 'Unchanged camera is not rewritten on every configure')
+        self.assertEqual(self.fake.sets(), ['saturation=255'] * 2, 'Every camera reopen reapplies saved values')
+
+    def test_configure_without_saved_values_runs_nothing(self):
+        self.fake.calls.clear()
+        self.window.configure()
+        self.assertEqual(self.fake.calls, [])
 
     def test_read_failure_shows_message_and_empty_panel(self):
         w = self.window

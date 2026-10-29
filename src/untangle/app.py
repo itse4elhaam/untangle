@@ -230,7 +230,6 @@ class Window(QMainWindow):
         self.last_file = None
         self.recordings = None
         self.camera_adjustments = None
-        self._camera_image_applied = None
         self.process = None
         self.worker = None
         self.started = 0
@@ -1880,17 +1879,15 @@ class Window(QMainWindow):
         else:
             saved.pop(camera_name, None)
         self.prefs.setValue('camera_image', json.dumps(saved, sort_keys=True))
-        self._camera_image_applied = (self.camera.currentData(), camera_name)
 
     def restore_camera_image(self, device):
-        """Reapply remembered picture settings, keyed by camera name: /dev/videoN moves on replug."""
-        name = self.camera.currentText()
-        if not device or self._camera_image_applied == (device, name):
-            self._camera_image_applied = (device, name) if device else None
-            return
-        self._camera_image_applied = (device, name)
-        saved = self.camera_image_settings().get(name)
-        if not isinstance(saved, dict):
+        """Reapply remembered picture settings after every camera open.
+
+        Keyed by camera name: /dev/videoN moves on replug. Reopening can reset
+        controls, so this deliberately runs on every configure with a camera.
+        """
+        saved = self.camera_image_settings().get(self.camera.currentText()) if device else None
+        if not isinstance(saved, dict) or not saved:
             return
         try:
             restore_saved(device, saved)

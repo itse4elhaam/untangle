@@ -115,11 +115,18 @@ def read_controls(device):
     return parse_controls(result.stdout)
 
 
-def write_controls(device, values):
-    """Automatic modes first: a camera ignores manual values while auto is on."""
-    ordered = sorted(values.items(), key=lambda item: item[0] not in AUTOMATIC)
-    batches = ([item for item in ordered if item[0] in AUTOMATIC],
-               [item for item in ordered if item[0] not in AUTOMATIC])
+def write_controls(device, values, current=None):
+    """Write automatic modes, then picture values, then manual partners, each separately.
+
+    A manual value is dropped while its automatic mode stays on: some drivers
+    reject it, and a rejected batch must not take brightness or contrast with it.
+    """
+    merged = {**(current or {}), **values}
+    values = {name: value for name, value in values.items() if manual_allowed(name, merged)}
+    batches = ([item for item in values.items() if item[0] in AUTOMATIC],
+               [item for item in values.items() if item[0] not in AUTOMATIC and item[0] not in MANUAL],
+               [item for item in values.items() if item[0] in MANUAL])
+    errors = []
     for batch in batches:
         if not batch:
             continue
@@ -128,9 +135,12 @@ def write_controls(device, values):
             result = subprocess.run(['v4l2-ctl', '-d', device, '--set-ctrl', setting],
                                     capture_output=True, text=True, timeout=2)
         except (OSError, subprocess.TimeoutExpired) as exc:
-            raise CameraControlError(f'Could not change camera settings: {exc}') from exc
+            errors.append(f'Could not change camera settings: {exc}')
+            continue
         if result.returncode:
-            raise CameraControlError((result.stderr or 'The camera rejected a setting.').strip())
+            errors.append((result.stderr or 'The camera rejected a setting.').strip())
+    if errors:
+        raise CameraControlError(' '.join(errors))
 
 
 def manual_allowed(name, values):
@@ -147,8 +157,11 @@ def restore_saved(device, saved):
     controls = {control.name: control for control in read_controls(device)}
     values = {name: controls[name].clamp(value) for name, value in saved.items()
               if name in controls and isinstance(value, int) and not isinstance(value, bool)}
+    current = {name: control.value for name, control in controls.items()}
+    merged = {**current, **values}
+    values = {name: value for name, value in values.items() if manual_allowed(name, merged)}
     if values:
-        write_controls(device, values)
+        write_controls(device, values, current)
     return values
 
 
@@ -332,7 +345,7 @@ class CameraAdjustments(QWidget):
             return
         values, self.pending = self.pending, {}
         try:
-            write_controls(self.device, values)
+            write_controls(self.device, values, self.current_values())
         except CameraControlError as exc:
             self.message.setText(str(exc))
             self.refresh_values()
@@ -374,7 +387,7 @@ class CameraAdjustments(QWidget):
         self.saved.clear()
         try:
             write_controls(self.device, {name: control.default for name, control in self.controls.items()
-                                         if name not in RESET_SKIP})
+                                         if name not in RESET_SKIP}, self.current_values())
         except CameraControlError as exc:
             self.message.setText(str(exc))
         else:
