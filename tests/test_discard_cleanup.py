@@ -207,6 +207,51 @@ class RecorderDiscardTests(unittest.TestCase):
         self.assertTrue(path.exists())
         w._upload_active = False
 
+    def test_restart_confirms_and_starts_only_after_discard(self):
+        w = self.window
+        w.recording = True
+        take = self.root / 'restart.mkv'
+        take.write_bytes(b'synthetic')
+        with CANCEL, patch.object(w, 'stop') as stop:
+            w.restart_recording()
+        stop.assert_not_called()
+        self.assertFalse(w._restarting)
+        with YES, patch.object(w, 'stop') as stop:
+            w.restart_recording()
+        stop.assert_called_once_with()
+        self.assertTrue(w._discarding)
+        with patch.object(w, 'start') as start, patch.object(w, 'remux') as remux:
+            w.stopped(str(take), '')
+        start.assert_called_once_with()
+        remux.assert_not_called()
+        self.assertFalse(take.exists())
+        self.assertFalse(w._restarting)
+
+    def test_restart_does_not_start_when_discard_fails(self):
+        w = self.window
+        take = self.root / 'retained.mkv'
+        take.write_bytes(b'synthetic')
+        w._restarting = True
+        with patch.object(Path, 'unlink', side_effect=PermissionError('fixture')), patch.object(w, 'start') as start:
+            w.finish_discard(take)
+        start.assert_not_called()
+        self.assertTrue(take.exists())
+        self.assertFalse(w._restarting)
+
+    def test_stop_failure_cancels_restart(self):
+        w = self.window
+        w.recording = True
+        w.engine.recording = True
+        w._restarting = w._discarding = True
+        with patch.object(w, 'start') as start:
+            w.stopped(str(self.root / 'take.mkv'), 'still stopping')
+        start.assert_not_called()
+        self.assertFalse(w._restarting)
+        self.assertTrue(w.restart_button.isEnabled())
+        w.engine.recording = False
+        w.recording = False
+
+
 
 if __name__ == '__main__':
     unittest.main()
