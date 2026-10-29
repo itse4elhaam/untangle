@@ -1,0 +1,36 @@
+src/untangle/app.py
+  s_be8ca6e62f11fd::t_032b2641d63ae4 1948-1950
+  s_be8ca6e62f11fd::t_fccda4371398da 2687-2688
+  s_be8ca6e62f11fd::t_18b101b2ae9ac9 20,232-233,481-485,721,833,1170,1847-1848,1869-1944,1951-1952
+src/untangle/theme.py
+  s_be8ca6e62f11fd::t_fccda4371398da 56
+src/untangle/camera_image.py
+  s_be8ca6e62f11fd::t_e36cb985c05272 263
+  s_be8ca6e62f11fd::t_5fba4830bb8c45 1-36,44-85,89-262,264-291,293-309,312-375,378-389
+  s_be8ca6e62f11fd::t_18b101b2ae9ac9 37-43,311,376-377
+  s_be8ca6e62f11fd::t_e0ff8973b3438c 86-88,292,310
+tests/test_camera_image.py
+  s_be8ca6e62f11fd::t_e0986a05004b08 5,8,147
+  s_be8ca6e62f11fd::t_e36cb985c05272 129-132
+  s_be8ca6e62f11fd::t_b58b83887162eb 1-4,6-7,9-128,133-146,148-236
+tests/fixtures/v4l2-hp-5mp.txt
+  s_be8ca6e62f11fd::t_73cd194d3af5eb 1-28
+tests/fixtures/v4l2-mx-brio.txt
+  s_be8ca6e62f11fd::t_60cbbaf620f3af 1-34
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c5fd72595025ddd10bc82284d8cc4015c53880d9",
+  "prompts": {},
+  "sessions": {
+    "s_be8ca6e62f11fd": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "217b48cd-aead-4c37-bfcb-da977c4bf158",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Elhaam Basheer Chaudhry <e4elhaam@gmail.com>"
+    }
+  }
+}
