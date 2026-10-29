@@ -2,7 +2,8 @@
 import os
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 import unittest
-from PySide6.QtGui import QImage
+from PySide6.QtCore import QEvent, QPoint, QPointF, Qt
+from PySide6.QtGui import QImage, QMouseEvent
 from PySide6.QtWidgets import QApplication
 from untangle.floating import CameraBubble, ZoomMotion
 
@@ -10,6 +11,19 @@ qt = QApplication.instance() or QApplication([])
 
 
 class FloatingChecks(unittest.TestCase):
+    def test_missed_release_does_not_keep_dragging_camera(self):
+        bubble = CameraBubble()
+        bubble.move(100, 100)
+        bubble._drag_offset = QPoint(10, 10)
+        original = bubble.pos()
+        event = QMouseEvent(QEvent.MouseMove, QPointF(20, 20), QPointF(300, 300),
+                            Qt.NoButton, Qt.NoButton, Qt.NoModifier)
+        bubble.mouseMoveEvent(event)
+        self.assertEqual(bubble.pos(), original)
+        self.assertIsNone(bubble._drag_offset)
+        self.assertEqual(bubble.cursor().shape(), Qt.OpenHandCursor)
+        bubble.close()
+
     def test_circle_clips_corners(self):
         bubble = CameraBubble()
         bubble.resize(200, 200)
