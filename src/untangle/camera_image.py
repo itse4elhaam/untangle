@@ -8,14 +8,19 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QFrame, QGridLayout, QHBoxL
     QPushButton, QScrollArea, QSlider, QVBoxLayout, QWidget)
 
 
-# Hardware pan/tilt/zoom would fight Untangle's own framing zoom, so they stay out.
 GROUPS = (
+    ('Device framing', ('zoom_absolute', 'pan_absolute', 'tilt_absolute')),
     ('Picture', ('brightness', 'contrast', 'saturation', 'hue', 'gamma', 'sharpness')),
     ('Light', ('auto_exposure', 'exposure_time_absolute', 'gain', 'backlight_compensation',
                'exposure_dynamic_framerate', 'power_line_frequency')),
     ('Colour', ('white_balance_automatic', 'white_balance_temperature')),
     ('Focus', ('focus_automatic_continuous', 'focus_absolute')),
+    ('Camera light', ('led1_mode', 'led1_frequency')),
 )
+GROUP_NOTES = {
+    'Device framing': 'The camera zooms on its sensor, which stays sharper than the sidebar Zoom. '
+                      'The sidebar Zoom crops afterwards, so the two multiply. Pan and tilt move a zoomed view.',
+}
 LABELS = {
     'brightness': 'Brightness', 'contrast': 'Contrast', 'saturation': 'Saturation', 'hue': 'Hue',
     'gamma': 'Gamma', 'sharpness': 'Sharpness', 'auto_exposure': 'Exposure',
@@ -24,20 +29,28 @@ LABELS = {
     'exposure_dynamic_framerate': 'Lower frame rate in low light',
     'power_line_frequency': 'Anti-flicker', 'white_balance_automatic': 'Automatic white balance',
     'white_balance_temperature': 'Temperature', 'focus_automatic_continuous': 'Autofocus',
-    'focus_absolute': 'Focus',
+    'focus_absolute': 'Focus', 'zoom_absolute': 'Zoom', 'pan_absolute': 'Pan', 'tilt_absolute': 'Tilt',
+    'led1_mode': 'Camera light', 'led1_frequency': 'Blink speed',
 }
-MENU_LABELS = {'auto_exposure': {1: 'Manual', 3: 'Automatic'}}
+MENU_LABELS = {'auto_exposure': {1: 'Manual', 3: 'Automatic'},
+               'led1_mode': {0: 'Off', 1: 'On', 2: 'Blink', 3: 'When camera is in use'}}
+# UVC zoom is a percentage on the Brio; pan and tilt are arc-seconds.
+DISPLAY = {'zoom_absolute': lambda value: f'{value}%',
+           'pan_absolute': lambda value: f'{value / 3600:g}°',
+           'tilt_absolute': lambda value: f'{value / 3600:g}°'}
 SUPPORTED = tuple(name for _, names in GROUPS for name in names)
 # Manual control -> (automatic partner, partner values that let the manual control work).
 MANUAL = {
     'white_balance_temperature': ('white_balance_automatic', (0,)),
     'exposure_time_absolute': ('auto_exposure', (1,)),
     'focus_absolute': ('focus_automatic_continuous', (0,)),
+    'led1_frequency': ('led1_mode', (2,)),
 }
 MANUAL_HINTS = {
     'white_balance_temperature': 'Turn off automatic white balance to adjust this.',
     'exposure_time_absolute': 'Set Exposure to Manual to adjust this.',
     'focus_absolute': 'Turn off autofocus to adjust this.',
+    'led1_frequency': 'Set Camera light to Blink to adjust this.',
 }
 # Mains frequency is regional; a camera's 60 Hz default would make 50 Hz lights flicker.
 RESET_SKIP = ('power_line_frequency',)
@@ -66,6 +79,9 @@ class Control:
     @property
     def label(self):
         return LABELS.get(self.name, self.name.replace('_', ' ').capitalize())
+
+    def display(self, value):
+        return DISPLAY.get(self.name, str)(value)
 
     def clamp(self, value):
         if self.kind == 'menu':
@@ -260,6 +276,11 @@ class CameraAdjustments(QWidget):
             heading = QLabel(title)
             heading.setObjectName('section')
             self.panel_layout.addWidget(heading)
+            if title in GROUP_NOTES:
+                note = QLabel(GROUP_NOTES[title])
+                note.setObjectName('muted')
+                note.setWordWrap(True)
+                self.panel_layout.addWidget(note)
             grid = QGridLayout()
             grid.setHorizontalSpacing(8)
             grid.setVerticalSpacing(4)
@@ -292,7 +313,7 @@ class CameraAdjustments(QWidget):
             grid.addWidget(combo, row + 1, 0, 1, 2)
             self.widgets[control.name] = (combo, None)
             return row + 2
-        value = QLabel(str(control.value))
+        value = QLabel(control.display(control.value))
         value.setObjectName('muted')
         value.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         grid.addWidget(value, row, 1)
@@ -334,7 +355,7 @@ class CameraAdjustments(QWidget):
             widget.setValue(value)
             widget.blockSignals(False)
         if value_label is not None:
-            value_label.setText(str(value))
+            value_label.setText(control.display(value))
         self.pending[name] = value
         self.saved[name] = value
         self.update_dependencies()
@@ -376,7 +397,7 @@ class CameraAdjustments(QWidget):
                 widget.setCurrentIndex(max(0, widget.findData(control.value)))
             widget.blockSignals(False)
             if value_label is not None:
-                value_label.setText(str(control.value))
+                value_label.setText(control.display(control.value))
         self.update_dependencies()
 
     def reset_defaults(self):

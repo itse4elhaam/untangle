@@ -60,12 +60,20 @@ class ParserTests(unittest.TestCase):
         brightness = parse_controls(HP)[0]
         self.assertEqual((brightness.minimum, brightness.maximum, brightness.default), (-64, 64, 0))
 
-    def test_brio_skips_hardware_ptz_and_led_but_keeps_focus(self):
+    def test_brio_exposes_device_framing_and_camera_light(self):
         controls = {c.name: c for c in parse_controls(BRIO)}
-        for skipped in ('pan_absolute', 'tilt_absolute', 'zoom_absolute', 'led1_mode', 'led1_frequency'):
-            self.assertNotIn(skipped, controls)
+        names = list(controls)
+        self.assertEqual(names[:3], ['zoom_absolute', 'pan_absolute', 'tilt_absolute'])
+        self.assertEqual(names[-2:], ['led1_mode', 'led1_frequency'])
+        self.assertEqual((controls['zoom_absolute'].value, controls['zoom_absolute'].display(150)), (150, '150%'))
+        self.assertEqual(controls['pan_absolute'].display(-36000), '-10°')
+        self.assertEqual(controls['led1_mode'].menu[3], 'When camera is in use')
         self.assertIn('inactive', controls['focus_absolute'].flags)
-        self.assertEqual(controls['contrast'].maximum, 255)
+
+    def test_hp_has_no_device_framing(self):
+        names = [c.name for c in parse_controls(HP)]
+        for missing in ('zoom_absolute', 'pan_absolute', 'led1_mode'):
+            self.assertNotIn(missing, names)
 
     def test_sparse_menus_and_labels(self):
         controls = {c.name: c for c in parse_controls(HP)}
@@ -214,6 +222,34 @@ class CameraPageTests(unittest.TestCase):
         self.assertTrue(time.isEnabled())
         self.flush()
         self.assertEqual(self.fake.sets()[0], 'white_balance_automatic=0,focus_automatic_continuous=0,auto_exposure=1')
+
+    def test_device_zoom_and_pan_write_to_the_camera(self):
+        self.open_page()
+        zoom, pan = self.control('zoom_absolute'), self.control('pan_absolute')
+        self.assertEqual(zoom.value(), 150)
+        self.assertEqual(self.window.camera_adjustments.widgets['zoom_absolute'][1].text(), '150%')
+        zoom.setValue(200)
+        pan.setValue(5000)
+        self.flush()
+        self.assertEqual(self.fake.sets(), ['zoom_absolute=200,pan_absolute=3600'])
+        self.assertEqual(self.window.camera_adjustments.widgets['pan_absolute'][1].text(), '1°')
+        self.window.engine.configure.assert_not_called()
+
+    def test_blink_speed_needs_blink_mode(self):
+        self.open_page()
+        light, speed = self.control('led1_mode'), self.control('led1_frequency')
+        self.assertFalse(speed.isEnabled())
+        light.setCurrentIndex(light.findData(2))
+        self.assertTrue(speed.isEnabled())
+        speed.setValue(40)
+        self.flush()
+        self.assertEqual(self.fake.sets(), ['led1_mode=2', 'led1_frequency=40'])
+
+    def test_reset_returns_device_zoom_to_100(self):
+        self.open_page()
+        self.case.click(self.window.camera_adjustments.reset_button)
+        self.assertEqual(self.fake.controls['zoom_absolute'].value, 100)
+        self.assertEqual(self.control('zoom_absolute').value(), 100)
 
     def test_reset_after_manual_focus_still_resets_picture(self):
         self.open_page()
