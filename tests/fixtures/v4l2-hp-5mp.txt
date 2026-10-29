@@ -1,0 +1,28 @@
+
+User Controls
+
+                     brightness 0x00980900 (int)    : min=-64 max=64 step=1 default=0 value=0 flags=0x00001000
+                       contrast 0x00980901 (int)    : min=0 max=64 step=1 default=32 value=32 flags=0x00001000
+                     saturation 0x00980902 (int)    : min=0 max=128 step=1 default=64 value=64 flags=0x00001000
+                            hue 0x00980903 (int)    : min=-40 max=40 step=1 default=0 value=0 flags=0x00001000
+        white_balance_automatic 0x0098090c (bool)   : default=1 value=1
+                          gamma 0x00980910 (int)    : min=72 max=500 step=1 default=100 value=100 flags=0x00001000
+                           gain 0x00980913 (int)    : min=0 max=4 step=1 default=0 value=0 flags=0x00001000
+           power_line_frequency 0x00980918 (menu)   : min=0 max=2 default=2 value=1 (50 Hz)
+				0: Disabled
+				1: 50 Hz
+				2: 60 Hz
+      white_balance_temperature 0x0098091a (int)    : min=2800 max=6500 step=1 default=4000 value=4000 flags=inactive, 0x00001000
+                      sharpness 0x0098091b (int)    : min=0 max=5 step=1 default=0 value=0 flags=0x00001000
+         backlight_compensation 0x0098091c (int)    : min=0 max=1 step=1 default=0 value=0 flags=0x00001000
+   region_of_interest_rectangle 0x00981ae1 (unknown): type=107 value=unsupported payload type flags=has-payload, 0x00001000
+  region_of_interest_auto_ctrls 0x00981ae2 (bitmask): max=0x00000001 default=0x00000001 value=0 flags=0x00001000
+
+Camera Controls
+
+                  auto_exposure 0x009a0901 (menu)   : min=0 max=3 default=3 value=3 (Aperture Priority Mode)
+				1: Manual Mode
+				3: Aperture Priority Mode
+         exposure_time_absolute 0x009a0902 (int)    : min=40 max=10000 step=1 default=312 value=312 flags=inactive, 0x00001000
+     exposure_dynamic_framerate 0x009a0903 (bool)   : default=0 value=1
+                        privacy 0x009a0910 (bool)   : default=0 value=0 flags=read-only

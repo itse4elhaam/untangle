@@ -53,7 +53,7 @@ def stylesheet(name='light'):
         c[icon] = (assets / f'clearline-{icon}-{variant}.svg').as_posix()
     return """
 QWidget { color: %(text)s; font-family: 'Inter', 'DejaVu Sans'; font-size: 14px; }
-QMainWindow, QDialog, QMessageBox, QFileDialog, QWidget#recordingsPage { background: %(canvas)s; }
+QMainWindow, QDialog, QMessageBox, QFileDialog, QWidget#recordingsPage, QWidget#cameraAdjustmentsPage { background: %(canvas)s; }
 QLabel { background: transparent; font-size: 14px; }
 QLabel#muted { color: %(muted)s; font-size: 13px; }
 QLabel#eyebrow { color: %(action)s; font-size: 13px; font-weight: 600; }

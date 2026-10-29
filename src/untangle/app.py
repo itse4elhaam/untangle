@@ -17,6 +17,7 @@ from PySide6.QtGui import QColor, QDesktopServices, QIcon, QPainter, QPen, QPixm
 from .floating import CameraBubble, ZoomMotion
 from .windows import WindowCatalog
 from .recordings import Recordings
+from .camera_image import CameraAdjustments, CameraControlError, restore_saved
 from .naming import next_recording_path, recording_files
 from .naming import recording_title, rename_recording
 from .naming_dialog import prompt_recording_name
@@ -228,6 +229,8 @@ class Window(QMainWindow):
         self.mask_path = self.prefs.value('mask', '')
         self.last_file = None
         self.recordings = None
+        self.camera_adjustments = None
+        self._camera_image_applied = None
         self.process = None
         self.worker = None
         self.started = 0
@@ -475,6 +478,11 @@ class Window(QMainWindow):
         self.camera_toggle.clicked.connect(self.toggle_camera)
         camera_row.addWidget(self.camera_toggle)
         controls.addLayout(camera_row)
+        self.camera_settings_button = QPushButton('Picture settings')
+        self.camera_settings_button.setAccessibleName('Camera picture settings')
+        self.camera_settings_button.setToolTip('Brightness, contrast, exposure, white balance and focus')
+        self.camera_settings_button.clicked.connect(self.open_camera_adjustments)
+        controls.addWidget(self.camera_settings_button)
         self._last_camera_device = self.camera.currentData()
         controls = self.microphone_setup = section('Microphone')
         self.microphone = QComboBox()
@@ -710,7 +718,7 @@ class Window(QMainWindow):
             navigation.addWidget(button, 1)
         content.addWidget(self.navigation_footer, 1, 0, Qt.AlignLeft | Qt.AlignBottom)
         layout.addLayout(content, 1)
-        self.config_controls = [self.screen_button, self.camera_button, self.capture_kind, self.capture_window, self.refresh_button, self.screen, self.camera, self.camera_toggle, self.microphone, self.clean_microphone, self.desktop_audio, self.shape, self.size, self.position, self.mask_button, self.mirror, self.quality, self.canvas, self.framing, self.camera_zoom, self.camera_zoom_reset, self.camera_zoom_minus, self.camera_zoom_plus]
+        self.config_controls = [self.screen_button, self.camera_button, self.capture_kind, self.capture_window, self.refresh_button, self.screen, self.camera, self.camera_toggle, self.microphone, self.clean_microphone, self.desktop_audio, self.shape, self.size, self.position, self.mask_button, self.mirror, self.quality, self.canvas, self.framing, self.camera_zoom, self.camera_zoom_reset, self.camera_zoom_minus, self.camera_zoom_plus, self.camera_settings_button]
         for combo in (self.screen, self.capture_window, self.microphone):
             combo.currentIndexChanged.connect(self.schedule_configure)
         self.camera.currentIndexChanged.connect(self.camera_changed)
@@ -822,6 +830,7 @@ class Window(QMainWindow):
         self.camera_toggle.setToolTip('Turn camera off' if camera_on else 'Turn camera on')
         self.camera_toggle.setEnabled(self.camera.count() > 1 and not (self.recording or self.busy or self.counting))
         self.camera_zoom.setEnabled(enabled)
+        self.camera_settings_button.setEnabled(enabled)
         self.camera_zoom_minus.setEnabled(enabled and self.camera_zoom.value() > 100)
         self.camera_zoom_plus.setEnabled(enabled and self.camera_zoom.value() < 300)
         self.camera_zoom_reset.setEnabled(enabled and self.camera_zoom.value() != 100)
@@ -1158,6 +1167,7 @@ class Window(QMainWindow):
                 self.update_setup_summary()
             if self.mode == 'screen' and camera and (self.uses_floating_camera() or window_id):
                 self.show_bubble()
+            self.restore_camera_image(camera)
             self.record_button.setEnabled(True)
             self.configuration_valid = True
             self.engine_notice('Setup selected. Microphone readiness is checked before recording.')
@@ -1834,6 +1844,8 @@ class Window(QMainWindow):
         if locked and self.recordings:
             self.recordings.release()
             self.pages.setCurrentWidget(self.recorder_page)
+        if locked and self.camera_adjustments is not None and self.pages.currentWidget() is self.camera_adjustments:
+            self.back_to_recorder()
         for widget in self.config_controls:
             widget.setEnabled(not locked)
         if not locked:
@@ -1854,9 +1866,90 @@ class Window(QMainWindow):
     def in_library(self):
         return self.pages.currentWidget() != self.recorder_page
 
+    def camera_image_settings(self):
+        try:
+            saved = json.loads(self.prefs.value('camera_image', '{}') or '{}')
+        except (TypeError, ValueError):
+            saved = {}
+        return saved if isinstance(saved, dict) else {}
+
+    def save_camera_image(self, camera_name, values):
+        saved = self.camera_image_settings()
+        if values:
+            saved[camera_name] = values
+        else:
+            saved.pop(camera_name, None)
+        self.prefs.setValue('camera_image', json.dumps(saved, sort_keys=True))
+        self._camera_image_applied = (self.camera.currentData(), camera_name)
+
+    def restore_camera_image(self, device):
+        """Reapply remembered picture settings, keyed by camera name: /dev/videoN moves on replug."""
+        name = self.camera.currentText()
+        if not device or self._camera_image_applied == (device, name):
+            self._camera_image_applied = (device, name) if device else None
+            return
+        self._camera_image_applied = (device, name)
+        saved = self.camera_image_settings().get(name)
+        if not isinstance(saved, dict):
+            return
+        try:
+            restore_saved(device, saved)
+        except CameraControlError as exc:
+            self.notice(f'Could not restore camera picture settings: {exc}')
+
+    def open_camera_adjustments(self):
+        device = self.camera.currentData()
+        if self.recording or self.counting or self.busy or not device:
+            return
+        if self.camera_adjustments is None:
+            self.camera_adjustments = CameraAdjustments(Preview(), self)
+            self.camera_adjustments.back_requested.connect(self.back_to_recorder)
+            self.camera_adjustments.saved_changed.connect(self.save_camera_image)
+            self.camera_adjustments.preview_resized.connect(self.resize_camera_adjustment_preview)
+            self.pages.addWidget(self.camera_adjustments)
+        self.configure_timer.stop()
+        self.start_timer.stop()
+        generation = self._preview_generation = getattr(self, '_preview_generation', 0) + 1
+        self.hide_bubble()
+        if self.engine:
+            self.engine.detach_preview()
+        self.preview.hide()
+        name = self.camera.currentText()
+        self.camera_adjustments.load(device, name, self.camera_image_settings().get(name))
+        self.pages.setCurrentWidget(self.camera_adjustments)
+        self.tray_record.setEnabled(False)
+        QTimer.singleShot(0, lambda: self.attach_camera_adjustment_preview(generation))
+
+    def attach_camera_adjustment_preview(self, generation):
+        page = self.camera_adjustments
+        if (self._closing or generation != getattr(self, '_preview_generation', 0)
+                or page is None or self.pages.currentWidget() is not page or not self.engine):
+            return
+        preview = page.preview
+        ratio = preview.devicePixelRatioF()
+        try:
+            self.engine.attach_camera_preview(int(preview.winId()),
+                max(1, round(preview.width() * ratio)), max(1, round(preview.height() * ratio)))
+        except Exception as exc:
+            page.message.setText(f'Live preview unavailable: {exc}')
+
+    def resize_camera_adjustment_preview(self, width, height):
+        page = self.camera_adjustments
+        if self.engine and page is not None and self.pages.currentWidget() is page:
+            ratio = page.preview.devicePixelRatioF()
+            try:
+                self.engine.resize_camera_preview(max(1, round(width * ratio)), max(1, round(height * ratio)))
+            except Exception:
+                pass
+
     def back_to_recorder(self):
         if self.recordings:
             self.recordings.release()
+        page = getattr(self, 'camera_adjustments', None)
+        if page is not None and self.pages.currentWidget() is page:
+            page.leave()
+            # Destroy the GLX child before Qt hides the page's native preview.
+            self.hide_bubble()
         self.pages.setCurrentWidget(self.recorder_page)
         self.refresh_upload_link()
         self.preview.show()
@@ -2591,6 +2684,8 @@ class Window(QMainWindow):
         if self.recordings:
             self.recordings.stop_thumbnails()
             self.recordings.release()
+        if self.camera_adjustments is not None:
+            self.camera_adjustments.leave()
         self._preview_generation = getattr(self, '_preview_generation', 0) + 1
         self.configure_timer.stop()
         self.start_timer.stop()
