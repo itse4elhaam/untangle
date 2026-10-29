@@ -4,7 +4,7 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QDialog, QHBoxLayout, QLabel, QLineEdit, QPushButton, QVBoxLayout, QWidget,
+    QDialog, QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPushButton, QVBoxLayout, QWidget,
 )
 
 from .naming import editable_recording_title
@@ -14,10 +14,13 @@ class RecordingNameDialog(QDialog):
     """A retryable name editor; ``saved_path`` is set only after a successful save."""
 
     def __init__(self, parent: QWidget | None, path: Path,
-                 rename: Callable[[str], Path], *, new_recording: bool = False):
+                 rename: Callable[[str], Path], *, new_recording: bool = False,
+                 discard: Callable[[], None] | None = None):
         super().__init__(parent)
         self.saved_path: Path | None = None
+        self.discarded = False
         self._rename = rename
+        self._discard = discard
         self._saving = False
         self._finished = False
         title = 'Name your recording' if new_recording else 'Rename recording'
@@ -58,6 +61,12 @@ class RecordingNameDialog(QDialog):
 
         buttons = QHBoxLayout()
         buttons.setSpacing(8)
+        self.discard_button = QPushButton('Discard recording')
+        self.discard_button.setObjectName('deleteRecording')
+        self.discard_button.setAutoDefault(False)
+        self.discard_button.clicked.connect(self.discard)
+        self.discard_button.setVisible(discard is not None)
+        buttons.addWidget(self.discard_button)
         buttons.addStretch()
         self.cancel_button = QPushButton('Keep current name' if new_recording else 'Cancel')
         self.cancel_button.setAutoDefault(False)
@@ -110,6 +119,25 @@ class RecordingNameDialog(QDialog):
             self._saving = False
             self.save_button.setEnabled(bool(self.name_edit.text().strip()) and not self._finished)
 
+    def discard(self):
+        """Delete through the caller after an explicit confirmation."""
+        if self._discard is None or self._saving or self._finished:
+            return
+        answer = QMessageBox.question(self, 'Discard recording?',
+            'Permanently delete this recording? This cannot be undone.',
+            QMessageBox.Yes | QMessageBox.Cancel, QMessageBox.Cancel)
+        if answer != QMessageBox.Yes:
+            return
+        try:
+            self._discard()
+        except OSError as error:
+            self.error_label.setText(f'Could not discard the recording: {error}')
+            self.error_label.show()
+            self._fit_content()
+            return
+        self.discarded = True
+        self.reject()
+
     def done(self, result):
         self._finished = True
         super().done(result)
@@ -117,9 +145,10 @@ class RecordingNameDialog(QDialog):
 
 def prompt_recording_name(parent: QWidget | None, path: Path,
                           rename: Callable[[str], Path], *,
-                          new_recording: bool = False) -> Path | None:
-    """Return the renamed path on Save, or None when the user dismisses the prompt."""
-    dialog = RecordingNameDialog(parent, path, rename, new_recording=new_recording)
+                          new_recording: bool = False,
+                          discard: Callable[[], None] | None = None) -> Path | None:
+    """Return the renamed path on Save, or None when dismissed or discarded."""
+    dialog = RecordingNameDialog(parent, path, rename, new_recording=new_recording, discard=discard)
     try:
         if dialog.exec() == QDialog.Accepted:
             return dialog.saved_path

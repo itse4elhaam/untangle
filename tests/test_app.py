@@ -407,8 +407,9 @@ class AppChecks(unittest.TestCase):
         path = self.root / 'Screen recording - 2026-10-23 at 12.30.mp4'
         path.write_bytes(b'saved synthetic recording')
         self.window.prefs.setValue('auto_upload', True)
-        def name(parent, original, rename, *, new_recording):
+        def name(parent, original, rename, *, new_recording, discard):
             self.assertTrue(new_recording)
+            self.assertTrue(callable(discard))
             self.assertTrue(self.window.busy)
             self.assertFalse(self.window.library_button.isEnabled())
             self.window.toggle_record()

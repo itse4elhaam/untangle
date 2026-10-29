@@ -236,6 +236,8 @@ class Window(QMainWindow):
         self.pause_started = 0
         self.paused_duration = 0
         self.quit_after_save = False
+        self._discarding = False
+        self._discard_path = None
         self._configure_pending = False
         self._live_update_failed = False
         self.configuration_valid = False
@@ -366,6 +368,12 @@ class Window(QMainWindow):
         self.settings_button.setObjectName('quiet')
         self.settings_button.clicked.connect(self.open_settings)
         header.addWidget(self.settings_button)
+        self.discard_button = QPushButton('Discard')
+        self.discard_button.setObjectName('quiet')
+        self.discard_button.setToolTip('Stop and delete this recording without saving it')
+        self.discard_button.hide()
+        self.discard_button.clicked.connect(self.discard_recording)
+        header.addWidget(self.discard_button)
         self.pause_button = QPushButton('Pause')
         self.pause_button.hide()
         self.pause_button.clicked.connect(self.toggle_pause)
@@ -654,6 +662,12 @@ class Window(QMainWindow):
         self.cancel_title_button.hide()
         self.cancel_title_button.clicked.connect(self.cancel_automatic_title)
         right.addWidget(self.cancel_title_button, 0, Qt.AlignLeft)
+        self.discard_saved_button = QPushButton('Discard this recording')
+        self.discard_saved_button.setObjectName('deleteRecording')
+        self.discard_saved_button.setToolTip('Permanently delete the recording you just saved')
+        self.discard_saved_button.hide()
+        self.discard_saved_button.clicked.connect(self.discard_saved_recording)
+        right.addWidget(self.discard_saved_button, 0, Qt.AlignLeft)
         self.upload_panel = QFrame()
         self.upload_panel.setObjectName('panel')
         upload_layout = QVBoxLayout(self.upload_panel)
@@ -919,6 +933,8 @@ class Window(QMainWindow):
         self.tray_record = menu.addAction('Start recording', self.toggle_record)
         self.tray_pause = menu.addAction('Pause', self.toggle_pause)
         self.tray_pause.setEnabled(False)
+        self.tray_discard = menu.addAction('Discard recording', self.discard_recording)
+        self.tray_discard.setEnabled(False)
         self.tray_zoom = menu.addAction('Zoom to pointer · Ctrl+Shift+F8', self.toggle_zoom)
         self.tray_zoom.setEnabled(False)
         menu.addSeparator()
@@ -1475,7 +1491,12 @@ class Window(QMainWindow):
             self.record_button.setText('■  Stop and save')
             self.pause_button.setVisible(True)
             self.pause_button.setText('Pause')
+            self.discard_button.setVisible(True)
+            self.discard_button.setEnabled(True)
+            self.discard_saved_button.hide()
+            self._discard_path = None
             self.tray_pause.setEnabled(True)
+            self.tray_discard.setEnabled(True)
             self.tray_record.setText('Stop and save')
             self.tray.setIcon(self.record_icon())
             self.engine_notice('Recording. Ctrl + Shift + F9 stops and saves.\n'
@@ -1499,9 +1520,11 @@ class Window(QMainWindow):
         self.tray_zoom.setEnabled(False)
         self.record_button.setEnabled(False)
         self.pause_button.setEnabled(False)
+        self.discard_button.setEnabled(False)
         self.tray_record.setEnabled(False)
         self.tray_pause.setEnabled(False)
-        self.notice('Saving your recording…')
+        self.tray_discard.setEnabled(False)
+        self.notice('Discarding your recording…' if self._discarding else 'Saving your recording…')
         self.worker = FinishWorker(self.engine, self.record_path)
         self.worker.finished_file.connect(self.stopped)
         self.worker.start()
@@ -1513,6 +1536,9 @@ class Window(QMainWindow):
             self.pause_button.setEnabled(True)
             self.tray_record.setEnabled(True)
             self.tray_pause.setEnabled(True)
+            self.discard_button.setEnabled(True)
+            self.tray_discard.setEnabled(True)
+            self._discarding = False
             self.zoom_button.setEnabled(self.mode == 'screen')
             self.tray_zoom.setEnabled(self.mode == 'screen')
             if self.mode == 'screen' and (self.zoom_motion.enabled or self.zoom_motion.factor != 1.):
@@ -1534,6 +1560,11 @@ class Window(QMainWindow):
         self.tray.setToolTip('Untangle · Saving recording')
         self.restore_capture_window()
         self.pause_button.setVisible(False)
+        self.discard_button.setVisible(False)
+        if self._discarding:
+            self._discarding = False
+            self.finish_discard(Path(path))
+            return
         if error:
             self.finish_save(Path(path), f'Recording stopped with an error: {error}. The original file is preserved.')
             return
@@ -1569,8 +1600,66 @@ class Window(QMainWindow):
                 target.unlink()
             self.finish_save(source, f'MP4 preparation failed. Your MKV is safe. {details}')
 
-    def finish_save(self, path, error):
-        emit(self, 'save.result', outcome='warning' if error else 'saved')
+    def discard_recording(self):
+        """Stop the current take and delete it instead of saving."""
+        if not self.recording or self.busy:
+            return
+        answer = QMessageBox.question(self, 'Discard this recording?',
+            'Stop now and delete this recording? Nothing will be saved. This cannot be undone.',
+            QMessageBox.Yes | QMessageBox.Cancel, QMessageBox.Cancel)
+        if answer != QMessageBox.Yes or not self.recording or self.busy:
+            return
+        self._discarding = True
+        self.stop()
+
+    def finish_discard(self, path):
+        emit(self, 'save.result', outcome='discarded')
+        self.ready_after_save()
+        try:
+            path.unlink(missing_ok=True)
+        except OSError as exc:
+            self.set_last(path)
+            self.notice(f'Could not discard the recording: {exc}. It is still at {path}.')
+        else:
+            self.notice('Recording discarded. Nothing was saved.')
+        if self.quit_after_save:
+            self.close()
+
+    def delete_saved_recording(self, path):
+        """Delete a just-saved recording and anything remembered about it."""
+        path = Path(path)
+        path.unlink()
+        try:
+            self.upload_store.remove(path)
+        except OSError:
+            pass  # The file is gone; a stale local Loom entry is harmless.
+        if self._discard_path == path:
+            self._discard_path = None
+            self.discard_saved_button.hide()
+        self.recording_deleted(str(path))
+
+    def discard_saved_recording(self):
+        path = self._discard_path
+        if (path is None or self.busy or self.recording or self.counting or self._upload_active):
+            return
+        if not path.is_file():
+            self._discard_path = None
+            self.discard_saved_button.hide()
+            self.notice('That recording is already gone.')
+            return
+        answer = QMessageBox.question(self, 'Discard this recording?',
+            f'Permanently delete this recording?\n\n{path.name}\n\nThis cannot be undone.',
+            QMessageBox.Yes | QMessageBox.Cancel, QMessageBox.Cancel)
+        if answer != QMessageBox.Yes or self.busy or self.recording or self.counting or self._upload_active:
+            return
+        try:
+            self.delete_saved_recording(path)
+        except OSError as exc:
+            self.notice(f'Could not discard {path.name}: {exc}')
+            return
+        self.notice('Recording discarded.')
+
+    def ready_after_save(self):
         self.busy = False
         self.record_button.setText('●  Start recording')
         self.record_button.setEnabled(self.configuration_valid)
@@ -1579,6 +1668,10 @@ class Window(QMainWindow):
         self.tray_record.setText('Start recording')
         self.tray.setToolTip('Untangle · Ready to record')
         self.lock_controls(False)
+
+    def finish_save(self, path, error):
+        emit(self, 'save.result', outcome='warning' if error else 'saved')
+        self.ready_after_save()
         if path and path.exists():
             self.set_last(path)
             if (not error and not self.quit_after_save and not self._closing
@@ -1638,12 +1731,21 @@ class Window(QMainWindow):
                     self.notice('Saved safely. Give your recording a name.')
                     try:
                         renamed = prompt_recording_name(self, path,
-                            lambda title: rename_recording(path, title), new_recording=True)
+                            lambda title: rename_recording(path, title), new_recording=True,
+                            discard=lambda: self.delete_saved_recording(path))
                         if renamed is not None:
                             self.set_last(renamed)
+                            path = renamed
                     finally:
                         self.busy = False
                         self.lock_controls(False)
+                    if not path.exists():
+                        self.notice('Recording discarded. Nothing was saved.')
+                        if self.quit_after_save and not self.busy:
+                            self.close()
+                        return
+            self._discard_path = path
+            self.discard_saved_button.show()
         self.notice(error or 'Saved. Play it back, or upload to Loom when you are ready.')
         if not error and self.prefs.value('auto_upload', False, type=bool):
             self.upload()
@@ -2006,8 +2108,13 @@ class Window(QMainWindow):
     def recording_renamed(self, old_path, new_path):
         if self.last_file is not None and Path(old_path) == self.last_file:
             self.set_last(new_path)
+        if self._discard_path == Path(old_path):
+            self._discard_path = Path(new_path)
 
     def recording_deleted(self, path):
+        if self._discard_path == Path(path):
+            self._discard_path = None
+            self.discard_saved_button.hide()
         if self.last_file is None or Path(path) != self.last_file:
             return
         paths = recording_files(VIDEOS)
@@ -2363,6 +2470,8 @@ class Window(QMainWindow):
     def upload(self, confirmed=False):
         if not self.last_file or self.busy or self.recording or self.counting or self._closing:
             return
+        self.discard_saved_button.hide()
+        self._discard_path = None
         try:
             size = self.last_file.stat().st_size
             if not self.last_file.is_file() or not os.access(self.last_file, os.R_OK):

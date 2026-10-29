@@ -34,6 +34,12 @@ def next_recording_path(directory, mode='camera', window_title='', now=None):
         number += 1
 
 
+def has_automatic_name(path):
+    """True until someone names it: automatic names end in a date, renamed ones never do."""
+    stem = Path(path).stem
+    return bool(_LEGACY.fullmatch(stem) or _READABLE.fullmatch(stem))
+
+
 def recording_title(path):
     """A display/upload title, including legacy recording names."""
     stem = Path(path).stem
