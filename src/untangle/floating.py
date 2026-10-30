@@ -109,7 +109,12 @@ class CameraBubble(QWidget):
     pixel_size_changed = Signal(int, int)
 
     def __init__(self):
-        super().__init__(None, Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.WindowDoesNotAcceptFocus)
+        # An X11 overlay has no WM frame or task-switcher entry. Qt.Popup
+        # would grab desktop input; a managed Tool can acquire a WM frame.
+        flags = Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.WindowDoesNotAcceptFocus
+        if QApplication.platformName() == 'xcb':
+            flags |= Qt.X11BypassWindowManagerHint
+        super().__init__(None, flags)
         self.setWindowTitle('Untangle · Camera widget')
         # OBS's native swapchain and QRegion both discard fractional alpha.
         # Qt must own this translucent window's backing store and final pixels.
@@ -120,6 +125,8 @@ class CameraBubble(QWidget):
         self.setToolTip('Drag to move · Right-click for recording controls\nCtrl + Shift + F8 toggles pointer zoom')
         self._drag_offset = None
         self._screen = None
+        self._placement_key = None
+        self._drag_position = None
         self.recording = False
         self.paused = False
         self.zoomed = False
@@ -198,6 +205,7 @@ class CameraBubble(QWidget):
     def showEvent(self, event):
         super().showEvent(event)
         if QApplication.platformName() == 'xcb':
+            self._update_input_shape()
             QTimer.singleShot(0, self.pin_to_workspaces)
 
     def resizeEvent(self, event):
@@ -232,9 +240,15 @@ class CameraBubble(QWidget):
             catcher = error.CatchError()
             # ShapeInput leaves the compositor's fractional visual alpha intact.
             for start in range(0, max(1, len(rectangles)), 1024):
-                window.shape_rectangles(shape.SO.Set if start == 0 else shape.SO.Union,
-                                        shape.SK.Input, X.YXBanded, 0, 0,
-                                        rectangles[start:start + 1024], onerror=catcher)
+                # python-xlib's Window.shape_rectangles wrapper does not
+                # accept onerror. The protocol request does, and lets us
+                # detect asynchronous failures before trusting the region.
+                shape.Rectangles(display=window.display, onerror=catcher,
+                    opcode=window.display.get_extension_major(shape.extname),
+                    destination_window=window, destination_kind=shape.SK.Input,
+                    operation=shape.SO.Set if start == 0 else shape.SO.Union,
+                    ordering=X.YXBanded, x_offset=0, y_offset=0,
+                    rectangles=rectangles[start:start + 1024])
             connection.sync()
             problem = catcher.get_error()
             if problem:
@@ -275,6 +289,10 @@ class CameraBubble(QWidget):
         self._update_input_shape()
 
     def arrange(self, screen, fraction, position, shape, mask_path=None, mirror_mask=False):
+        key = screen, position
+        if key != self._placement_key:
+            self._drag_position = None
+        self._placement_key = key
         self._screen = screen
         bounds = screen.availableGeometry()
         side = round(min(bounds.width(), bounds.height()) * fraction)
@@ -283,6 +301,9 @@ class CameraBubble(QWidget):
         margin = 20
         x = bounds.left() + margin if 'left' in position else bounds.right() - side - margin + 1
         y = bounds.top() + margin if 'top' in position else bounds.bottom() - side - margin + 1
+        if self._drag_position is not None:
+            x = bounds.left() + round(self._drag_position[0] * (bounds.width() - side))
+            y = bounds.top() + round(self._drag_position[1] * (bounds.height() - side))
         self.move(x, y)
         self.apply_shape(shape, mask_path, mirror_mask)
 
@@ -332,6 +353,11 @@ class CameraBubble(QWidget):
 
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.LeftButton:
+            if self._drag_offset is not None and self._screen is not None:
+                bounds = self._screen.availableGeometry()
+                self._drag_position = (
+                    min(1., max(0., (self.x() - bounds.left()) / max(1, bounds.width() - self.width()))),
+                    min(1., max(0., (self.y() - bounds.top()) / max(1, bounds.height() - self.height()))))
             self._drag_offset = None
             self.setCursor(Qt.OpenHandCursor)
             self.moved.emit()

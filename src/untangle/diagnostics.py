@@ -170,21 +170,23 @@ def install(directory):
 
 
 def window_state(widget):
-    """No winId() on QWidget: collecting diagnostics must not create windows."""
+    """Read existing native IDs without winId(), which can create windows."""
     if widget is None:
         return None
-    handle = widget.windowHandle()
     rect = widget.geometry()
-    screen = widget.screen().geometry()
+    from PySide6.QtWidgets import QWidget
+    screen = QWidget.screen(widget).geometry()
     return dict(role=type(widget).__name__, visible=widget.isVisible(),
                 geometry=[rect.x(), rect.y(), rect.width(), rect.height()],
                 screen_geometry=[screen.x(), screen.y(), screen.width(), screen.height()],
                 oversized=rect.width() > screen.width() or rect.height() > screen.height(),
-                window_id=int(handle.winId()) if handle else None)
+                window_id=int(widget.effectiveWinId()) or None)
 
 
 def snapshot(owner, stage, *, native=False):
     """UI-thread snapshot at transitions and at a low recording-only cadence."""
+    if not any(not isinstance(handler, logging.NullHandler) for handler in logger.handlers):
+        return
     try:
         from PySide6.QtWidgets import QApplication, QWidget
         from .window_diagnostics import native_window_state

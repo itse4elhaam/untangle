@@ -76,6 +76,27 @@ class FloatingChecks(unittest.TestCase):
         self.assertLess(screen.availableGeometry().bottom() - bubble.geometry().bottom(), 25)
         bubble.close()
 
+    def test_dragged_position_survives_recording_setup_until_preset_changes(self):
+        bubble = CameraBubble()
+        self.addCleanup(bubble.close)
+        screen = qt.primaryScreen()
+        bubble.arrange(screen, .23, 'bottom-right', 'circle')
+        start = bubble.pos() + QPoint(10, 10)
+        bubble.mousePressEvent(QMouseEvent(QEvent.MouseButtonPress,
+            QPointF(10, 10), QPointF(start), Qt.LeftButton, Qt.LeftButton, Qt.NoModifier))
+        end = start - QPoint(80, 60)
+        bubble.mouseMoveEvent(QMouseEvent(QEvent.MouseMove,
+            QPointF(10, 10), QPointF(end), Qt.NoButton, Qt.LeftButton, Qt.NoModifier))
+        bubble.mouseReleaseEvent(QMouseEvent(QEvent.MouseButtonRelease,
+            QPointF(10, 10), QPointF(end), Qt.LeftButton, Qt.NoButton, Qt.NoModifier))
+        dragged = bubble.pos()
+        bubble.arrange(screen, .23, 'bottom-right', 'rounded')
+        self.assertEqual(bubble.pos(), dragged)
+        bubble.arrange(screen, .3, 'bottom-right', 'circle')
+        self.assertTrue(screen.availableGeometry().contains(bubble.geometry()))
+        bubble.arrange(screen, .3, 'top-left', 'circle')
+        self.assertEqual(bubble.pos(), screen.availableGeometry().topLeft() + QPoint(20, 20))
+
     def test_zoom_starts_at_pointer_and_eases_back(self):
         motion = ZoomMotion()
         motion.enabled = True

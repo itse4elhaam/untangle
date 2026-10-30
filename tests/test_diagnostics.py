@@ -13,6 +13,39 @@ from untangle.window_diagnostics import native_window_state
 
 
 class DiagnosticTests(unittest.TestCase):
+    def test_snapshot_handles_recorder_screen_selector_without_creating_windows(self):
+        import test_app
+        case = test_app.AppChecks()
+        case.setUp()
+        self.addCleanup(case.tearDown)
+        owner = case.window
+        from PySide6.QtWidgets import QWidget
+        with patch.object(owner, 'winId', side_effect=AssertionError('native creation')), \
+             self.assertLogs(d.logger) as captured:
+            d.snapshot(owner, 'test')
+        records = self.records(captured)
+        self.assertEqual([r['event'] for r in records], ['window.snapshot', 'window.snapshot'])
+        screen = QWidget.screen(owner).geometry()
+        self.assertEqual(records[0]['screen_geometry'],
+                         [screen.x(), screen.y(), screen.width(), screen.height()])
+
+    def test_snapshot_without_a_log_handler_does_not_inspect_widgets(self):
+        import logging
+        with patch.object(d.logger, 'handlers', [logging.NullHandler()]), \
+             patch.object(d, 'window_state') as inspect:
+            d.snapshot(Mock(), 'test')
+        inspect.assert_not_called()
+
+    def test_window_state_does_not_create_a_native_window(self):
+        from PySide6.QtCore import Qt
+        from PySide6.QtWidgets import QApplication, QWidget
+        qt = QApplication.instance() or QApplication([])
+        widget = QWidget()
+        self.addCleanup(widget.close)
+        self.assertFalse(widget.testAttribute(Qt.WA_WState_Created))
+        self.assertIsNone(d.window_state(widget)['window_id'])
+        self.assertFalse(widget.testAttribute(Qt.WA_WState_Created))
+
     def records(self, captured):
         return [json.loads(record.getMessage()) for record in captured.records]
 
