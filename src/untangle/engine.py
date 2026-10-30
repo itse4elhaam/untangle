@@ -218,6 +218,9 @@ def _load_obs():
         "obs_scene_create": (P, S), "obs_scene_release": (None, P),
         "obs_wait_for_destroy_queue": (B,),
         "obs_scene_get_source": (P, P), "obs_scene_add": (P, P, P),
+        "obs_sceneitem_set_visible": (None, P, B),
+        "obs_sceneitem_set_order": (None, P, I),
+        "obs_source_set_enabled": (None, P, B),
         "obs_sceneitem_set_pos": (None, P, C.POINTER(_Vec2)),
         "obs_sceneitem_set_scale": (None, P, C.POINTER(_Vec2)),
         "obs_sceneitem_set_alignment": (None, P, U),
@@ -647,6 +650,8 @@ class Engine:
                                       camera_settings(camera, capture_w, capture_h, self.fps))
                 self._sources.append(source)
                 self._camera_source = source
+                self._presentation_floating = bool(window_id is None)
+                self._presentation_screen = screen
                 self._camera_mirror = bool(mirror)
                 item = None
                 compose_camera = mode != "screen" or not floating_camera or window_id is not None
@@ -1269,6 +1274,61 @@ class Engine:
         self._camera_mask_size = mask_size
         if self._camera_item:
             self._camera_display_size = (dw, dh)
+
+    def set_presentation(self, amount):
+        """Animate the existing camera from bubble (0) to full canvas (1).
+
+        Called on Qt's timer. Sources, output, timestamps and audio stay alive.
+        Camera-only sessions acquire their desktop source only on first return
+        to screen presentation, preserving the selected encoding canvas.
+        """
+        self._check_open()
+        if not self._camera_source or not math.isfinite(amount):
+            raise EngineError("Presentation requires a camera and a finite progress value.")
+        amount = max(0., min(1., amount))
+        o = self._obs
+        if not self._screen_item and amount < 1:
+            source = self._source("xshm_input", "RecIt screen", {
+                "screen": self._presentation_screen, "show_cursor": True})
+            self._sources.append(source)
+            self._screen_source = source
+            self._screen_dimensions = self._dimensions(source, "Screen capture")
+            self._screen_item = o.obs_scene_add(self._scene, source)
+            if not self._screen_item:
+                raise EngineError("OBS could not add the screen presentation.")
+            o.obs_sceneitem_set_order(self._screen_item, 3)  # OBS_ORDER_MOVE_BOTTOM
+            self.restore_screen_zoom()
+        if not self._camera_scene_item:
+            self._camera_scene_item = o.obs_scene_add(self._scene, self._camera_source)
+            if not self._camera_scene_item:
+                raise EngineError("OBS could not add the camera presentation.")
+        settings = dict(self._camera_framing)
+        endpoints = []
+        for mode in ('screen', 'camera'):
+            settings['mode'] = mode
+            crop, (x, y, scale) = camera_composition(
+                self.width, self.height, *self._camera_dimensions, **settings)
+            if mode == 'screen' and self._camera_position is not None:
+                x = self._camera_position[0] * (self.width - crop[2] * scale)
+                y = self._camera_position[1] * (self.height - crop[3] * scale)
+            endpoints.append((*crop, x, y, crop[2] * scale))
+        values = [a + (b - a) * amount for a, b in zip(*endpoints)]
+        left, top, width, height = [round(v) for v in values[:4]]
+        x, y, display_width = values[4:]
+        data = self._data(dict(relative=False, left=left, top=top, cx=width, cy=height))
+        item = self._camera_scene_item
+        o.obs_sceneitem_defer_update_begin(item)
+        try:
+            o.obs_source_update(self._camera_crop_filter, data)
+            if self._camera_mask_filter:
+                o.obs_source_set_enabled(self._camera_mask_filter, amount == 0)
+            self._place(item, x, y, display_width / width, self._camera_mirror, display_width)
+            o.obs_sceneitem_set_visible(item, amount > 0 or not self._presentation_floating)
+            if self._screen_item:
+                o.obs_sceneitem_set_visible(self._screen_item, amount < 1)
+        finally:
+            o.obs_sceneitem_defer_update_end(item)
+            o.obs_data_release(data)
 
     def set_camera_position(self, x: float, y: float):
         """Move a composited overlay within its available canvas travel area.

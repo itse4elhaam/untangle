@@ -11,6 +11,26 @@ from PySide6.QtGui import QImage, QPainter
 from PySide6.QtWidgets import QWidget, QMenu, QApplication
 
 
+def release_window_input(widget):
+    """Release this Qt client's native pointer grab before hiding a window.
+
+    Qt's QWidget grabber bookkeeping and the XCB native grab are separate.
+    A bounded ShapeInput region does not constrain an active pointer grab.
+    Use Qt's own connection, not a fresh python-xlib connection, so the ungrab
+    belongs to the client that can own the grab. Other applications' grabs
+    are unaffected by this request.
+    """
+    popup = QApplication.activePopupWidget()
+    if popup is not None:
+        popup.close()
+    grabber = QWidget.mouseGrabber()
+    if grabber is not None:
+        grabber.releaseMouse()
+    handle = widget.windowHandle()
+    if handle is not None:
+        handle.setMouseGrabEnabled(False)
+
+
 def camera_mask(shape, width, height, custom=None, mirror=False):
     """An alpha image, never a one-bit window region, in physical pixels."""
     if shape == 'custom':
@@ -79,6 +99,7 @@ class ZoomMotion:
 
 
 class CameraBubble(QWidget):
+    presentation_requested = Signal()
     stop_requested = Signal()
     pause_requested = Signal()
     zoom_requested = Signal()
@@ -160,6 +181,14 @@ class CameraBubble(QWidget):
         painter.drawImage(QRectF(self.rect()), self.frame_image())
         painter.end()
 
+    def hideEvent(self, event):
+        self._drag_offset = None
+        self.setCursor(Qt.OpenHandCursor)
+        release_window_input(self)
+        if QApplication.platformName() == 'xcb':
+            self._update_input_shape(empty=True)
+        super().hideEvent(event)
+
     def closeEvent(self, event):
         self.set_frame_provider(None)
         super().closeEvent(event)
@@ -185,13 +214,13 @@ class CameraBubble(QWidget):
         if self.isVisible() and QApplication.platformName() == 'xcb':
             self._update_input_shape()
 
-    def _update_input_shape(self):
+    def _update_input_shape(self, *, empty=False):
         from Xlib import X, display
         from Xlib.ext import shape
         ratio = self.devicePixelRatioF()
         mask = camera_mask(self._shape, max(1, round(self.width() * ratio)),
                            max(1, round(self.height() * ratio)), self._custom_mask, self._mirror_mask)
-        rectangles = camera_input_rectangles(mask)
+        rectangles = [] if empty else camera_input_rectangles(mask)
         connection = display.Display()
         try:
             window = connection.create_resource_object('window', int(self.winId()))
@@ -293,6 +322,7 @@ class CameraBubble(QWidget):
         menu = QMenu(self)
         menu.addAction('Open Untangle', self.open_requested.emit)
         if self.recording:
+            menu.addAction('Switch camera presentation', self.presentation_requested.emit)
             menu.addAction('Stop and save · Ctrl+Shift+F9', self.stop_requested.emit)
             menu.addAction('Resume' if self.paused else 'Pause', self.pause_requested.emit)
         action = menu.addAction('Zoom out' if self.zoomed else 'Zoom to pointer · Ctrl+Shift+F8', self.zoom_requested.emit)

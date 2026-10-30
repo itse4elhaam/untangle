@@ -17,6 +17,7 @@ class WindowStateTests(unittest.TestCase):
         self.addCleanup(self.stack.close)
         root = Path(self.stack.enter_context(tempfile.TemporaryDirectory()))
         for target, name, value in [
+            (app, 'AudioDevices', MagicMock()),
             (app.Window, 'initialize', None), (app.Hotkeys, 'start', None),
             (app, 'prompt_recording_name', None),
             (app, 'cameras', []), (app, 'microphones', []),

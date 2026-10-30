@@ -14,7 +14,7 @@ import time
 
 from PySide6.QtCore import Qt, QTimer, Signal, QThread, QProcess, QUrl, QSettings
 from PySide6.QtGui import QColor, QDesktopServices, QIcon, QPainter, QPen, QPixmap, QShortcut, QKeySequence, QCursor
-from .floating import CameraBubble, ZoomMotion
+from .floating import CameraBubble, ZoomMotion, release_window_input
 from .windows import WindowCatalog
 from .recordings import Recordings
 from .camera_image import CameraAdjustments, CameraControlError, restore_saved
@@ -246,7 +246,14 @@ class Window(QMainWindow):
         self.recording_error_baseline = 0
         self.zoom_motion = ZoomMotion()
         self.window_catalog = WindowCatalog()
+        self.presentation_amount = 0.
+        self.presentation_target = 0.
+        self.presentation_committed = 0.
+        self.presentation_timer = QTimer(self)
+        self.presentation_timer.setInterval(16)
+        self.presentation_timer.timeout.connect(self.animate_presentation)
         self.bubble = CameraBubble()
+        self.bubble.presentation_requested.connect(self.toggle_presentation)
         self.bubble.stop_requested.connect(self.stop)
         self.bubble.pause_requested.connect(self.toggle_pause)
         self.bubble.zoom_requested.connect(self.toggle_zoom)
@@ -653,6 +660,10 @@ class Window(QMainWindow):
         self.zoom_button.setEnabled(False)
         self.zoom_button.setToolTip('While recording, press Ctrl + Shift + F8 to zoom in or out at your pointer.')
         self.zoom_button.clicked.connect(self.toggle_zoom)
+        self.presentation_button = QPushButton('Switch camera presentation')
+        self.presentation_button.setEnabled(False)
+        self.presentation_button.clicked.connect(self.toggle_presentation)
+        zoom_row.addWidget(self.presentation_button)
         zoom_row.addStretch()
         zoom_row.addWidget(self.zoom_button)
         self.zoom_amount = QComboBox()
@@ -938,6 +949,8 @@ class Window(QMainWindow):
         menu = QMenu()
         menu.addAction('Open Untangle', self.reveal)
         self.tray_record = menu.addAction('Start recording', self.toggle_record)
+        self.tray_presentation = menu.addAction('Switch camera presentation', self.toggle_presentation)
+        self.tray_presentation.setEnabled(False)
         self.tray_pause = menu.addAction('Pause', self.toggle_pause)
         self.tray_pause.setEnabled(False)
         self.tray_discard = menu.addAction('Discard recording', self.discard_recording)
@@ -1215,6 +1228,52 @@ class Window(QMainWindow):
             ratio = self.preview.devicePixelRatioF()
             self.engine.resize_preview(round(width * ratio), round(height * ratio))
 
+    def toggle_presentation(self):
+        if not self.recording or self.busy or not self.camera.currentData():
+            return
+        self.presentation_target = 0. if self.presentation_target else 1.
+        self.presentation_last_time = time.monotonic()
+        if self.presentation_target == 0:
+            self._capture_window_state = self.windowState() & ~Qt.WindowMinimized
+            self.hide()
+        self.bubble.hide()
+        self.presentation_timer.start()
+
+    def animate_presentation(self):
+        if not self.presentation_timer.isActive():
+            return
+        if not self.recording or self.busy or not self.engine:
+            self.presentation_timer.stop()
+            return
+        now = time.monotonic()
+        step = min(.1, now - self.presentation_last_time) / .35
+        self.presentation_last_time = now
+        if self.paused:
+            return
+        if self.presentation_target > self.presentation_amount:
+            self.presentation_amount = min(self.presentation_target, self.presentation_amount + step)
+        else:
+            self.presentation_amount = max(self.presentation_target, self.presentation_amount - step)
+        progress = self.presentation_amount
+        try:
+            self.engine.set_presentation(progress * progress * (3 - 2 * progress))
+            if progress == self.presentation_target:
+                self.presentation_committed = progress
+                self.presentation_timer.stop()
+                if progress == 0:
+                    self.show_bubble()
+        except Exception as exc:
+            self.presentation_timer.stop()
+            self.presentation_amount = self.presentation_target = self.presentation_committed
+            try:
+                self.engine.set_presentation(self.presentation_committed)
+                if self.presentation_committed == 0:
+                    self.show_bubble()
+            except Exception as recovery:
+                self.notice(f'Camera presentation failed: {exc}. Could not restore it: {recovery}')
+                return
+            self.notice(f'Camera presentation could not change: {exc}')
+
     def show_bubble(self):
         screen = QApplication.screens()[self.screen.currentIndex()]
         self.bubble.arrange(screen, self.size.value() / 100, self.position.currentData(), self.shape.currentData(), self.mask_path,
@@ -1484,6 +1543,7 @@ class Window(QMainWindow):
             self.record_path = next_recording_path(VIDEOS, self.mode, window_title)
             self.recording_error = ''
             self.recording_error_baseline = len(self.engine.errors)
+            self.presentation_amount = self.presentation_target = self.presentation_committed = 1. if self.mode == 'camera' else 0.
             self.engine.start(self.record_path)
             encoder = self.engine.stats().get('encoder', '')
             self.encoder_label.setText('Intel hardware · H.264' if encoder == 'ffmpeg_vaapi' else 'CPU encoding · H.264')
@@ -1491,6 +1551,8 @@ class Window(QMainWindow):
             self.paused_duration = 0
             self.paused = False
             self.recording = True
+            self.presentation_button.setEnabled(bool(self.camera.currentData()))
+            self.tray_presentation.setEnabled(bool(self.camera.currentData()))
             self._audio_warning_since = None
             self.bubble.recording = True
             self.zoom_button.setEnabled(self.mode == 'screen')
@@ -1521,6 +1583,9 @@ class Window(QMainWindow):
             self.restore_capture_window()
 
     def stop(self):
+        self.presentation_timer.stop()
+        self.presentation_button.setEnabled(False)
+        self.tray_presentation.setEnabled(False)
         if not self.recording or self.busy:
             return
         self.busy = True
@@ -2773,6 +2838,7 @@ class Window(QMainWindow):
         return QIcon(pix)
 
     def hideEvent(self, event):
+        release_window_input(self)
         if not (self.recording or self.counting or self.preparing_audio):
             self.idle_audio.stop()
         super().hideEvent(event)

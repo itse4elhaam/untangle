@@ -22,7 +22,8 @@ class NavigationTests(unittest.TestCase):
             subprocess.run(['ffmpeg', '-hide_banner', '-loglevel', 'error',
                 '-f', 'lavfi', '-i', 'testsrc2=size=160x90:rate=10', '-t', '1',
                 '-an', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', str(clip)], check=True)
-            with (patch.object(app.Window, 'initialize'),
+            with (patch.object(app, 'AudioDevices', return_value=MagicMock()),
+                  patch.object(app.Window, 'initialize'),
                   patch.object(app.Hotkeys, 'start'),
                   patch.object(app, 'cameras', return_value=[]),
                   patch.object(app, 'microphones', return_value=[]),

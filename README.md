@@ -37,6 +37,9 @@ uv pip install --python .venv/bin/python -r requirements.txt
 ./scripts/test.sh
 ```
 
+The safe runner requires bubblewrap (`bwrap`). It isolates devices, audio and Bluetooth servers, desktop sockets, and networking, and makes the host filesystem read-only. It fails if isolation is unavailable. Use this runner rather than direct unittest discovery.
+
+
 The test command uses offscreen Qt, mocks, and synthetic media. It doesn't open your camera or microphone. T3's Untangle project has setup and headless-test commands too. Neither runs automatically.
 
 Qt is pinned to 6.11.1. Version 6.12.0 crashed the tested Python 3.10 runtime during repeated widget updates. Keep Essentials, Addons, and Shiboken on matching versions.

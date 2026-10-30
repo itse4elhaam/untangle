@@ -19,7 +19,7 @@ Run safe checks from this repository root:
 bash -n scripts/*.sh bin/*
 ```
 
-The runner uses `.venv/bin/python` when available, otherwise `python3`, sets an absolute `PYTHONPATH` for `src/`, and runs `unittest discover -s tests`. It clears display and hardware opt-in environment switches and accepts no capture flags. It works from any working directory.
+The runner uses `.venv/bin/python` when available, otherwise `python3`, sets an absolute `PYTHONPATH` for `src/`, and runs `unittest discover -s tests`. It clears display and hardware opt-in environment switches and accepts no capture flags. It works from any working directory. It requires bubblewrap (`bwrap`) and fails closed if namespace isolation is unavailable. Tests run with private devices, runtime directories, and networking, and a read-only host filesystem. Do not bypass this runner with direct unittest discovery: incomplete UI mocks can otherwise reach real audio devices and switch Bluetooth profiles.
 
 Use mocks and synthetic samples. Never run device capture, live desktop tests, microphone checks, camera checks, Bluetooth profile changes, or audible playback without explicit authorization. Hardware tests are opt-in; leave their flags and environment switches unset during ordinary checks. Opening the app can open capture devices, so do not launch it as an incidental verification step.
 
