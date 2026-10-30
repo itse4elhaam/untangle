@@ -125,6 +125,18 @@ class CameraAlphaTests(unittest.TestCase):
         connection.return_value.close.assert_called_once()
         self.assertTrue(bubble.mask().isEmpty())
 
+    def test_hidden_camera_has_an_explicit_empty_native_input_region(self):
+        from Xlib.ext import shape
+        bubble = self.bubble()
+        with patch('Xlib.display.Display') as connection:
+            bubble._update_input_shape(empty=True)
+        window = connection.return_value.create_resource_object.return_value
+        args = window.shape_rectangles.call_args.args
+        self.assertEqual(args[0], shape.SO.Set)
+        self.assertEqual(args[1], shape.SK.Input)
+        self.assertEqual(args[-1], [])
+        connection.return_value.close.assert_called_once()
+
     def test_obs_composition_mask_uses_same_fractional_pixels(self):
         engine = Engine.__new__(Engine)
         with tempfile.TemporaryDirectory() as folder:

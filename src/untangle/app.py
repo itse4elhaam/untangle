@@ -14,7 +14,7 @@ import time
 
 from PySide6.QtCore import Qt, QTimer, Signal, QThread, QProcess, QUrl, QSettings
 from PySide6.QtGui import QColor, QDesktopServices, QIcon, QPainter, QPen, QPixmap, QShortcut, QKeySequence, QCursor
-from .floating import CameraBubble, ZoomMotion
+from .floating import CameraBubble, ZoomMotion, release_window_input
 from .windows import WindowCatalog
 from .recordings import Recordings
 from .camera_image import CameraAdjustments, CameraControlError, restore_saved
@@ -248,6 +248,7 @@ class Window(QMainWindow):
         self.window_catalog = WindowCatalog()
         self.presentation_amount = 0.
         self.presentation_target = 0.
+        self.presentation_committed = 0.
         self.presentation_timer = QTimer(self)
         self.presentation_timer.setInterval(16)
         self.presentation_timer.timeout.connect(self.animate_presentation)
@@ -1257,11 +1258,20 @@ class Window(QMainWindow):
         try:
             self.engine.set_presentation(progress * progress * (3 - 2 * progress))
             if progress == self.presentation_target:
+                self.presentation_committed = progress
                 self.presentation_timer.stop()
                 if progress == 0:
                     self.show_bubble()
         except Exception as exc:
             self.presentation_timer.stop()
+            self.presentation_amount = self.presentation_target = self.presentation_committed
+            try:
+                self.engine.set_presentation(self.presentation_committed)
+                if self.presentation_committed == 0:
+                    self.show_bubble()
+            except Exception as recovery:
+                self.notice(f'Camera presentation failed: {exc}. Could not restore it: {recovery}')
+                return
             self.notice(f'Camera presentation could not change: {exc}')
 
     def show_bubble(self):
@@ -1533,7 +1543,7 @@ class Window(QMainWindow):
             self.record_path = next_recording_path(VIDEOS, self.mode, window_title)
             self.recording_error = ''
             self.recording_error_baseline = len(self.engine.errors)
-            self.presentation_amount = self.presentation_target = 1. if self.mode == 'camera' else 0.
+            self.presentation_amount = self.presentation_target = self.presentation_committed = 1. if self.mode == 'camera' else 0.
             self.engine.start(self.record_path)
             encoder = self.engine.stats().get('encoder', '')
             self.encoder_label.setText('Intel hardware · H.264' if encoder == 'ffmpeg_vaapi' else 'CPU encoding · H.264')
@@ -2828,6 +2838,7 @@ class Window(QMainWindow):
         return QIcon(pix)
 
     def hideEvent(self, event):
+        release_window_input(self)
         if not (self.recording or self.counting or self.preparing_audio):
             self.idle_audio.stop()
         super().hideEvent(event)

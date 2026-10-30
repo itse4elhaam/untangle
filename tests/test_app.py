@@ -60,6 +60,21 @@ class AppChecks(unittest.TestCase):
         w.engine.stop.assert_not_called()
         w.recording = False
 
+    def test_presentation_failure_restores_last_completed_mode(self):
+        w = self.window
+        w.recording = True
+        w.busy = w.paused = False
+        w.presentation_amount = w.presentation_target = w.presentation_committed = 1.
+        w.engine.set_presentation.side_effect = [RuntimeError('Desktop unavailable'), None]
+        w.toggle_presentation()
+        w.presentation_last_time -= .1
+        w.animate_presentation()
+        self.assertEqual(w.presentation_amount, 1.)
+        self.assertFalse(w.presentation_timer.isActive())
+        w.engine.set_presentation.assert_called_with(1.)
+        w.engine.stop.assert_not_called()
+        w.recording = False
+
     def test_presentation_animation_waits_while_paused(self):
         w = self.window
         w.recording = True
@@ -72,6 +87,15 @@ class AppChecks(unittest.TestCase):
         w.engine.set_presentation.assert_not_called()
         w.presentation_timer.stop()
         w.recording = False
+
+    def test_hiding_main_window_for_capture_releases_native_input(self):
+        w = self.window
+        w.show()
+        w.counting = True
+        with patch.object(glint, 'release_window_input') as release:
+            w.hide()
+        release.assert_called_once_with(w)
+        w.counting = False
 
     def test_visible_identity_uses_untangle_and_bundled_mark(self):
         self.assertEqual(self.window.windowTitle(), 'Untangle')

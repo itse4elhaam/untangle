@@ -11,7 +11,7 @@ from PySide6.QtCore import Qt, QPoint
 from PySide6.QtMultimedia import QMediaPlayer, QVideoSink
 from PySide6.QtWidgets import QApplication, QMessageBox, QStyle, QStyleOptionSlider
 from PySide6.QtTest import QTest
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 from untangle.recordings import Recordings
 
 qt = QApplication.instance() or QApplication([])
@@ -309,6 +309,7 @@ class LatestRecordingDeletionChecks(unittest.TestCase):
             latest.touch()
             os.utime(older, (1, 1))
             for target, name, value in (
+                (app, 'AudioDevices', MagicMock()),
                 (app.Window, 'initialize', None), (app.Hotkeys, 'start', None),
                 (app, 'cameras', []), (app, 'microphones', []),
                 (app, 'QSettings', QSettings(str(root / 'prefs.ini'), QSettings.IniFormat)),
