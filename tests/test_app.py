@@ -36,6 +36,43 @@ class AppChecks(unittest.TestCase):
         self.window.engine.errors = []
         self.window.configure()
 
+    def test_presentation_switch_keeps_recording_and_uses_existing_engine(self):
+        w = self.window
+        w.recording = True
+        w.busy = w.paused = False
+        w.presentation_amount = w.presentation_target = 0.
+        w.toggle_presentation()
+        self.assertEqual(w.presentation_target, 1.)
+        for _ in range(5):
+            w.presentation_last_time -= .1
+            w.animate_presentation()
+        self.assertEqual(w.presentation_amount, 1.)
+        self.assertFalse(w.bubble.isVisible())
+        w.engine.set_presentation.assert_called_with(1.)
+        w.toggle_presentation()
+        with patch.object(w, 'show_bubble') as show:
+            for _ in range(5):
+                w.presentation_last_time -= .1
+                w.animate_presentation()
+            show.assert_called_once()
+        w.engine.set_presentation.assert_called_with(0.)
+        w.engine.start.assert_not_called()
+        w.engine.stop.assert_not_called()
+        w.recording = False
+
+    def test_presentation_animation_waits_while_paused(self):
+        w = self.window
+        w.recording = True
+        w.busy = False
+        w.paused = True
+        w.toggle_presentation()
+        w.presentation_last_time -= .1
+        w.animate_presentation()
+        self.assertEqual(w.presentation_amount, 0.)
+        w.engine.set_presentation.assert_not_called()
+        w.presentation_timer.stop()
+        w.recording = False
+
     def test_visible_identity_uses_untangle_and_bundled_mark(self):
         self.assertEqual(self.window.windowTitle(), 'Untangle')
         self.assertEqual(glint.ICON, Path(__file__).resolve().parents[1] / 'assets/untangle-mark.svg')

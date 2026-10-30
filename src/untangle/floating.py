@@ -79,6 +79,7 @@ class ZoomMotion:
 
 
 class CameraBubble(QWidget):
+    presentation_requested = Signal()
     stop_requested = Signal()
     pause_requested = Signal()
     zoom_requested = Signal()
@@ -293,6 +294,7 @@ class CameraBubble(QWidget):
         menu = QMenu(self)
         menu.addAction('Open Untangle', self.open_requested.emit)
         if self.recording:
+            menu.addAction('Switch camera presentation', self.presentation_requested.emit)
             menu.addAction('Stop and save · Ctrl+Shift+F9', self.stop_requested.emit)
             menu.addAction('Resume' if self.paused else 'Pause', self.pause_requested.emit)
         action = menu.addAction('Zoom out' if self.zoomed else 'Zoom to pointer · Ctrl+Shift+F8', self.zoom_requested.emit)
