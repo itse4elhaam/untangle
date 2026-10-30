@@ -9,6 +9,7 @@ import time
 from PySide6.QtCore import QEvent, Qt, Signal, QRectF, QTimer
 from PySide6.QtGui import QImage, QPainter
 from PySide6.QtWidgets import QWidget, QMenu, QApplication
+from .diagnostics import event as diagnostic_event, failure as diagnostic_failure
 
 
 def release_window_input(widget):
@@ -123,6 +124,7 @@ class CameraBubble(QWidget):
         self.paused = False
         self.zoomed = False
         self._shape = 'square'
+        self._input_passthrough = False
         self._custom_mask = None
         self._mirror_mask = False
         self._alpha_mask = None
@@ -215,23 +217,42 @@ class CameraBubble(QWidget):
             self._update_input_shape()
 
     def _update_input_shape(self, *, empty=False):
-        from Xlib import X, display
+        from Xlib import X, display, error
         from Xlib.ext import shape
         ratio = self.devicePixelRatioF()
-        mask = camera_mask(self._shape, max(1, round(self.width() * ratio)),
-                           max(1, round(self.height() * ratio)), self._custom_mask, self._mirror_mask)
-        rectangles = [] if empty else camera_input_rectangles(mask)
-        connection = display.Display()
+        rectangles = []
+        if not empty and not self._input_passthrough:
+            mask = camera_mask(self._shape, max(1, round(self.width() * ratio)),
+                               max(1, round(self.height() * ratio)), self._custom_mask, self._mirror_mask)
+            rectangles = camera_input_rectangles(mask)
+        connection = None
         try:
+            connection = display.Display()
             window = connection.create_resource_object('window', int(self.winId()))
+            catcher = error.CatchError()
             # ShapeInput leaves the compositor's fractional visual alpha intact.
             for start in range(0, max(1, len(rectangles)), 1024):
                 window.shape_rectangles(shape.SO.Set if start == 0 else shape.SO.Union,
                                         shape.SK.Input, X.YXBanded, 0, 0,
-                                        rectangles[start:start + 1024])
-            connection.flush()
+                                        rectangles[start:start + 1024], onerror=catcher)
+            connection.sync()
+            problem = catcher.get_error()
+            if problem:
+                raise problem
+            diagnostic_event('camera.input_shape.applied', input_rectangles=len(rectangles),
+                             visible=self.isVisible(), window_id=int(self.winId()),
+                             outcome='click_through' if self._input_passthrough or empty else 'bounded')
+        except Exception as exc:
+            diagnostic_failure('camera.input_shape.failed', exc)
+            # A failed native mask must not leave an opaque input window.
+            # Tray controls remain usable when this window passes clicks through.
+            self._input_passthrough = True
+            handle = self.windowHandle()
+            if handle is not None:
+                handle.setFlag(Qt.WindowTransparentForInput, True)
         finally:
-            connection.close()
+            if connection is not None:
+                connection.close()
 
     def pin_to_workspaces(self):
         if not self.isVisible():

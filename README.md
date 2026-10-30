@@ -89,3 +89,11 @@ Untangle was called RecIt. The standalone repo preserves its app history. Your s
 Recordings remain in `~/Videos/RecIt`. Logs remain in `~/.local/state/glint/glint.log`. The private runtime stays in `~/.local/share/glint`, and the existing settings and single-instance identifiers remain compatible.
 
 See [migration notes](docs/migration.md) before switching an existing installation. The [brand files](docs/brand.md) contain the editable logo assets.
+
+## Local diagnostics
+
+Untangle writes structured application diagnostics to `~/.local/state/glint/diagnostics.jsonl` when you next start the app. The current file and three rotated backups are limited to 2 MiB each and use private file permissions. The existing launcher/OBS output remains in `glint.log`.
+
+Diagnostics record process revision, operation boundaries, typed failures and code locations, recording transitions, native window and parent-frame geometry, input-region bounds, Qt popup/grabber state, and a recording heartbeat every ten seconds. A separate watchdog records a stalled UI thread without calling Qt from that thread. Camera input-region requests are checked; a rejected region makes that bubble pass clicks through for the remainder of the process. Tray controls remain available.
+
+Diagnostics do not collect recording contents, window titles, recording filenames, OAuth credentials, exception messages, or upload payloads. Nothing is uploaded. Application diagnostics begin on the next manual launch; installing an update does not restart an existing instance.

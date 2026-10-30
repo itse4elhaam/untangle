@@ -1,4 +1,5 @@
 """V4L2 picture controls (contrast, exposure, focus…) and the page that edits them."""
+from .diagnostics import observed, failure as diagnostic_failure
 from dataclasses import dataclass, field
 import re
 import subprocess
@@ -120,6 +121,7 @@ def parse_controls(text):
     return [found[name] for name in SUPPORTED if name in found]
 
 
+@observed("camera_image.read_controls")
 def read_controls(device):
     try:
         result = subprocess.run(['v4l2-ctl', '-d', device, '--list-ctrls-menus'],
@@ -131,6 +133,7 @@ def read_controls(device):
     return parse_controls(result.stdout)
 
 
+@observed("camera_image.write_controls")
 def write_controls(device, values, current=None):
     """Write automatic modes, then picture values, then manual partners, each separately.
 
@@ -166,6 +169,7 @@ def manual_allowed(name, values):
     return partner not in values or values[partner] in allowed
 
 
+@observed("camera_image.restore_saved")
 def restore_saved(device, saved):
     """Reapply saved values, clamped to this camera's current ranges. Returns applied values."""
     if not saved:
@@ -255,6 +259,7 @@ class CameraAdjustments(QWidget):
         try:
             controls = read_controls(device)
         except CameraControlError as exc:
+            diagnostic_failure("camera.control.failed", exc)
             controls = []
             self.message.setText(str(exc))
         self.controls = {control.name: control for control in controls}
@@ -368,6 +373,7 @@ class CameraAdjustments(QWidget):
         try:
             write_controls(self.device, values, self.current_values())
         except CameraControlError as exc:
+            diagnostic_failure("camera.control.failed", exc)
             self.message.setText(str(exc))
             self.refresh_values()
             return
@@ -381,6 +387,7 @@ class CameraAdjustments(QWidget):
         try:
             controls = read_controls(self.device)
         except CameraControlError as exc:
+            diagnostic_failure("camera.control.failed", exc)
             self.message.setText(str(exc))
             return
         for control in controls:
@@ -410,6 +417,7 @@ class CameraAdjustments(QWidget):
             write_controls(self.device, {name: control.default for name, control in self.controls.items()
                                          if name not in RESET_SKIP}, self.current_values())
         except CameraControlError as exc:
+            diagnostic_failure("camera.control.failed", exc)
             self.message.setText(str(exc))
         else:
             self.message.setText('Camera settings reset to defaults.')

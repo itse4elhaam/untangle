@@ -14,6 +14,7 @@ import time
 
 from PySide6.QtCore import Qt, QTimer, Signal, QThread, QProcess, QUrl, QSettings
 from PySide6.QtGui import QColor, QDesktopServices, QIcon, QPainter, QPen, QPixmap, QShortcut, QKeySequence, QCursor
+from .diagnostics import event as diagnostic_event, failure as diagnostic_failure, observed, snapshot, install as install_diagnostics
 from .floating import CameraBubble, ZoomMotion, release_window_input
 from .windows import WindowCatalog
 from .recordings import Recordings
@@ -106,6 +107,7 @@ class Hotkeys(QThread):
             conn.sync()
             conn.close()
         except Exception as exc:
+            diagnostic_failure('application.operation.failed', exc)
             self.unavailable.emit(f'Global shortcuts unavailable. Use the tray icon. {exc}')
 
 
@@ -178,6 +180,7 @@ class FinishWorker(QThread):
                     self.engine.errors.append(warning)
             self.finished_file.emit(str(self.path), '')
         except Exception as exc:
+            diagnostic_failure('application.operation.failed', exc)
             emit(self, 'finish.failed', level='warning', exception_type=type(exc).__name__,
                  duration_ms=round((time.monotonic() - started) * 1000))
             self.finished_file.emit(str(self.path), str(exc))
@@ -196,6 +199,7 @@ class AudioWorker(QThread):
         try:
             self.result.emit(self.action(), '')
         except Exception as exc:
+            diagnostic_failure('application.operation.failed', exc)
             emit(self, 'audio_worker.failed', level='warning', exception_type=type(exc).__name__,
                  duration_ms=round((time.monotonic() - started) * 1000))
             self.result.emit(None, str(exc))
@@ -220,6 +224,9 @@ class Window(QMainWindow):
         self._audio_warning_since = None
         self._closing = False
         self._capture_window_state = None
+        self._capture_preview_detached = False
+        self._diagnostic_at = 0.
+        self._diagnostic_engine_errors = 0
         self._audio_retry_at = 0
         self.recording = False
         self.paused = False
@@ -900,6 +907,7 @@ class Window(QMainWindow):
             self.engine.set_camera_framing(**changes)
             self.save_preferences()
         except Exception as exc:
+            diagnostic_failure('application.operation.failed', exc)
             self._live_update_failed = True
             self.configuration_valid = False
             self.record_button.setEnabled(False)
@@ -1025,6 +1033,7 @@ class Window(QMainWindow):
         self.prefs.setValue('mask', self.mask_path)
         self.prefs.sync()
 
+    @observed("app.initialize")
     def initialize(self):
         if self._closing or self.in_library() or self.engine:
             return
@@ -1037,6 +1046,7 @@ class Window(QMainWindow):
             self.resize_preview(self.preview.width(), self.preview.height())
             self.configure()
         except Exception as exc:
+            diagnostic_failure('application.operation.failed', exc)
             self.notice(f'Could not start the recording engine: {exc}')
             self.encoder_label.setText('Engine unavailable')
             self.record_button.setEnabled(False)
@@ -1065,6 +1075,7 @@ class Window(QMainWindow):
             self.record_button.setEnabled(True)
             self.save_preferences()
         except Exception as exc:
+            diagnostic_failure('application.operation.failed', exc)
             self._live_update_failed = True
             self.configuration_valid = False
             self.record_button.setEnabled(False)
@@ -1134,6 +1145,7 @@ class Window(QMainWindow):
             self.capture_window.setCurrentIndex(max(0, index))
             self.capture_window.setToolTip(self.capture_window.currentText())
         except Exception as exc:
+            diagnostic_failure('application.operation.failed', exc)
             self.capture_window.addItem('Window list unavailable', None)
             if hasattr(self, 'status'):
                 self.notice(f'Could not list windows: {exc}')
@@ -1166,6 +1178,7 @@ class Window(QMainWindow):
             self._configure_pending = True
             self.configure_timer.start(180)
 
+    @observed("app.configure")
     def configure(self, microphone=None, recording_setup=False):
         if not recording_setup:
             key = (self.microphone.currentData(), self.clean_microphone.isChecked())
@@ -1220,6 +1233,7 @@ class Window(QMainWindow):
                 self.source_note.setText(f'{output} · Recording only the selected window. Keep it open and unminimized.')
             self.save_preferences()
         except Exception as exc:
+            diagnostic_failure('application.operation.failed', exc)
             self.record_button.setEnabled(False)
             self.notice(f'Check your setup: {exc}')
 
@@ -1228,6 +1242,7 @@ class Window(QMainWindow):
             ratio = self.preview.devicePixelRatioF()
             self.engine.resize_preview(round(width * ratio), round(height * ratio))
 
+    @observed("app.toggle_presentation")
     def toggle_presentation(self):
         if not self.recording or self.busy or not self.camera.currentData():
             return
@@ -1235,7 +1250,7 @@ class Window(QMainWindow):
         self.presentation_last_time = time.monotonic()
         if self.presentation_target == 0:
             self._capture_window_state = self.windowState() & ~Qt.WindowMinimized
-            self.hide()
+            self.hide_for_capture()
         self.bubble.hide()
         self.presentation_timer.start()
 
@@ -1263,6 +1278,7 @@ class Window(QMainWindow):
                 if progress == 0:
                     self.show_bubble()
         except Exception as exc:
+            diagnostic_failure('application.operation.failed', exc)
             self.presentation_timer.stop()
             self.presentation_amount = self.presentation_target = self.presentation_committed
             try:
@@ -1274,6 +1290,7 @@ class Window(QMainWindow):
                 return
             self.notice(f'Camera presentation could not change: {exc}')
 
+    @observed('camera.show')
     def show_bubble(self):
         screen = QApplication.screens()[self.screen.currentIndex()]
         self.bubble.arrange(screen, self.size.value() / 100, self.position.currentData(), self.shape.currentData(), self.mask_path,
@@ -1282,10 +1299,12 @@ class Window(QMainWindow):
         self.bubble.show()
         try:
             self.engine.attach_bubble(self.bubble)
+            snapshot(self, 'camera.shown', native=True)
         except Exception:
             self.bubble.hide()
             raise
 
+    @observed('camera.hide')
     def hide_bubble(self):
         if self.engine:
             self.engine.detach_camera_preview()
@@ -1340,6 +1359,7 @@ class Window(QMainWindow):
             if not self.zoom_motion.enabled and factor == 1.0:
                 self.zoom_timer.stop()
         except Exception as exc:
+            diagnostic_failure('application.operation.failed', exc)
             self.zoom_timer.stop()
             self.notice(f'Pointer zoom stopped: {exc}')
 
@@ -1355,6 +1375,7 @@ class Window(QMainWindow):
         if self.engine:
             self.engine.set_screen_zoom(1.0, .5, .5)
 
+    @observed("app.toggle_record")
     def toggle_record(self):
         if self.in_library():
             return
@@ -1384,7 +1405,7 @@ class Window(QMainWindow):
             # Hide before capture starts, avoiding the preview recursion in the recording.
             if self.mode == 'screen':
                 self._capture_window_state = self.windowState() & ~Qt.WindowMinimized
-                self.hide()
+                self.hide_for_capture()
             self.start_timer.start(250)
 
     def cancel_countdown(self):
@@ -1400,6 +1421,7 @@ class Window(QMainWindow):
             self.notice('Countdown cancelled. Ready when you are.')
             self.restore_capture_window()
 
+    @observed("app.start")
     def start(self):
         if self._closing or self.in_library() or self.busy or self.recording or not self.counting or not self.configuration_valid:
             return
@@ -1443,6 +1465,7 @@ class Window(QMainWindow):
         worker.finished.connect(finished)
         worker.start()
 
+    @observed("app.audio_prepared")
     def audio_prepared(self, source, error):
         if self._closing:
             return  # closeEvent releases capture and restores after the worker exits.
@@ -1464,6 +1487,7 @@ class Window(QMainWindow):
         else:
             self.begin_recording()
 
+    @observed("app.audio_start_failed")
     def audio_start_failed(self, error):
         emit(self, 'preparation.aborted', level='warning', reason='preparation_failed_or_cancelled')
         self._audio_generation += 1
@@ -1507,6 +1531,7 @@ class Window(QMainWindow):
             and status.get('packets', 0) > 0 and status.get('nonzero_packets', 0) > 0
             and status.get('packet_age') is not None and status['packet_age'] < 1.5)
 
+    @observed("app.microphone_verified")
     def microphone_verified(self, generation, source, error):
         if self._closing or generation != self._audio_generation or not self.preparing_audio:
             return
@@ -1517,11 +1542,12 @@ class Window(QMainWindow):
         elif self.mode == 'screen':
             emit(self, 'readiness.ready', source=source)
             self._capture_window_state = self.windowState() & ~Qt.WindowMinimized
-            self.hide()
+            self.hide_for_capture()
             QTimer.singleShot(250, lambda: self.begin_recording(generation))
         else:
             self.begin_recording(generation)
 
+    @observed("app.begin_recording")
     def begin_recording(self, generation=None):
         if self._closing or (generation is not None and generation != self._audio_generation):
             return
@@ -1575,6 +1601,7 @@ class Window(QMainWindow):
             if self.mode == 'screen':
                 self.tray.setToolTip('Untangle · Recording\nF9 stop · F10 pause · F8 zoom\nHold Ctrl + Shift with each key')
         except Exception as exc:
+            diagnostic_failure('application.operation.failed', exc)
             emit(self, 'record_start.failed', level='warning', exception_type=type(exc).__name__)
             self.release_audio()
             self.lock_controls(False)
@@ -1582,6 +1609,7 @@ class Window(QMainWindow):
             self.notice(f'Could not start recording: {exc}')
             self.restore_capture_window()
 
+    @observed("app.stop")
     def stop(self):
         self.presentation_timer.stop()
         self.presentation_button.setEnabled(False)
@@ -1604,6 +1632,7 @@ class Window(QMainWindow):
         self.worker.finished_file.connect(self.stopped)
         self.worker.start()
 
+    @observed("app.stopped")
     def stopped(self, path, error):
         if error and self.engine.recording:
             self.busy = False
@@ -1678,6 +1707,7 @@ class Window(QMainWindow):
                 target.unlink()
             self.finish_save(source, f'MP4 preparation failed. Your MKV is safe. {details}')
 
+    @observed("app.restart_recording")
     def restart_recording(self):
         if not self.recording or self.busy:
             return
@@ -1691,6 +1721,7 @@ class Window(QMainWindow):
         self._discarding = True
         self.stop()
 
+    @observed("app.discard_recording")
     def discard_recording(self):
         """Stop the current take and delete it instead of saving."""
         if not self.recording or self.busy:
@@ -1848,6 +1879,7 @@ class Window(QMainWindow):
         if self.quit_after_save and not self.busy:
             self.close()
 
+    @observed("app.toggle_pause")
     def toggle_pause(self):
         if not self.recording or self.busy:
             return
@@ -1862,6 +1894,7 @@ class Window(QMainWindow):
             self.pause_button.setText('Resume' if self.paused else 'Pause')
             self.tray_pause.setText('Resume' if self.paused else 'Pause')
         except Exception as exc:
+            diagnostic_failure('application.operation.failed', exc)
             self.notice(f'Could not change pause state: {exc}')
             self.restore_capture_window()
 
@@ -1992,6 +2025,16 @@ class Window(QMainWindow):
             trace.telemetry('health', status)
 
     def tick(self):
+        from .diagnostics import beat
+        beat()
+        now = time.monotonic()
+        if self.recording and now >= self._diagnostic_at:
+            self._diagnostic_at = now + 10
+            snapshot(self, 'recording.heartbeat', native=True)
+            errors = getattr(self.engine, 'errors', [])
+            if isinstance(errors, list) and len(errors) != self._diagnostic_engine_errors:
+                self._diagnostic_engine_errors = len(errors)
+                diagnostic_event('engine.errors', error_count=len(errors))
         self.idle_audio.reconcile()
         self.update_microphone_meter()
         audio_idle = not self.audio_worker or not self.audio_worker.isRunning()
@@ -2092,6 +2135,7 @@ class Window(QMainWindow):
         except CameraControlError as exc:
             self.notice(f'Could not restore camera picture settings: {exc}')
 
+    @observed("app.open_camera_adjustments")
     def open_camera_adjustments(self):
         device = self.camera.currentData()
         if self.recording or self.counting or self.busy or not device:
@@ -2126,6 +2170,7 @@ class Window(QMainWindow):
             self.engine.attach_camera_preview(int(preview.winId()),
                 max(1, round(preview.width() * ratio)), max(1, round(preview.height() * ratio)))
         except Exception as exc:
+            diagnostic_failure('application.operation.failed', exc)
             page.message.setText(f'Live preview unavailable: {exc}')
 
     def resize_camera_adjustment_preview(self, width, height):
@@ -2167,12 +2212,15 @@ class Window(QMainWindow):
             ratio = self.preview.devicePixelRatioF()
             self.engine.attach_preview(int(self.preview.winId()),
                 round(self.preview.width() * ratio), round(self.preview.height() * ratio))
+            self._capture_preview_detached = False
             if self.mode == 'screen' and self.camera.currentData() and self.configuration_valid:
                 if self.uses_floating_camera() or self.capture_kind.currentData() == 'window':
                     self.show_bubble()
         except Exception as exc:
+            diagnostic_failure('application.operation.failed', exc)
             self.notice(f'Could not restore the preview: {exc}')
 
+    @observed("app.open_recordings")
     def open_recordings(self, path=None):
         if self.recording or self.counting or self.busy:
             return
@@ -2563,6 +2611,7 @@ class Window(QMainWindow):
             self.set_last(path)
             self.upload()
 
+    @observed("app.upload")
     def upload(self, confirmed=False):
         if not self.last_file or self.busy or self.recording or self.counting or self._closing:
             return
@@ -2715,6 +2764,7 @@ class Window(QMainWindow):
     def upload_source_matches(self):
         return self.upload_store.file_identity(self._upload_file) == self._upload_identity
 
+    @observed("app.upload_done")
     def upload_done(self, code, status):
         if not self.upload_source_matches():
             self.upload_end('', state='uncertain')
@@ -2750,6 +2800,7 @@ class Window(QMainWindow):
                 advice = 'Check your connection and Loom library before retrying. A failed command may leave a remote video.'
             self.upload_end('Loom upload failed. Your local recording is safe. ' + advice, state=result['status'])
 
+    @observed("app.visibility_done")
     def visibility_done(self, code, status):
         if not self.upload_source_matches():
             self.upload_end('', state='uncertain')
@@ -2760,7 +2811,9 @@ class Window(QMainWindow):
         else:
             self.upload_end('Uploaded, but Loom could not apply the sharing setting. Review permissions in Loom before sharing the link.', state=getattr(self, '_upload_result', {}).get('status', 'uploaded'), visibility_warning='Sharing permissions were not confirmed.')
 
+    @observed("app.upload_end")
     def upload_end(self, text, state='failed', visibility_warning=''):
+        diagnostic_event('upload.result', outcome=state)
         self._upload_active = False
         self.upload_timer.stop()
         self.busy = False
@@ -2803,6 +2856,39 @@ class Window(QMainWindow):
     def notice(self, text):
         self.status.setText(text)
 
+    def hide_for_capture(self):
+        # libobs owns a native GLX child under preview. Destroy that child
+        # before Qt unmaps its parent, while retaining scene/output/audio.
+        self._preview_generation = getattr(self, '_preview_generation', 0) + 1
+        snapshot(self, 'capture.before_hide', native=True)
+        if self.engine:
+            self.engine.detach_preview()
+            self._capture_preview_detached = True
+        self.hide()
+        snapshot(self, 'capture.hidden', native=True)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if getattr(self, '_capture_preview_detached', False):
+            generation = self._preview_generation
+            QTimer.singleShot(0, lambda: self.restore_capture_preview(generation))
+
+    def restore_capture_preview(self, generation):
+        if (self._closing or not self._capture_preview_detached or not self.engine
+                or generation != getattr(self, '_preview_generation', 0)
+                or not self.isVisible() or self.isMinimized()
+                or self.pages.currentWidget() is not self.recorder_page):
+            return
+        try:
+            ratio = self.preview.devicePixelRatioF()
+            self.engine.attach_preview(int(self.preview.winId()),
+                max(1, round(self.preview.width() * ratio)), max(1, round(self.preview.height() * ratio)))
+            self._capture_preview_detached = False
+            snapshot(self, 'capture.preview_restored', native=True)
+        except Exception as exc:
+            diagnostic_failure('preview.restore.failed', exc)
+            self.notice(f'Could not restore the preview: {exc}')
+
     def restore_capture_window(self):
         # Only undo our screen-capture hide. Camera callbacks must leave the
         # user's current visibility/state alone and must not request focus.
@@ -2816,6 +2902,7 @@ class Window(QMainWindow):
             finally:
                 self.setAttribute(Qt.WA_ShowWithoutActivating, False)
 
+    @observed("app.reveal")
     def reveal(self):
         # Explicit tray/bubble/launcher requests may unminimize, but must keep
         # maximization. They also supersede a pending capture restoration.
@@ -2843,6 +2930,7 @@ class Window(QMainWindow):
             self.idle_audio.stop()
         super().hideEvent(event)
 
+    @observed("app.closeEvent")
     def closeEvent(self, event):
         if getattr(self, 'audio_check_dialog', None):
             self.audio_check_dialog.reject()
@@ -2939,6 +3027,9 @@ def main():
                 break
             time.sleep(.1)
         return 0
+    # Only the owning process rotates the diagnostic file and installs hooks.
+    # A second launcher activation must not race the running app's log handler.
+    install_diagnostics(STATE)
     QLocalServer.removeServer('truedevs-glint-' + str(os.getuid()))
     server = QLocalServer()
     if not server.listen('truedevs-glint-' + str(os.getuid())):
@@ -2954,7 +3045,11 @@ def main():
     window.show()
     signal.signal(signal.SIGINT, lambda *_: window.close())
     signal.signal(signal.SIGTERM, lambda *_: window.close())
-    return app.exec()
+    try:
+        return app.exec()
+    finally:
+        from .diagnostics import shutdown
+        shutdown()
 
 
 if __name__ == '__main__':

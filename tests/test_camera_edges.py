@@ -137,6 +137,22 @@ class CameraAlphaTests(unittest.TestCase):
         self.assertEqual(args[-1], [])
         connection.return_value.close.assert_called_once()
 
+    def test_rejected_x11_shape_falls_back_to_click_through_until_restart(self):
+        bubble = self.bubble()
+        bubble.winId()
+        with patch('Xlib.display.Display') as connection, \
+             patch('Xlib.error.CatchError') as catcher:
+            catcher.return_value.get_error.return_value = RuntimeError('BadMatch')
+            bubble._update_input_shape()
+        self.assertTrue(bubble._input_passthrough)
+        self.assertTrue(bubble.windowHandle().flags() & Qt.WindowTransparentForInput)
+        connection.return_value.sync.assert_called_once()
+        connection.return_value.close.assert_called_once()
+        with patch('Xlib.display.Display') as next_connection:
+            bubble._update_input_shape()
+        request = next_connection.return_value.create_resource_object.return_value.shape_rectangles
+        self.assertEqual(request.call_args.args[-1], [])
+
     def test_obs_composition_mask_uses_same_fractional_pixels(self):
         engine = Engine.__new__(Engine)
         with tempfile.TemporaryDirectory() as folder:
