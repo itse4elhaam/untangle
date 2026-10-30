@@ -1,4 +1,5 @@
 """Google Drive integration. No network calls occur until explicitly requested."""
+from .diagnostics import observed, failure as diagnostic_failure
 import json
 import os
 from pathlib import Path
@@ -21,6 +22,7 @@ class DriveClient:
             stream.write(content)
         temporary.replace(path)
 
+    @observed("drive.configure")
     def configure(self, path):
         content = Path(path).read_text()
         data = json.loads(content).get('installed', {})
@@ -29,6 +31,7 @@ class DriveClient:
         self.save_private(self.client_file, content)
         self.disconnect()
 
+    @observed("drive.login")
     def login(self):
         from google_auth_oauthlib.flow import InstalledAppFlow
         flow = InstalledAppFlow.from_client_secrets_file(str(self.client_file), SCOPES)
@@ -50,6 +53,7 @@ class DriveClient:
             self.save_private(self.token_file, credentials.to_json())
         return build('drive', 'v3', credentials=credentials, cache_discovery=False)
 
+    @observed("drive.folders")
     def folders(self):
         service = self.service()
         folders = [('My Drive', 'root')]
@@ -63,6 +67,7 @@ class DriveClient:
             if not page:
                 return folders
 
+    @observed("drive.upload")
     def upload(self, paths, folder_id, progress):
         from googleapiclient.http import MediaFileUpload
         service = self.service()
@@ -83,5 +88,6 @@ class DriveClient:
         if failures:
             raise ValueError('Upload failed for: ' + ', '.join(failures) + '. Other files may have uploaded. Retrying creates new copies.')
 
+    @observed("drive.disconnect")
     def disconnect(self):
         self.token_file.unlink(missing_ok=True)

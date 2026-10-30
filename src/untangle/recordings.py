@@ -1,4 +1,5 @@
 """Local recordings browser using Qt's native media player."""
+from .diagnostics import observed, failure as diagnostic_failure
 from collections import OrderedDict
 from datetime import datetime
 import shutil
@@ -283,6 +284,7 @@ class Recordings(QWidget):
         self.player.errorOccurred.connect(self.failed)
         self.refresh()
 
+    @observed("recordings.refresh")
     def refresh(self, selected=None):
         selected = Path(selected) if selected else (self.selected_path() or Path(self.player.source().toLocalFile()))
         self.stop_thumbnails()
@@ -505,6 +507,7 @@ class Recordings(QWidget):
         self.update_actions()
         self.message.setText('Saved Loom link cleared on this computer. The recording on Loom is unchanged.')
 
+    @observed("recordings.rename_selected")
     def rename_selected(self):
         path = self.selected_path()
         self.update_actions()
@@ -571,6 +574,7 @@ class Recordings(QWidget):
             QApplication.clipboard().setText(str(path))
             self.message.setText('File path copied. This file is on your computer.')
 
+    @observed("recordings.open_drive")
     def open_drive(self):
         from .drive_dialog import DriveDialog
         paths = self.checked_paths()
@@ -623,6 +627,7 @@ class Recordings(QWidget):
             f'Permanently delete {count} you never named?\n\n{self.listing(paths)}\n\n'
             'Recordings you named are kept. This cannot be undone. Any recordings on Loom are unchanged.')
 
+    @observed("recordings.delete_paths")
     def delete_paths(self, paths, title, question):
         self.update_actions()
         if not paths or any(self.deletion_blocked(path) for path in paths):
@@ -681,6 +686,7 @@ class Recordings(QWidget):
         self.release()
         super().hideEvent(event)
 
+    @observed("recordings.select")
     def select(self, item, previous=None):
         self.release()
         self.toggle.setEnabled(False)
@@ -723,6 +729,7 @@ class Recordings(QWidget):
         if update_message:
             self.message.setText('Press Play to review. Uploading is a separate action.')
 
+    @observed("recordings.toggle_play")
     def toggle_play(self):
         if self.player.playbackState() == QMediaPlayer.PlayingState:
             self.player.pause()
@@ -805,6 +812,7 @@ class Recordings(QWidget):
                 self.seek.setValue(position)
         self.time.setText(f'{timestamp(position)} / {timestamp(duration)}')
 
+    @observed("recordings.failed")
     def failed(self, error, message):
         self.player.stop()
         self.toggle.setEnabled(False)
@@ -813,6 +821,7 @@ class Recordings(QWidget):
         self.stage.setCurrentWidget(self.placeholder)
         self.message.setText(f'Could not play this recording: {message}. Your file is still on this computer.')
 
+    @observed("recordings.release")
     def release(self, *_):
         self.stage.setCurrentWidget(self.placeholder)
         self.toggle.setEnabled(False)

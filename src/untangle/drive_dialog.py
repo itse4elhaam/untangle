@@ -1,4 +1,5 @@
 """Explicit Google authorization and selected-recording uploads."""
+from .diagnostics import observed, failure as diagnostic_failure
 from PySide6.QtCore import QThread, Signal, QSettings
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QLabel, QPushButton, QComboBox,
                                QFileDialog, QMessageBox)
@@ -14,6 +15,7 @@ class DriveTask(QThread):
         super().__init__(parent)
         self.operation = operation
 
+    @observed("drive_dialog.run")
     def run(self):
         try:
             self.done.emit(self.operation(self.progress.emit))
@@ -63,6 +65,7 @@ class DriveDialog(QDialog):
         self.controls = [self.configure, self.login, self.refresh, self.folders, self.upload, self.disconnect]
         self.upload.setEnabled(False)
 
+    @observed("drive_dialog.configure_client")
     def configure_client(self):
         path, _ = QFileDialog.getOpenFileName(self, 'Choose Google Desktop OAuth client JSON', '', 'JSON (*.json)')
         if path:
@@ -100,6 +103,7 @@ class DriveDialog(QDialog):
         if success and done:
             done(task.result)
 
+    @observed("drive_dialog.load_folders")
     def load_folders(self, _=None):
         self.start(lambda progress: self.client.folders(), self.show_folders)
 
@@ -112,6 +116,7 @@ class DriveDialog(QDialog):
         self.upload.setEnabled(bool(self.paths) and bool(folders))
         self.status.setText('Choose a folder for the selected recordings.')
 
+    @observed("drive_dialog.upload_files")
     def upload_files(self):
         folder = self.folders.currentData()
         if not folder or not self.paths:
@@ -124,6 +129,7 @@ class DriveDialog(QDialog):
         self.settings.setValue('drive/folder', folder)
         self.start(lambda progress: self.client.upload(self.paths, folder, progress))
 
+    @observed("drive_dialog.forget")
     def forget(self):
         self.client.disconnect()
         self.folders.clear()

@@ -97,6 +97,82 @@ class AppChecks(unittest.TestCase):
         release.assert_called_once_with(w)
         w.counting = False
 
+    def test_capture_detaches_native_preview_before_hiding_main_window(self):
+        w = self.window
+        w.mode = 'screen'
+        w.countdown = 1
+        w.counting = True
+        w.count_timer = QTimer(w)
+        order = []
+        w.engine.detach_preview.side_effect = lambda: order.append('detach')
+        with patch.object(w, 'hide', side_effect=lambda: order.append('hide')):
+            w.countdown_tick()
+        w.start_timer.stop()
+        self.assertEqual(order, ['detach', 'hide'])
+        w.counting = False
+
+    def test_reveal_restores_only_main_preview_in_full_camera_presentation(self):
+        w = self.window
+        w.mode = 'screen'
+        w._capture_preview_detached = True
+        w._preview_generation = 42
+        w.presentation_amount = w.presentation_target = 1.
+        w.show()
+        with patch.object(w, 'show_bubble') as bubble:
+            w.restore_capture_preview(w._preview_generation)
+        w.engine.attach_preview.assert_called_once()
+        bubble.assert_not_called()
+        self.assertFalse(w._capture_preview_detached)
+
+    def test_capture_preview_restore_rejects_stale_hidden_and_library_callbacks(self):
+        w = self.window
+        w._capture_preview_detached = True
+        w._preview_generation = 42
+        w.restore_capture_preview(42)  # Hidden.
+        w.show()
+        w.restore_capture_preview(41)  # Superseded.
+        with patch.object(w.pages, 'currentWidget', return_value=w.settings_dialog):
+            w.restore_capture_preview(42)
+        w.engine.attach_preview.assert_not_called()
+        w.restore_capture_preview(42)
+        w.restore_capture_preview(42)
+        w.engine.attach_preview.assert_called_once()
+
+    def test_microphone_ready_and_presentation_hide_detach_before_unmap(self):
+        w = self.window
+        w.mode = 'screen'
+        w.recording = True
+        w.busy = False
+        order = []
+        w.engine.detach_preview.side_effect = lambda: order.append('detach')
+        with patch.object(w, 'hide', side_effect=lambda: order.append('hide')):
+            w.presentation_target = 1.
+            w.toggle_presentation()
+        self.assertEqual(order, ['detach', 'hide'])
+        w.presentation_timer.stop()
+        order.clear()
+        w.selected_source = 'synthetic'
+        w.recording = False
+        w.preparing_audio = True
+        with patch.object(w, 'hide', side_effect=lambda: order.append('hide')), \
+             patch.object(w, 'microphone_ready', return_value=True), \
+             patch.object(glint.QTimer, 'singleShot'):
+            w.microphone_verified(w._audio_generation, 'synthetic', '')
+        self.assertEqual(order, ['detach', 'hide'])
+        w.preparing_audio = False
+        w.recording = False
+
+    def test_second_launcher_does_not_reinstall_or_rotate_active_process_logs(self):
+        with patch.object(glint, 'QApplication'), patch.object(glint, 'load_fonts'), \
+             patch.object(glint, 'apply_theme'), patch.object(glint, 'install_diagnostics') as install, \
+             patch('PySide6.QtCore.QLockFile') as lock, \
+             patch('PySide6.QtCore.QStandardPaths.writableLocation', return_value=str(self.root)), \
+             patch('PySide6.QtNetwork.QLocalSocket') as socket:
+            lock.return_value.tryLock.return_value = False
+            socket.return_value.waitForConnected.return_value = True
+            self.assertEqual(glint.main(), 0)
+        install.assert_not_called()
+
     def test_visible_identity_uses_untangle_and_bundled_mark(self):
         self.assertEqual(self.window.windowTitle(), 'Untangle')
         self.assertEqual(glint.ICON, Path(__file__).resolve().parents[1] / 'assets/untangle-mark.svg')
