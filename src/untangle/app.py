@@ -1299,6 +1299,7 @@ class Window(QMainWindow):
         self.bubble.show()
         try:
             self.engine.attach_bubble(self.bubble)
+            self.move_camera_overlay()
             snapshot(self, 'camera.shown', native=True)
         except Exception:
             self.bubble.hide()

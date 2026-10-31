@@ -1,5 +1,39 @@
 # Verification
 
+## Native camera overlay input
+
+`tests/test_overlay_input.py` runs through `./scripts/test.sh` when `Xvfb` is on
+`PATH`. It creates a private X server inside the runner's existing isolation.
+The host display, audio servers, Bluetooth, cameras and sound devices remain
+inaccessible. It exercises real X11 pointer events at 1× and 1.5× scaling,
+selecting text in an underlying synthetic application, clicking through camera
+corners, dragging the camera without changing keyboard focus, hiding/showing
+the overlay without losing its dragged position, and moving/resizing/editing
+the original application. A second
+pass uses real OBS XComposite capture of that private synthetic window and an
+image source for camera pixels. It never loads camera or audio capture plugins.
+This check requires the OBS 27 plugins used by Untangle and software GLX.
+
+The October 30 overlay correction addresses two failures present in the user's
+diagnostic log. The python-xlib `shape_rectangles` wrapper rejects `onerror`,
+so no input region was installed and the camera permanently became mouse
+transparent. The fix uses the protocol request's supported error handler.
+The recorder's `screen` selector also shadows `QWidget.screen()`, which broke
+every window snapshot. Diagnostics now call the base method, read an existing
+native ID without creating a window, and skip snapshots when no log handler
+is attached.
+
+The camera is now an X11 override-redirect panel, with no window-manager frame
+and no keyboard focus request. This follows the small non-focusing camera
+panel approach in [Cap's Linux implementation](https://github.com/CapSoftware/Cap/blob/84334e79035e408ab82ed3b6ca63db1e76e14c0e/apps/desktop-gpui/src/app_windows.rs#L4194).
+Qt's grabbing `Popup` type is deliberately avoided. Only the visible camera
+silhouette accepts input. The main recorder remains hidden during screen
+recording; the target application remains the original window.
+
+These checks establish interaction on the private synthetic X server. They
+do not reproduce the user's window manager or establish that the logged
+TypeError alone caused the reported selection failure across the target app.
+
 Qt is pinned to PySide6 6.11.1. On the tested Python 3.10 runtime, 6.12.0 loses references to Python's `None` during ordinary widget updates and eventually aborts with `none_dealloc: deallocating None`. The offscreen `tests/test_qt_runtime.py` subprocess exercises 10,000 microphone-meter updates and interpreter shutdown without opening capture devices. Keep Essentials and Addons on the same version when changing the pin. This dependency fix does not establish Bluetooth microphone reliability.
 
 An audio-only hardware comparison requires explicit recording authorization and a closed Untangle process, with no other capture stream active:

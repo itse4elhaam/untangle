@@ -7,6 +7,7 @@ import tempfile
 import threading
 import unittest
 from unittest.mock import Mock, call, patch
+from types import MethodType
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QImage, QPainter
@@ -118,29 +119,52 @@ class CameraAlphaTests(unittest.TestCase):
         from Xlib.ext import shape
         bubble = self.bubble()
         bubble.apply_shape('circle')
-        with patch('Xlib.display.Display') as connection:
+        with patch('Xlib.display.Display') as connection, \
+             patch('Xlib.ext.shape.Rectangles') as request, \
+             patch('Xlib.error.CatchError') as catcher:
+            catcher.return_value.get_error.return_value = None
             bubble._update_input_shape()
-        window = connection.return_value.create_resource_object.return_value
-        self.assertEqual(window.shape_rectangles.call_args.args[1], shape.SK.Input)
+        self.assertFalse(bubble._input_passthrough)
+        self.assertEqual(request.call_args.kwargs['destination_kind'], shape.SK.Input)
         connection.return_value.close.assert_called_once()
         self.assertTrue(bubble.mask().isEmpty())
+
+    def test_x11_shape_uses_the_real_library_call_signature(self):
+        from Xlib.ext import shape
+        bubble = self.bubble()
+        with patch('Xlib.display.Display') as connection, \
+             patch('Xlib.ext.shape.Rectangles') as request, \
+             patch('Xlib.error.CatchError') as catcher:
+            catcher.return_value.get_error.return_value = None
+            window = connection.return_value.create_resource_object.return_value
+            # The extension wrapper does not accept onerror. A plain Mock
+            # hid that incompatibility in the previous input-region tests.
+            window.shape_rectangles = MethodType(shape.rectangles, window)
+            bubble._update_input_shape()
+        self.assertFalse(bubble._input_passthrough)
+        self.assertTrue(request.called)
+        self.assertEqual(request.call_args.kwargs['destination_kind'], shape.SK.Input)
+        self.assertIs(request.call_args.kwargs['onerror'], catcher.return_value)
 
     def test_hidden_camera_has_an_explicit_empty_native_input_region(self):
         from Xlib.ext import shape
         bubble = self.bubble()
-        with patch('Xlib.display.Display') as connection:
+        with patch('Xlib.display.Display') as connection, \
+             patch('Xlib.ext.shape.Rectangles') as request, \
+             patch('Xlib.error.CatchError') as catcher:
+            catcher.return_value.get_error.return_value = None
             bubble._update_input_shape(empty=True)
-        window = connection.return_value.create_resource_object.return_value
-        args = window.shape_rectangles.call_args.args
-        self.assertEqual(args[0], shape.SO.Set)
-        self.assertEqual(args[1], shape.SK.Input)
-        self.assertEqual(args[-1], [])
+        args = request.call_args.kwargs
+        self.assertEqual(args['operation'], shape.SO.Set)
+        self.assertEqual(args['destination_kind'], shape.SK.Input)
+        self.assertEqual(args['rectangles'], [])
         connection.return_value.close.assert_called_once()
 
     def test_rejected_x11_shape_falls_back_to_click_through_until_restart(self):
         bubble = self.bubble()
         bubble.winId()
         with patch('Xlib.display.Display') as connection, \
+             patch('Xlib.ext.shape.Rectangles'), \
              patch('Xlib.error.CatchError') as catcher:
             catcher.return_value.get_error.return_value = RuntimeError('BadMatch')
             bubble._update_input_shape()
@@ -148,10 +172,9 @@ class CameraAlphaTests(unittest.TestCase):
         self.assertTrue(bubble.windowHandle().flags() & Qt.WindowTransparentForInput)
         connection.return_value.sync.assert_called_once()
         connection.return_value.close.assert_called_once()
-        with patch('Xlib.display.Display') as next_connection:
+        with patch('Xlib.display.Display'), patch('Xlib.ext.shape.Rectangles') as request:
             bubble._update_input_shape()
-        request = next_connection.return_value.create_resource_object.return_value.shape_rectangles
-        self.assertEqual(request.call_args.args[-1], [])
+        self.assertEqual(request.call_args.kwargs['rectangles'], [])
 
     def test_obs_composition_mask_uses_same_fractional_pixels(self):
         engine = Engine.__new__(Engine)
