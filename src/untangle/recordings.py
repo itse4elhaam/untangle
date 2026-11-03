@@ -49,11 +49,12 @@ class Recordings(QWidget):
     theme_requested = Signal(str)
     settings_requested = Signal()
 
-    def __init__(self, directory, parent=None, deletion_blocked=None, upload_store=None):
+    def __init__(self, directory, parent=None, deletion_blocked=None, upload_store=None, upload_blocked=None):
         super().__init__(parent)
         self.directory = Path(directory)
         self.deletion_blocked = deletion_blocked or (lambda path: False)
         self.upload_store = upload_store
+        self.upload_blocked = upload_blocked or (lambda: False)
         self.setObjectName('recordingsPage')
         self.thumbnail_cache = OrderedDict()
         self.thumbnail_queue = []
@@ -408,7 +409,8 @@ class Recordings(QWidget):
         elif status == 'deleted':
             upload_text = 'Upload to Loom again'
         self.upload.setText(upload_text)
-        self.upload.setEnabled(exists and not blocked and status not in ('uploading', 'processing'))
+        self.upload.setEnabled(exists and not blocked and not self.upload_blocked()
+                               and status not in ('uploading', 'processing'))
         self.copy.setEnabled(exists)
         self.rename.setEnabled(exists and not blocked)
         targets = [target for target in self.checked_paths() if target.is_file()]

@@ -201,6 +201,7 @@ class RecorderDiscardTests(unittest.TestCase):
         path.write_bytes(b'saved')
         w.finish_save(path, '')
         w._upload_active = True
+        w._upload_file = path
         with patch('PySide6.QtWidgets.QMessageBox.question') as confirm:
             w.discard_saved_recording()
         confirm.assert_not_called()

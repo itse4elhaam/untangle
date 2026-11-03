@@ -127,11 +127,11 @@ class LoomWorkflowChecks(unittest.TestCase):
 
     def begin_upload(self, help_text=MODERN_HELP):
         self.window.upload()
-        helper = self.window.process
+        helper = self.window._upload_process
         self.assertEqual(helper.arguments, ['loom', 'video', 'upload', '--help'])
         helper.finish(help_text)
-        self.assertIsNot(self.window.process, helper)
-        return self.window.process
+        self.assertIsNot(self.window._upload_process, helper)
+        return self.window._upload_process
 
     def assert_unlocked(self):
         self.assertFalse(self.window.busy)
@@ -146,7 +146,7 @@ class LoomWorkflowChecks(unittest.TestCase):
         process = self.begin_upload(help_text)
         process.finish(video_response(**fields))
         if help_text == HELP:
-            self.window.process.finish(code=1)
+            self.window._upload_process.finish(code=1)
 
     def open_library(self):
         self.window.open_recordings(self.path)
@@ -180,8 +180,129 @@ class LoomWorkflowChecks(unittest.TestCase):
         process.feed('Processing video\n', errors=True)
         self.assertEqual(self.window.upload_progress.maximum(), 0)
         self.assertIn('processing', self.window.upload_heading.text())
-        self.assertTrue(self.window.busy)
+        self.assertFalse(self.window.busy)
         self.assertNotIn('copied', self.window.upload_detail.text())
+
+    def test_upload_keeps_recording_and_navigation_available(self):
+        process = self.begin_upload()
+        self.assertFalse(self.window.busy)
+        for control in (self.window.record_button, self.window.library_button,
+                        self.window.settings_button, self.window.sharing_button,
+                        self.window.upload_library):
+            self.assertTrue(control.isEnabled())
+        self.window.toggle_record()
+        self.assertTrue(self.window.counting)
+        status = self.window.status.text()
+        process.finish(video_response())
+        self.assertTrue(self.window.counting)
+        self.assertFalse(self.window.library_button.isEnabled())
+        self.assertEqual(self.window.status.text(), status)
+        self.window.cancel_countdown()
+
+    def test_upload_protects_only_its_source_in_recordings(self):
+        other = self.root / 'Another recording.mp4'
+        other.write_bytes(b'Synthetic recording')
+        process = self.begin_upload()
+        page = self.open_library()
+        self.assertTrue(self.window.in_library())
+        self.assertFalse(page.rename.isEnabled())
+        self.assertFalse(page.delete.isEnabled())
+        self.assertFalse(page.upload.isEnabled())
+        self.window.open_recordings(other)
+        self.assertTrue(page.rename.isEnabled())
+        self.assertTrue(page.delete.isEnabled())
+        self.assertFalse(page.upload.isEnabled())
+        self.window.upload_recording(str(other))
+        self.assertIs(self.window._upload_process, process)
+        self.assertEqual(self.window._upload_file, self.path)
+        process.finish(video_response())
+        self.assertTrue(self.window.in_library())
+        self.assertTrue(page.upload.isEnabled())
+
+    def test_upload_completion_and_cancel_preserve_concurrent_save(self):
+        for cancel in (False, True):
+            with self.subTest(cancel=cancel):
+                self.window.upload_store.remove(self.path)
+                process = self.begin_upload()
+                source = self.root / 'Next recording.mkv'
+                source.write_bytes(b'Synthetic MKV')
+                self.window.busy = True
+                self.window.lock_controls(True)
+                self.window.record_button.setEnabled(False)
+                self.window.remux(source)
+                remux = self.window.process
+                self.assertIsNot(remux, process)
+                self.assertFalse(process.killed)
+                status = self.window.status.text()
+                if cancel:
+                    with patch.object(QMessageBox, 'question', return_value=QMessageBox.Yes):
+                        self.window.retry_upload()
+                    self.assertTrue(process.killed)
+                else:
+                    process.finish(video_response())
+                self.assertFalse(remux.killed)
+                self.assertIs(self.window.process, remux)
+                self.assertTrue(self.window.busy)
+                self.assertFalse(self.window.record_button.isEnabled())
+                self.assertFalse(self.window.library_button.isEnabled())
+                self.assertEqual(self.window.status.text(), status)
+                target = source.with_suffix('.mp4')
+                target.write_bytes(b'Synthetic MP4')
+                remux.finish()
+                self.assertEqual(self.window.last_file, target)
+                self.assertTrue(self.window.record_button.isEnabled())
+                target.unlink()
+                self.window.set_last(self.path)
+
+    def test_upload_finish_preserves_recording_controls_and_stop(self):
+        process = self.begin_upload()
+        self.window.recording = True
+        self.window.lock_controls(True)
+        self.window.record_button.setText('Stop recording')
+        self.window.notice('Recording')
+        process.finish(video_response())
+        self.assertEqual(self.window.record_button.text(), 'Stop recording')
+        self.assertEqual(self.window.status.text(), 'Recording')
+        self.assertFalse(self.window.settings_button.isEnabled())
+        with patch.object(self.window, 'stop') as stop:
+            self.window.toggle_record()
+            stop.assert_called_once()
+        self.window.recording = False
+        self.window.lock_controls(False)
+
+    def test_close_keeps_upload_alive_until_canceled(self):
+        process = self.begin_upload()
+        event = MagicMock()
+        self.window.closeEvent(event)
+        event.ignore.assert_called_once()
+        self.assertFalse(self.window._closing)
+        self.assertFalse(process.killed)
+        with patch.object(QMessageBox, 'question', return_value=QMessageBox.Yes):
+            self.window.retry_upload()
+        self.assertTrue(process.killed)
+        self.assertFalse(self.window._upload_active)
+
+    def test_upload_settings_keep_account_changes_blocked(self):
+        process = self.begin_upload()
+        def inspect(dialog):
+            buttons = self.buttons(dialog)
+            self.assertFalse(buttons['Disconnect TWG account…'].isEnabled())
+            self.assertTrue(buttons['Check connection'].isEnabled())
+            process.finish(video_response())
+            self.assertTrue(buttons['Disconnect TWG account…'].isEnabled())
+        self.inspect_sharing(inspect)
+
+    def test_retry_during_recording_does_not_change_latest_file(self):
+        process = self.begin_upload()
+        process.finish(code=1)
+        latest = self.root / 'New recording.mp4'
+        latest.write_bytes(b'Synthetic recording')
+        self.window.set_last(latest)
+        self.window.busy = True
+        self.window.retry_upload()
+        self.assertEqual(self.window.last_file, latest)
+        self.assertIs(self.window._upload_process, process)
+        self.window.busy = False
 
     def test_result_byte_counts_never_become_transfer_progress(self):
         process = self.begin_upload()
@@ -205,7 +326,7 @@ class LoomWorkflowChecks(unittest.TestCase):
         process = self.begin_upload(HELP)
         self.window.prefs.setValue('visibility', 'public')
         process.finish(video_response())
-        visibility = self.window.process
+        visibility = self.window._upload_process
         self.assertEqual(visibility.arguments, [
             'loom', 'video', 'visibility', 'set', URL, '--visibility', 'owner',
             '-o', 'json', '--output-summary', 'none'])
@@ -224,7 +345,7 @@ class LoomWorkflowChecks(unittest.TestCase):
         with patch.object(QMessageBox, 'question', return_value=QMessageBox.Cancel) as confirm:
             self.window.retry_upload()
         confirm.assert_called_once()
-        self.assertIs(self.window.process, visibility)
+        self.assertIs(self.window._upload_process, visibility)
         self.assertEqual(self.window.upload_store.get(self.path)['url'], URL)
         persisted = json.loads((self.root / 'uploads.json').read_text())['uploads'][str(self.path)]
         self.assertEqual(persisted['url'], URL)
@@ -249,17 +370,17 @@ class LoomWorkflowChecks(unittest.TestCase):
     def test_manual_title_preference_is_snapshotted_before_help_returns(self):
         self.window.prefs.setValue('loom_auto_titles', False)
         self.window.upload()
-        helper = self.window.process
+        helper = self.window._upload_process
         self.window.prefs.setValue('loom_auto_titles', True)
         helper.finish(MODERN_HELP)
-        self.assertEqual(self.window.process.arguments[-2:], ['--title', 'Local walkthrough'])
+        self.assertEqual(self.window._upload_process.arguments[-2:], ['--title', 'Local walkthrough'])
 
     def test_manual_title_without_advertised_support_fails_before_transfer(self):
         self.window.prefs.setValue('loom_auto_titles', False)
         self.window.upload()
-        helper = self.window.process
+        helper = self.window._upload_process
         helper.finish(HELP)
-        self.assertIs(self.window.process, helper)
+        self.assertIs(self.window._upload_process, helper)
         self.assert_unlocked()
         self.assertIn('syntax could not be verified', self.window.status.text().lower())
 
@@ -284,7 +405,7 @@ class LoomWorkflowChecks(unittest.TestCase):
         confirm.assert_not_called()
         self.assertTrue(self.window._upload_active)
         self.assertEqual(self.window._upload_file, self.path)
-        self.assertIsNot(self.window.process, process)
+        self.assertIsNot(self.window._upload_process, process)
 
     def test_structured_auth_failure_marks_connection_disconnected(self):
         self.window.loom_account = {'status': 'connected', 'name': 'Synthetic User'}
@@ -314,7 +435,7 @@ class LoomWorkflowChecks(unittest.TestCase):
 
     def test_process_launch_error_is_terminal_only_once(self):
         self.window.upload()
-        process = self.window.process
+        process = self.window._upload_process
         with patch.object(self.window, 'upload_end', wraps=self.window.upload_end) as ended:
             process.errorOccurred.emit(QProcess.FailedToStart)
             process.finished.emit(1, QProcess.CrashExit)
@@ -330,7 +451,7 @@ class LoomWorkflowChecks(unittest.TestCase):
                 process = self.begin_upload(HELP)
                 timers = set(self.window.findChildren(QTimer))
                 process.finish(video_response())
-                visibility = self.window.process
+                visibility = self.window._upload_process
                 self.assertIsNot(visibility, process)
                 if outcome == 'failed_start':
                     visibility.errorOccurred.emit(QProcess.FailedToStart)
@@ -352,7 +473,7 @@ class LoomWorkflowChecks(unittest.TestCase):
         timers = set(self.window.findChildren(QTimer))
         self.window.upload()
         created = set(self.window.findChildren(QTimer)) - timers
-        self.window.process.errorOccurred.emit(QProcess.FailedToStart)
+        self.window._upload_process.errorOccurred.emit(QProcess.FailedToStart)
         QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
         remaining = set(self.window.findChildren(QTimer)) & created
         self.assertFalse(remaining, 'Failed-to-start check left an owned timeout callback behind')
@@ -378,7 +499,7 @@ class LoomWorkflowChecks(unittest.TestCase):
         process = self.begin_upload(HELP)
         process.finish(video_response(isComplete=True))
         self.replace_source()
-        self.window.process.finish()
+        self.window._upload_process.finish()
         self.assert_unlocked()
         self.assertEqual(self.window.upload_store.get(self.path), {})
         self.assertIsNone(self.window._upload_url)
@@ -399,7 +520,7 @@ class LoomWorkflowChecks(unittest.TestCase):
         process.finish(video_response(isComplete=True))
         self.assertEqual(self.window.upload_store.get(self.path)['url'], URL)
         with patch.object(self.window.upload_store, 'update', side_effect=OSError('Synthetic disk full')):
-            self.window.process.finish()
+            self.window._upload_process.finish()
         self.assertTrue(self.window._upload_metadata_warning)
         page = self.open_library()
         with patch.object(QMessageBox, 'question', return_value=QMessageBox.Yes):
