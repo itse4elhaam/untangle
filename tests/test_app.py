@@ -180,6 +180,10 @@ class AppChecks(unittest.TestCase):
 
     def tearDown(self):
         self.window.recording = self.window.busy = self.window.counting = False
+        self.window._upload_active = False
+        if self.window._upload_process is not None:
+            self.window._upload_process.kill()
+            self.window._upload_process.waitForFinished(1000)
         self.window.close()
         # Closed top-level Qt widgets otherwise survive across the suite and
         # every theme change repolishes those obsolete recorder trees too.
@@ -260,18 +264,16 @@ class AppChecks(unittest.TestCase):
             self.assertFalse(self.window.busy)
             self.assertEqual(path.read_bytes(), b'private video')
 
-    def test_loom_unknown_help_and_failed_start_unlock_controls(self):
+    def test_loom_unknown_help_and_failed_start_keep_controls_available(self):
         self.prepare_upload_snapshot()
-        self.window.busy = True
-        self.window.process = MagicMock()
+        self.window._upload_process = MagicMock()
         self.window._upload_visibility = 'owner'
         self.window._upload_auto_title = True
-        self.window.process.readAllStandardOutput.return_value = b'Usage: unsupported grammar'
-        self.window.process.readAllStandardError.return_value = b''
+        self.window._upload_process.readAllStandardOutput.return_value = b'Usage: unsupported grammar'
+        self.window._upload_process.readAllStandardError.return_value = b''
         self.window.upload_help(0, QProcess.NormalExit)
         self.assertFalse(self.window.busy)
         self.assertIn('syntax could not be verified', self.window.status.text())
-        self.window.busy = True
         self.window._upload_url = 'https://www.loom.com/share/abc123'
         self.window.upload_process_error(QProcess.FailedToStart)
         self.assertFalse(self.window.busy)
@@ -285,9 +287,9 @@ class AppChecks(unittest.TestCase):
 
     def test_loom_error_does_not_expose_cli_secrets(self):
         self.prepare_upload_snapshot()
-        self.window.process = MagicMock()
-        self.window.process.readAllStandardOutput.return_value = b''
-        self.window.process.readAllStandardError.return_value = b'OAuth token secret-private-value expired'
+        self.window._upload_process = MagicMock()
+        self.window._upload_process.readAllStandardOutput.return_value = b''
+        self.window._upload_process.readAllStandardError.return_value = b'OAuth token secret-private-value expired'
         self.window.upload_done(1, QProcess.NormalExit)
         self.assertNotIn('secret-private-value', self.window.status.text())
         self.assertIn('connect your Loom account', self.window.status.text())
@@ -410,9 +412,9 @@ class AppChecks(unittest.TestCase):
         path.write_bytes(b'video')
         self.window.set_last(path)
         self.prepare_upload_snapshot(path)
-        self.window.process = MagicMock()
-        self.window.process.readAllStandardOutput.return_value = b''
-        self.window.process.readAllStandardError.return_value = b'account needs login'
+        self.window._upload_process = MagicMock()
+        self.window._upload_process.readAllStandardOutput.return_value = b''
+        self.window._upload_process.readAllStandardError.return_value = b'account needs login'
         self.window.upload_done(1, QProcess.NormalExit)
         self.assertTrue(path.exists())
         self.assertFalse(self.window.busy)

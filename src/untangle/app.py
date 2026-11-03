@@ -276,6 +276,7 @@ class Window(QMainWindow):
         self._upload_output = ''
         self._upload_errors = ''
         self._upload_active = False
+        self._upload_process = None
         self._title_job = None
         self.build()
         self.set_theme(self.prefs.value('theme', 'light'))
@@ -1768,7 +1769,7 @@ class Window(QMainWindow):
 
     def discard_saved_recording(self):
         path = self._discard_path
-        if (path is None or self.busy or self.recording or self.counting or self._upload_active):
+        if path is None or self.recording_file_busy(path):
             return
         if not path.is_file():
             self._discard_path = None
@@ -1778,7 +1779,7 @@ class Window(QMainWindow):
         answer = QMessageBox.question(self, 'Discard this recording?',
             f'Permanently delete this recording?\n\n{path.name}\n\nThis cannot be undone.',
             QMessageBox.Yes | QMessageBox.Cancel, QMessageBox.Cancel)
-        if answer != QMessageBox.Yes or self.busy or self.recording or self.counting or self._upload_active:
+        if answer != QMessageBox.Yes or self.recording_file_busy(path):
             return
         try:
             self.delete_saved_recording(path)
@@ -2082,6 +2083,7 @@ class Window(QMainWindow):
         self.audio_check_button.setEnabled(not locked)
         self.sharing_button.setEnabled(not locked)
         self.library_button.setEnabled(not locked)
+        self.upload_library.setEnabled(not locked)
         if locked and self.recordings:
             self.recordings.release()
             self.pages.setCurrentWidget(self.recorder_page)
@@ -2227,8 +2229,9 @@ class Window(QMainWindow):
             return
         if self.recordings is None:
             self.recordings = Recordings(VIDEOS, self,
-                deletion_blocked=lambda path: self.recording or self.counting or self.busy,
-                upload_store=self.upload_store)
+                deletion_blocked=self.recording_file_busy,
+                upload_store=self.upload_store,
+                upload_blocked=lambda: self._upload_active)
             self.recordings.recording_deleted.connect(self.recording_deleted)
             self.recordings.recording_renamed.connect(self.recording_renamed)
             self.recordings.upload_requested.connect(self.upload_recording)
@@ -2250,6 +2253,10 @@ class Window(QMainWindow):
         self.recordings.search.clear()
         self.recordings.refresh(path)
 
+    def recording_file_busy(self, path):
+        return (self.recording or self.counting or self.busy
+                or (self._upload_active and Path(path).resolve() == self._upload_file.resolve()))
+
     def recording_renamed(self, old_path, new_path):
         if self.last_file is not None and Path(old_path) == self.last_file:
             self.set_last(new_path)
@@ -2269,7 +2276,7 @@ class Window(QMainWindow):
         self.last_file = None
 
     def upload_recording(self, path):
-        if self.busy or self.recording or self.counting or self._closing:
+        if self.busy or self.recording or self.counting or self._closing or self._upload_active:
             return
         self.set_last(path)
         if self.last_file is None:
@@ -2360,10 +2367,10 @@ class Window(QMainWindow):
             status = state.get('status')
             connected = status == 'connected'
             connect.setVisible(not connected)
-            connect.setEnabled(bool(cli) and self._account_operation is None)
+            connect.setEnabled(bool(cli) and self._account_operation is None and not self._upload_active)
             connect.setText('Connect Loom account ↗' if status == 'disconnected' else 'Reconnect Loom account ↗')
             disconnect.setVisible(connected)
-            disconnect.setEnabled(connected and self._account_operation is None)
+            disconnect.setEnabled(connected and self._account_operation is None and not self._upload_active)
             check.setEnabled(bool(cli) and self._account_operation is None)
             if connected:
                 name = state.get('name') or state.get('email') or state.get('account_id') or 'Signed-in account'
@@ -2393,12 +2400,12 @@ class Window(QMainWindow):
             self.loom_probe(['whoami', '-o', 'json', '--output-summary', 'none'], result)
         check.clicked.connect(probe)
         def logout():
-            if self._account_operation is not None:
+            if self._account_operation is not None or self._upload_active:
                 return
             answer = QMessageBox.question(dialog, 'Disconnect TWG account?',
                 'This signs out the selected TWG CLI profile for all Atlassian products, including Loom. Local recordings and saved links stay on this computer.',
                 QMessageBox.Yes | QMessageBox.Cancel, QMessageBox.Cancel)
-            if answer != QMessageBox.Yes:
+            if answer != QMessageBox.Yes or self._upload_active:
                 return
             self._account_operation = 'logout'
             show_account()
@@ -2459,7 +2466,7 @@ class Window(QMainWindow):
 
     def check_loom_video(self, path):
         path = Path(path)
-        if self.busy or self.recording or self.counting or self._closing or path in self._loom_check_paths:
+        if self.recording_file_busy(path) or self._closing or path in self._loom_check_paths:
             return
         entry = self.upload_store.get(path)
         identifier = video_id(entry.get('remote_id') or entry.get('url', ''))
@@ -2504,6 +2511,8 @@ class Window(QMainWindow):
         self.loom_probe(['loom', 'video', 'get', identifier, '-o', 'json', '--output-summary', 'none'], checked)
 
     def connect_loom(self):
+        if self._upload_active:
+            return
         cli = self.find_cli()
         if not cli:
             self.notice('Install the official TWG CLI using Sharing instructions, then connect Loom.')
@@ -2552,7 +2561,7 @@ class Window(QMainWindow):
             button.setEnabled(bool(url) and not active)
         self.upload_retry.setVisible(active or retry)
         self.upload_retry.setText('Cancel upload…' if active else 'Retry upload…')
-        self.upload_library.setEnabled(not active and not self.busy)
+        self.upload_library.setEnabled(not (self.busy or self.recording or self.counting))
 
     def update_upload_elapsed(self):
         if not self._upload_active:
@@ -2602,19 +2611,22 @@ class Window(QMainWindow):
                 QMessageBox.Yes | QMessageBox.Cancel, QMessageBox.Cancel)
             if answer != QMessageBox.Yes or not self._upload_active:
                 return
-            self.process.kill()
-            self.process.waitForFinished(1000)
+            self._upload_process.kill()
+            self._upload_process.waitForFinished(1000)
             if self._upload_active:
                 self.upload_end('Upload canceled. Check Loom before retrying; your local recording is safe.', state='uncertain')
             return
         path = getattr(self, '_upload_file', None)
-        if path:
+        if path and not (self.busy or self.recording or self.counting or self._closing):
             self.set_last(path)
             self.upload()
 
     @observed("app.upload")
     def upload(self, confirmed=False):
         if not self.last_file or self.busy or self.recording or self.counting or self._closing:
+            return
+        if self._upload_active:
+            self.notice('Another Loom upload is in progress. This recording is saved locally; upload it from Recordings when the current upload finishes.')
             return
         self.discard_saved_button.hide()
         self._discard_path = None
@@ -2652,15 +2664,14 @@ class Window(QMainWindow):
                 QMessageBox.Yes | QMessageBox.Cancel, QMessageBox.Cancel)
             if answer != QMessageBox.Yes:
                 return
+        if self.busy or self.recording or self.counting or self._closing or self._upload_active:
+            return
         identity = self.upload_store.file_identity(self.last_file)
         if identity is None:
             self.notice('The local recording is missing or unreadable.')
             return
         self._upload_identity = identity
         self._upload_fallback_state = None
-        self.busy = True
-        self.lock_controls(True)
-        self.record_button.setEnabled(False)
         self._upload_cli = cli
         self._upload_file = self.last_file.absolute()
         self._upload_visibility = self.prefs.value('visibility', 'owner')
@@ -2682,22 +2693,22 @@ class Window(QMainWindow):
         self.start_upload_process(['loom', 'video', 'upload', '--help'], self.upload_help)
 
     def start_upload_process(self, args, finished, *, stream=False):
-        previous = self.process
-        self.process = QProcess(self)
+        previous = self._upload_process
+        self._upload_process = QProcess(self)
         if previous is not None:
             previous.deleteLater()
-        process = self.process
+        process = self._upload_process
         process.setProgram(self._upload_cli)
         process.setArguments(args)
         process.finished.connect(lambda code, status: finished(code, status)
-            if self.process is process and self._upload_active else None)
+            if self._upload_process is process and self._upload_active else None)
         process.errorOccurred.connect(lambda error: self.upload_process_error(error)
-            if self.process is process and self._upload_active else None)
+            if self._upload_process is process and self._upload_active else None)
         if not stream:
             timer = QTimer(self)
             timer.setSingleShot(True)
             def expired():
-                if self.process is process and self._upload_active:
+                if self._upload_process is process and self._upload_active:
                     process.kill()
                     if getattr(self, '_upload_url', None):
                         self.upload_end('Uploaded, but the sharing check timed out. Review permissions in Loom before sharing.', state=self._upload_result.get('status', 'uploaded'), visibility_warning='Sharing permissions were not confirmed.')
@@ -2714,8 +2725,10 @@ class Window(QMainWindow):
             timer.timeout.connect(timer.deleteLater)
             timer.start(20000)
         if stream:
-            process.readyReadStandardOutput.connect(lambda: self.read_upload_output(False))
-            process.readyReadStandardError.connect(lambda: self.read_upload_output(True))
+            process.readyReadStandardOutput.connect(lambda: self.read_upload_output(False)
+                if self._upload_process is process and self._upload_active else None)
+            process.readyReadStandardError.connect(lambda: self.read_upload_output(True)
+                if self._upload_process is process and self._upload_active else None)
         process.start()
 
     def upload_process_error(self, error):
@@ -2726,7 +2739,7 @@ class Window(QMainWindow):
                 self.upload_end('Could not start the Loom CLI. Your local file is saved.', state='failed')
 
     def upload_help(self, code, status):
-        help_text = bytes(self.process.readAllStandardOutput()).decode(errors='replace') + bytes(self.process.readAllStandardError()).decode(errors='replace')
+        help_text = bytes(self._upload_process.readAllStandardOutput()).decode(errors='replace') + bytes(self._upload_process.readAllStandardError()).decode(errors='replace')
         if code != 0 or status != QProcess.NormalExit:
             self.upload_end('This TWG CLI does not support video uploads. Update it and connect your Loom account.', state='failed')
             return
@@ -2741,11 +2754,12 @@ class Window(QMainWindow):
         self._upload_sets_visibility = supports_option(help_text, '--visibility')
         self._upload_transfer_started = True
         self.update_upload_panel('Uploading to Loom', 'The CLI does not report byte progress. Your local recording stays safe.', active=True)
-        self.notice('Uploading to Loom…')
+        if not (self.busy or self.recording or self.counting):
+            self.notice('Uploading to Loom…')
         self.start_upload_process(args, self.upload_done, stream=True)
 
     def read_upload_output(self, errors=False):
-        channel = self.process.readAllStandardError if errors else self.process.readAllStandardOutput
+        channel = self._upload_process.readAllStandardError if errors else self._upload_process.readAllStandardOutput
         chunk = bytes(channel()).decode(errors='replace')
         field = '_upload_errors' if errors else '_upload_output'
         setattr(self, field, (getattr(self, field, '') + chunk)[-1024 * 1024:])
@@ -2781,7 +2795,8 @@ class Window(QMainWindow):
         if code == 0 and status == QProcess.NormalExit and self._upload_url:
             if not self._upload_sets_visibility:
                 self.update_upload_panel('Applying Loom sharing permissions', 'The video was received. Confirming who can watch it…', active=True)
-                self.notice('Uploaded. Applying your Loom sharing setting…')
+                if not (self.busy or self.recording or self.counting):
+                    self.notice('Uploaded. Applying your Loom sharing setting…')
                 self.start_upload_process(['loom', 'video', 'visibility', 'set', self._upload_url,
                     '--visibility', self._upload_visibility, '-o', 'json', '--output-summary', 'none'], self.visibility_done)
                 return
@@ -2817,9 +2832,6 @@ class Window(QMainWindow):
         diagnostic_event('upload.result', outcome=state)
         self._upload_active = False
         self.upload_timer.stop()
-        self.busy = False
-        self.lock_controls(False)
-        self.record_button.setEnabled(bool(self.engine) and self.configuration_valid)
         source_matches = self.upload_source_matches()
         if not source_matches:
             self._upload_url = None
@@ -2842,8 +2854,13 @@ class Window(QMainWindow):
             detail += ' ' + self._upload_metadata_warning
         self.update_upload_panel(headings.get(state, 'Loom upload'), detail,
                                  retry=state in ('failed', 'uncertain') and not getattr(self, '_upload_url', None))
-        self.notice(text)
-        if self.quit_after_save:
+        if not (self.busy or self.recording or self.counting):
+            self.notice(text)
+        if self.recordings:
+            self.recordings.update_actions()
+        if getattr(self, '_sharing_dialog', None) is not None:
+            self._show_loom_account()
+        if self.quit_after_save and not (self.busy or self.recording or self.counting):
             self.close()
 
     def engine_notice(self, text):
@@ -2945,6 +2962,10 @@ class Window(QMainWindow):
             if answer == QMessageBox.Save:
                 self.quit_after_save = True
                 self.stop()
+            return
+        if self._upload_active:
+            self.notice('A Loom upload is still running. Cancel the upload to close sooner.')
+            event.ignore()
             return
         if self._title_job is not None:
             self._closing = True
