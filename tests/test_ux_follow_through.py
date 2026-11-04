@@ -58,3 +58,19 @@ class FollowThroughTests(unittest.TestCase):
         w.upload_store.update(path, visibility_warning='Permission check failed')
         w.update_audience_status()
         self.assertIn('UNVERIFIED', w.upload_audience.text())
+
+    def test_app_quit_cancels_editor_and_defers_window_close(self):
+        from untangle.editing_dialog import EditingDialog
+        from unittest.mock import Mock
+        path = Path(self.case.temp.name) / 'editing.mp4'
+        path.write_bytes(b'synthetic')
+        editor = EditingDialog(path, self.w)
+        editor.worker = Mock()
+        event = Mock()
+        with patch.object(editor, 'reject') as cancel:
+            self.w.closeEvent(event)
+            cancel.assert_called_once()
+        event.ignore.assert_called_once()
+        self.assertTrue(editor._quit_when_finished)
+        editor.worker = None
+        editor.deleteLater()

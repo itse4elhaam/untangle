@@ -1418,10 +1418,12 @@ class Engine:
         if encoder_id == "ffmpeg_vaapi":
             settings.update(vaapi_device="/dev/dri/renderD128", vaapi_codec=27,
                             profile=100, level=52, bf=0)
-            if not constant_bitrate:
+            if getattr(self, "_compact_recording", False) and not constant_bitrate:
                 settings.update(rate_control="CQP", qp=18)
         else:
-            settings.update(rate_control="CRF", crf=18, preset="veryfast", profile="high")
+            settings.update(preset="veryfast", profile="high")
+            if getattr(self, "_compact_recording", False):
+                settings.update(rate_control="CRF", crf=18)
         # Encode once, at the original resolution/rate. MP4 preparation remains
         # a lossless stream copy. OBS 27 uses qp for VAAPI and crf for x264.
         data = self._data(settings)
@@ -1461,7 +1463,7 @@ class Engine:
         self.encoder = encoder_id
 
     @traced('record_start')
-    def start(self, path: Path) -> None:
+    def start(self, path: Path, *, compact=False) -> None:
         self._check_open()
         if self._output:
             raise EngineError("A recording already exists; stop it before starting another.")
@@ -1482,6 +1484,9 @@ class Engine:
             raise EngineError(f"Refusing to overwrite {path}.")
         if not path.parent.is_dir() or not os.access(path.parent, os.W_OK):
             raise EngineError(f"Recording directory is missing or not writable: {path.parent}")
+        if not isinstance(compact, bool):
+            raise EngineError("Recording compression must be enabled or disabled.")
+        self._compact_recording = compact
         candidates = []
         if "ffmpeg_vaapi" in self.encoders and os.access("/dev/dri/renderD128", os.R_OK | os.W_OK):
             candidates.append("ffmpeg_vaapi")
@@ -1497,7 +1502,7 @@ class Engine:
             except EngineError as exc:
                 failures.append(str(exc))
                 self._release_recording()
-                if candidate == "ffmpeg_vaapi":
+                if candidate == "ffmpeg_vaapi" and compact:
                     # Some drivers cannot start CQP. Keep their existing CBR
                     # hardware path before falling back to CPU encoding.
                     try:

@@ -12,9 +12,10 @@ from untangle.engine import Engine, EngineError
 
 
 class EncodingTests(unittest.TestCase):
-    def encoder_settings(self, encoder, **kwargs):
+    def encoder_settings(self, encoder, *, compact=False, **kwargs):
         engine = Engine.__new__(Engine)
         engine._obs = Mock()
+        engine._compact_recording = compact
         engine.width, engine.height, engine.fps = 1920, 1080, 30
         engine.encoders = ['ffmpeg_aac']
         engine._stop_event = Mock()
@@ -26,13 +27,22 @@ class EncodingTests(unittest.TestCase):
         engine._obs.obs_output_set_audio_encoder.assert_called_once()
         return settings[0]
 
+    def test_default_keeps_original_recording_settings(self):
+        for encoder in ('obs_x264', 'ffmpeg_vaapi'):
+            with self.subTest(encoder=encoder):
+                settings = self.encoder_settings(encoder)
+                self.assertEqual(settings['rate_control'], 'CBR')
+                self.assertEqual(settings['bitrate'], 6221)
+                self.assertNotIn('crf', settings)
+                self.assertNotIn('qp', settings)
+
     def test_encoder_quality_modes_use_obs27_options_and_keep_aac(self):
-        cpu = self.encoder_settings('obs_x264')
+        cpu = self.encoder_settings('obs_x264', compact=True)
         self.assertEqual((cpu['rate_control'], cpu['crf']), ('CRF', 18))
         self.assertEqual(cpu['preset'], 'veryfast')
-        hardware = self.encoder_settings('ffmpeg_vaapi')
+        hardware = self.encoder_settings('ffmpeg_vaapi', compact=True)
         self.assertEqual((hardware['rate_control'], hardware['qp']), ('CQP', 18))
-        fallback = self.encoder_settings('ffmpeg_vaapi', constant_bitrate=True)
+        fallback = self.encoder_settings('ffmpeg_vaapi', compact=True, constant_bitrate=True)
         self.assertEqual(fallback['rate_control'], 'CBR')
         self.assertEqual(fallback['bitrate'], 6221)
 
@@ -46,7 +56,7 @@ class EncodingTests(unittest.TestCase):
         engine._release_recording = Mock()
         with tempfile.TemporaryDirectory() as root, patch('untangle.engine.os.access', return_value=True):
             path = Path(root) / 'take.mkv'
-            engine.start(path)
+            engine.start(path, compact=True)
         self.assertEqual(engine._create_recording.call_count, 2)
         engine._create_recording.assert_called_with(path, 'ffmpeg_vaapi', constant_bitrate=True)
         self.assertIn('compatible fixed bitrate', engine.warnings[0])
