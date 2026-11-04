@@ -1,5 +1,6 @@
 """Recorder layout checks with mocked capture and no device access."""
 import unittest
+from unittest.mock import patch
 
 from PySide6.QtCore import QPoint
 from PySide6.QtTest import QTest
@@ -14,6 +15,75 @@ qt = test_app.qt
 class RecorderLayoutChecks(unittest.TestCase):
     setUp = test_app.AppChecks.setUp
     tearDown = test_app.AppChecks.tearDown
+
+    def test_details_start_collapsed_and_toggling_preserves_audio_ownership(self):
+        w = self.window
+        w.show()
+        qt.processEvents()
+        self.assertFalse(w.details_toggle.isChecked())
+        for control in (w.microphone_meter, w.presentation_button, w.shortcuts, w.status):
+            self.assertFalse(control.isVisible())
+        labels = [item.text() for item in w.controls_panel.findChildren(QLabel)]
+        self.assertNotIn('Recording setup', labels)
+        self.assertFalse(hasattr(w, 'mode_hint'))
+        source, owner = w.idle_audio.source, w.idle_audio.owner
+        with patch.object(w.idle_audio, 'stop') as stop, patch.object(w.idle_audio, 'reconcile') as reconcile:
+            w.engine.reset_mock()
+            for recording in (False, True):
+                w.recording = recording
+                w.details_toggle.click()
+                for control in (w.microphone_meter, w.presentation_button, w.shortcuts):
+                    self.assertTrue(control.isVisible())
+                w.details_toggle.click()
+                self.assertFalse(w.microphone_meter.isVisible())
+            w.recording = False
+            stop.assert_not_called()
+            reconcile.assert_not_called()
+            self.assertEqual(w.engine.mock_calls, [])
+        self.assertEqual((w.idle_audio.source, w.idle_audio.owner), (source, owner))
+
+    def test_collapsed_details_keep_warnings_recording_and_save_feedback_visible(self):
+        w = self.window
+        w.show()
+        w.engine.warnings = []
+        w.engine_notice('Setup selected.', detail=True)
+        self.assertFalse(w.status.isVisible())
+        w.engine.warnings = ['Camera unavailable. Choose another camera.']
+        w.engine_notice('Setup selected.', detail=True)
+        self.assertTrue(w.status.isVisible())
+        self.assertIn('Camera unavailable', w.status.text())
+        for text in ('Could not prepare microphone', 'Recording · 00:10', 'Paused · 00:10',
+                     'Saved safely.', 'Uploading to Loom…'):
+            w.notice(text)
+            w.details_toggle.click()
+            w.details_toggle.click()
+            self.assertTrue(w.status.isVisible())
+            self.assertEqual(w.status.text(), text)
+        w.idle_audio.error = 'Synthetic microphone disconnected'
+        w.update_microphone_meter()
+        self.assertTrue(w.monitor_warning.isVisible())
+        self.assertIn('disconnected', w.monitor_warning.text())
+
+    def test_audio_check_return_preserves_disclosure_choice(self):
+        w = self.window
+        w.show()
+        with patch('untangle.audio_check.QMediaPlayer'):
+            for expanded in (False, True):
+                w.details_toggle.setChecked(expanded)
+                previous = w.status.text()
+                w.open_settings()
+                w.audio_check_button.click()
+                self.assertFalse(w.settings_dialog.isVisible())
+                self.assertTrue(w.audio_check_dialog.isVisible())
+                self.assertFalse(w.microphone_meter.isVisible())
+                w.audio_check_dialog.done_button.click()
+                self.assertIsNone(w.audio_check_dialog)
+                self.assertEqual(w.details_toggle.isChecked(), expanded)
+                self.assertEqual(w.microphone_meter.isVisible(), expanded)
+                self.assertEqual(w.shortcuts.isVisible(), expanded)
+                self.assertEqual(w.status.text(), previous)
+                self.assertEqual(w.status.isVisible(), expanded)
+        w.engine.begin_audio_check.assert_not_called()
 
     def test_long_device_names_fit_sidebar_viewport(self):
         qt.setStyleSheet(glint.STYLE)

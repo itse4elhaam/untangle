@@ -36,6 +36,7 @@ class RecorderThemeChecks(unittest.TestCase):
         w.desktop_audio.setChecked(True)
         self.assertTrue(w.desktop_audio.isChecked())
         w.show()
+        w.details_toggle.click()
         w.focus_button.setChecked(True)
         test_app.qt.processEvents()
         self.assertTrue(w.controls_panel.isHidden())
@@ -50,6 +51,7 @@ class RecorderThemeChecks(unittest.TestCase):
         w.show()
         w.lock_controls(True)
         w.recording = True
+        w.details_toggle.click()
         w.zoom_button.setEnabled(True)
         w.open_settings()
         self.assertFalse(w.settings_dialog.isVisible())
