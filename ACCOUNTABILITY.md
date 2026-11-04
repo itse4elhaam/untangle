@@ -63,3 +63,13 @@ The report provides app-wide source coverage, official Loom/Supercut reference l
 Delegate reports safe suite success: 609 tests in 69.181 seconds, three skips; shell syntax passed. The initial missing-dependency attempt failed, then a temporary symlink to the existing project venv enabled the successful run and was removed. These are delegate-reported results, not an independent rerun by accountability. Existing synthetic screenshots predate current library/Drive row controls; current changed pixels remain unverified. No live/hardware acceptance was performed.
 
 Status is now **UX audit report and small polish delivered for review**, with current visual verification, approval of proposals, integration checks and merge still open. This does not complete setup UI, mode-specific framing/crop, resize or wizard work. Resume parent reads after position 221. No polling or monitoring started.
+
+## Follow-up: local integration remains pending
+
+Verified local branch `feat/recorder-improvements` at `7438874626c13522209cb669c38495574afc7e8a`. Merge `298656a5f286a31cfd9271e6bc466aa34d28514d` combines PR #20 docs head `aa06a651feaa379ac97f2eb82abde86d174cb114` with UX head `c3b6d6b9e3c8b7f5a76bdccbb3f7166d53172fca`; merge `7438874` adds resize head `f0b26a795df567a39f1705d2b082d4b06483c64d`. Root reports both merges were conflict-free. This audit did not switch branches or perform merges.
+
+GitHub still reports #20, #21 and [PR #22](https://github.com/itse4elhaam/untangle/pull/22) OPEN. #20's published head is `aa06a65`; #21 and #22 both target `feat/recorder-setup`. #22 has no hosted check rollup or review decision. Root reports the integration branch is not pushed. Local merging does not merge those PRs remotely or establish combined acceptance.
+
+A single read of `/tmp/untangle-integrated-first.log` now shows `Ran 612 tests in 68.924s`, `OK (skipped=3)`. This is observed log evidence from root's run, not an accountability rerun or independently captured process exit. It covers the first local UX/resize combination, not the still-running setup UI, framing/crop and wizard work. Root's resize report also records a native desktop resize scenario skipped because Xvfb was unavailable. That verification gap remains open.
+
+Read parent messages through position 242. No new user requests beyond this batch were reported. Final integrated checks, screenshot coverage, workstream results, publication and final reconciliation remain pending. No deployment is authorized. Resume parent reads after position 242; no polling scheduled.

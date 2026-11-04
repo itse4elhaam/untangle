@@ -15,7 +15,7 @@ Do not deploy, install, activate timers, upload recordings, or launch the app wi
 - [ ] Keep camera framing/zoom preferences separate for camera-only and screen-plus-camera setups, including reload and mode switching.
 - [ ] Remove the redundant “Recording setup” heading and the “Screen + optional camera.” / equivalent mode helper text, preserving mode controls.
 - [ ] Add a Settings control to reposition the camera image inside its fixed shape, like moving an image within a crop. Preserve the shape position/size; persist framing per setup and test boundaries.
-- [ ] Provide a complete repeatable Google Drive setup guide using the wizard skill for every human prerequisite: Google project/API, OAuth consent/Desktop client, local configuration/sign-in, destination, background scheduling, verification, troubleshooting and disabling. Do not run the wizard or activate anything.
+- [x] Provide a complete repeatable Google Drive setup guide using the wizard skill for every human prerequisite: Google project/API, OAuth consent/Desktop client, local configuration/sign-in, destination, background scheduling, verification, troubleshooting and disabling. Do not run the wizard or activate anything.
 
 ## Dedicated workstreams requested by user
 
@@ -46,3 +46,10 @@ Do not deploy, install, activate timers, upload recordings, or launch the app wi
 - [ ] Integrate UX polish with other completed workstreams and verify the combined head. Current pixels remain unverified; older synthetic screenshots do not establish current layout acceptance.
 - [ ] User decision on the eleven larger proposals in docs/ux-audit-2026-11-04.md (PR #21). None is approved or implemented by this report. Priorities include explaining deletion requirements before confirmation, showing actual archive scheduler status, Review saved recording, current library layout verification, capture/audio preflight summary, sharing/storage overview, operation-specific Drive feedback, audience visibility beside copying, shortcut discoverability, and future editor/separate-track architecture.
 - Cancellation correction: Cancel upload already exists; only its discoverability from the library is proposed.
+
+## Drive wizard integration
+
+- PR #23, head a44526aa0063bf4d7d624604af56250c4c1b93c8, delivered ten-stage repeatable wizard, full local setup/recovery guide, and Settings/Drive guide buttons.
+- Root merged it locally with UX/resize. Delegate full suite lacked PySide6; root therefore reruns using the project environment.
+- Root found and fixed a keyboard regression: guide buttons must not become default dialog actions when Enter commits a combo. All 8 Settings UI tests pass after setting autoDefault false. Root also changed the wizard shebang to /bin/bash per AGENTS.md; template helpers remain unchanged.
+- Full combined suite is pending after that fix. No wizard execution, OAuth, installation, timer activation, uploads, or live setup verification.
