@@ -161,10 +161,28 @@ copy. Offline or inaccessible destinations leave local files intact.
 ## Verify only when uploads are authorized
 
 Use an existing disposable, non-sensitive video, not a new live capture. Manual
-uploads require selecting recordings, **Upload selected recordings**, and
-confirmation. Check the destination in Drive before retrying a failed operation;
-earlier files may have succeeded and manual retries create additional copies.
-Manual uploads do not populate the automatic archive retention ledger.
+uploads start from **Upload selected to Google Drive…** in the library. Load the
+folders, choose the destination and confirm the upload. Manual uploads work even
+when background archiving is off. Both manual and automatic uploads save the
+remote ID before transfer and verify Drive size/checksum before starting retention.
+Retries reuse that ID in its original folder, including after a partial failure.
+Changing the chosen folder affects recordings that do not yet have a saved ID.
+Check Drive before retrying an unconfirmed result.
+
+To keep recordings off Drive, select them and choose **Do not upload to Google
+Drive**. The row shows the exclusion, which blocks both manual and background
+uploads and follows local renames and edits of the same file. Select them again
+and choose **Allow Google Drive uploads** to clear it. Mixed selections are all
+excluded when you choose Do not upload. Existing remote copies and transfers
+already in progress are unchanged. A copied/exported file is a new recording
+with its own upload choice. Unreadable exclusion settings block uploads.
+
+Deletion normally requires a current verified remote copy. To delete without one,
+check **Allow deletion without a backup**, then use the recording's delete button
+or a bulk delete action. The confirmation warns that this may be the only copy
+and defaults to Cancel. The checkbox resets after each attempt. Busy recordings,
+symbolic links and files changed during confirmation remain protected. This
+choice never enables automatic deletion.
 
 For automatic verification, close Untangle and allow two timer runs. Check the
 file in Drive and inspect the private local ledger without sharing its contents:

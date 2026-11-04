@@ -58,7 +58,7 @@ class LoomLibraryTests(unittest.TestCase):
 
     def new_dialog(self, store=None):
         dialog = Recordings(self.directory, deletion_blocked=lambda path: self.blocked,
-            upload_store=self.store if store is None else store)
+            upload_store=self.store if store is None else store, drive_state=self.root / 'drive')
         self.dialogs.append(dialog)
         dialog.files.setCurrentRow(0)
         return dialog
@@ -97,11 +97,58 @@ class LoomLibraryTests(unittest.TestCase):
                     self.dialog.delete_selected()
                 confirm.assert_not_called()
                 self.assertTrue(self.path.exists())
-                self.assertIn('Archive selected', self.dialog.message.text())
+                self.assertIn('Upload selected', self.dialog.message.text())
         with patch('untangle.drive_dialog.DriveDialog') as drive:
             self.dialog.drive.click()
             self.assertEqual(drive.call_args.args[0], [self.path])
             drive.return_value.exec.assert_called_once()
+
+    def test_delete_without_backup_requires_confirmation_and_resets(self):
+        with patch('untangle.archive.has_remote_copy', return_value=False), \
+                patch('untangle.recordings.QMessageBox.question', return_value=QMessageBox.Cancel) as confirm:
+            self.dialog.delete_without_backup.setChecked(True)
+            self.dialog.delete_selected()
+            self.assertIn('only copy', confirm.call_args.args[2])
+            self.assertTrue(self.path.exists())
+            self.assertFalse(self.dialog.delete_without_backup.isChecked())
+            confirm.reset_mock()
+            self.dialog.delete_selected()
+            confirm.assert_not_called()
+            self.dialog.delete_without_backup.setChecked(True)
+            confirm.return_value = QMessageBox.Yes
+            self.dialog.delete_selected()
+            self.assertFalse(self.path.exists())
+
+    def test_override_still_blocks_busy_or_changed_files(self):
+        def become_busy(*args):
+            self.blocked = True
+            return QMessageBox.Yes
+        self.dialog.delete_without_backup.setChecked(True)
+        with patch('untangle.recordings.QMessageBox.question', side_effect=become_busy):
+            self.dialog.delete_selected()
+        self.assertTrue(self.path.exists())
+        self.blocked = False
+        def replace(*args):
+            self.path.write_bytes(b'changed fixture')
+            return QMessageBox.Yes
+        self.dialog.delete_without_backup.setChecked(True)
+        with patch('untangle.recordings.QMessageBox.question', side_effect=replace):
+            self.dialog.delete_selected()
+        self.assertTrue(self.path.exists())
+
+    def test_selected_drive_exclusion_survives_rename_and_can_be_cleared(self):
+        from untangle.drive_policy import DrivePolicy
+        self.dialog.drive_exclude.click()
+        self.assertTrue(DrivePolicy(self.root / 'drive').blocked(self.path))
+        self.assertIn('Do not upload to Google Drive', self.dialog.files.currentItem().text())
+        with patch('untangle.recordings.prompt_recording_name',
+                   side_effect=lambda parent, path, rename: rename('Private renamed recording')):
+            self.dialog.rename_selected()
+        renamed = self.dialog.selected_path()
+        self.assertTrue(DrivePolicy(self.root / 'drive').blocked(renamed))
+        self.assertEqual(self.dialog.drive_exclude.text(), 'Allow Google Drive uploads')
+        self.dialog.drive_exclude.click()
+        self.assertFalse(DrivePolicy(self.root / 'drive').blocked(renamed))
 
     def test_deletion_final_remote_and_file_identity_checks_survive_confirmation(self):
         with patch('untangle.archive.has_remote_copy', side_effect=[True, False]) as remote, \

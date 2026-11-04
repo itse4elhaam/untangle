@@ -28,8 +28,8 @@ class DriveDialogTests(unittest.TestCase):
                 self.assertIn('1 of 2 uploaded to Chosen archive folder', text)
                 self.assertIn('good.mp4: Uploaded', text)
                 self.assertIn('<bad>.mp4: Failed or unconfirmed', text)
-                self.assertIn('do not establish verified archive retention', text)
-                self.assertIn('Retrying creates additional copies', text)
+                self.assertIn('Verified copies satisfy the deletion check', text)
+                self.assertIn('Retries reuse the saved archive copy', text)
                 client.return_value.login.assert_not_called()
                 client.return_value.service.assert_not_called()
             finally:

@@ -169,7 +169,8 @@ class DriveDialog(QDialog):
             return
         answer = QMessageBox.question(self, 'Upload to Google Drive',
             f'Upload {len(self.paths)} recording(s) to {self.folders.currentText()}? '
-            'Uploading again creates additional copies.')
+            'Excluded recordings will be skipped. Existing archive copies are reused in their '
+            'original destination; new uploads use the chosen folder. Copies are verified before cleanup.')
         if answer != QMessageBox.Yes:
             return
         self.settings.setValue('drive/folder', folder)
@@ -189,10 +190,12 @@ class DriveDialog(QDialog):
         uploaded = sum(row.get('status') == 'uploaded' for row in outcomes)
         lines = [f'{uploaded} of {len(outcomes)} uploaded to {destination}.']
         for row in outcomes:
-            result = 'Uploaded' if row.get('status') == 'uploaded' else 'Failed or unconfirmed; check Drive before retrying'
+            result = ('Uploaded and verified' if row.get('status') == 'uploaded' else
+                      'Skipped: Do not upload to Google Drive' if row.get('status') == 'excluded' else
+                      'Failed or unconfirmed; check Drive before retrying')
             lines.append(f'{row["name"]}: {result}')
-        lines.append('Manual uploads do not establish verified archive retention. '
-                     'Retrying creates additional copies; select only the files you want to retry.')
+        lines.append('Verified copies satisfy the deletion check. Cleanup is offered after 7 days. '
+                     'Retries reuse the saved archive copy in its original destination.')
         self.status.setText('\n'.join(lines))
 
     @observed("drive_dialog.forget")

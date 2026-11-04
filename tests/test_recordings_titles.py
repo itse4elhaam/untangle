@@ -149,7 +149,7 @@ class RecordingTitleTests(unittest.TestCase):
         self.assertTrue(other.exists())
         self.assertIn('Deletion blocked', self.dialog.message.text())
         blocked.assert_called_once()
-        self.assertIn('Archive selected', blocked.call_args.args[2])
+        self.assertIn('Upload selected', blocked.call_args.args[2])
         with patch('untangle.recordings.QMessageBox.question', return_value=QMessageBox.Cancel), \
                 patch('untangle.recordings.QMessageBox.warning') as blocked, \
                 patch('untangle.archive.has_remote_copy', return_value=True):
