@@ -188,7 +188,7 @@ class HeadsetRoundtripTests(unittest.TestCase):
         self.window.engine.configure.side_effect = self.configure_engine
         self.window.engine.release_audio.side_effect = self.release_engine
         self.window.engine.close.side_effect = self.release_engine
-        def record(path):
+        def record(path, *, compact=False):
             shutil.copyfile(self.clip, path)
             self.events.append('record')
         self.window.engine.start.side_effect = record
