@@ -16,7 +16,20 @@ from PySide6.QtMultimediaWidgets import QVideoWidget
 from PySide6.QtWidgets import (
     QAbstractItemView, QWidget, QFrame, QSplitter, QStackedWidget, QLineEdit, QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
     QPushButton, QComboBox, QSizePolicy, QSlider, QVBoxLayout, QApplication, QMessageBox, QStyle, QStyleOptionSlider,
+    QStyledItemDelegate, QStyleOptionViewItem, QToolButton,
 )
+
+
+class RecordingRowDelegate(QStyledItemDelegate):
+    """Reserve trailing space for real, keyboard-accessible row buttons."""
+    action_width = 76
+
+    def paint(self, painter, option, index):
+        style = option.widget.style()
+        style.drawPrimitive(QStyle.PE_PanelItemViewItem, option, painter, option.widget)
+        content = QStyleOptionViewItem(option)
+        content.rect.adjust(0, 0, -self.action_width, 0)
+        super().paint(painter, content, index)
 
 
 class PlaybackSlider(QSlider):
@@ -121,6 +134,7 @@ class Recordings(QWidget):
         library_layout.addWidget(self.count)
         self.files = QListWidget()
         self.files.setObjectName('recordingFiles')
+        self.files.setItemDelegate(RecordingRowDelegate(self.files))
         self.files.setMinimumWidth(230)
         self.files.setIconSize(QSize(112, 64))
         self.files.setSpacing(4)
@@ -336,6 +350,7 @@ class Recordings(QWidget):
             item.setData(Qt.UserRole + 2, item.text())
             item.setToolTip(str(path))
             self.files.addItem(item)
+            self.add_row_actions(item, path)
         self.start_thumbnail()
         self.filter_files(self.search.text())
         for index in range(self.files.count()):
@@ -421,6 +436,14 @@ class Recordings(QWidget):
                                and status not in ('uploading', 'processing'))
         self.copy.setEnabled(exists)
         self.rename.setEnabled(exists and not blocked)
+        for index in range(self.files.count()):
+            item = self.files.item(index)
+            row = self.files.itemWidget(item)
+            if row is not None:
+                target = Path(item.data(Qt.UserRole))
+                enabled = target.is_file() and not self.deletion_blocked(target)
+                for button in row.findChildren(QToolButton):
+                    button.setEnabled(enabled)
         targets = [target for target in self.checked_paths() if target.is_file()]
         self.delete.setText(f'Delete {len(targets)}' if len(targets) > 1 else 'Delete')
         self.delete.setEnabled(bool(targets) and not any(self.deletion_blocked(target) for target in targets))
@@ -612,6 +635,45 @@ class Recordings(QWidget):
         if len(paths) > limit:
             names.append(f'…and {len(paths) - limit} more')
         return '\n'.join(names)
+
+    def add_row_actions(self, item, path):
+        row = QWidget()
+        layout = QHBoxLayout(row)
+        layout.setContentsMargins(0, 0, 6, 0)
+        layout.setSpacing(4)
+        layout.addStretch()
+        assets = Path(__file__).resolve().parents[2] / 'assets'
+        for action in ('rename', 'delete'):
+            button = QToolButton(row)
+            button.setObjectName(f'{action}RecordingRow')
+            button.setIcon(QIcon(str(assets / f'recording-{action}.svg')))
+            button.setIconSize(QSize(18, 18))
+            button.setFixedSize(28, 32)
+            button.setAutoRaise(True)
+            button.setStyleSheet('QToolButton { padding: 0; min-height: 0; }')
+            button.setToolTip(f'{action.capitalize()} {path.name}')
+            button.setAccessibleName(f'{action.capitalize()} {path.name}')
+            button.clicked.connect(lambda checked=False, target=path, operation=action:
+                                   self.row_action(target, operation))
+            layout.addWidget(button)
+        self.files.setItemWidget(item, row)
+        row.setAutoFillBackground(False)
+
+    def row_action(self, path, action):
+        if not path.is_file() or self.deletion_blocked(path):
+            self.message.setText('This recording is missing or in use. Try again when it is available.')
+            return
+        for index in range(self.files.count()):
+            item = self.files.item(index)
+            if Path(item.data(Qt.UserRole)) == path:
+                self.files.clearSelection()
+                self.files.setCurrentItem(item)
+                item.setSelected(True)
+                if action == 'rename':
+                    self.rename_selected()
+                else:
+                    self.delete_selected()
+                return
 
     def offer_cleanup(self):
         from .archive import cleanup_candidates
