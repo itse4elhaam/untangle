@@ -10,7 +10,7 @@ from .upload_store import UploadStore
 from .loom import valid_share_url
 
 from PySide6.QtCore import Qt, QUrl, Signal, QSize, QSignalBlocker, QProcess, QTimer, QEvent
-from PySide6.QtGui import QDesktopServices, QIcon, QPixmap, QShortcut, QKeySequence, QPalette
+from PySide6.QtGui import QAction, QDesktopServices, QIcon, QPixmap, QShortcut, QKeySequence, QPalette
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtMultimediaWidgets import QVideoWidget
 from PySide6.QtWidgets import (
@@ -324,17 +324,14 @@ class Recordings(QWidget):
         self.copy.setToolTip('Copy the local file path to the clipboard')
         self.copy.clicked.connect(self.copy_selected_path)
         actions.addWidget(self.copy)
-        self.rename = QPushButton('Rename')
+        self.rename = QAction('Rename', self)
         self.rename.setToolTip('Rename the selected recording (F2)')
-        self.rename.clicked.connect(self.rename_selected)
+        self.rename.triggered.connect(self.rename_selected)
         rename_shortcut = QShortcut(QKeySequence('F2'), self)
         rename_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
         rename_shortcut.activated.connect(self.rename_selected)
-        actions.addWidget(self.rename)
-        self.delete = QPushButton('Delete')
-        self.delete.setObjectName('deleteRecording')
-        self.delete.clicked.connect(self.delete_selected)
-        actions.addWidget(self.delete)
+        self.delete = QAction('Delete', self)
+        self.delete.triggered.connect(self.delete_selected)
         preview_layout.addLayout(actions)
         self.files.currentItemChanged.connect(self.select)
         self.player.playbackStateChanged.connect(lambda state: self.toggle.setText(
@@ -746,9 +743,13 @@ class Recordings(QWidget):
                 self.files.setCurrentItem(item)
                 item.setSelected(True)
                 if action == 'rename':
-                    self.rename_selected()
+                    self.rename.trigger()
                 else:
-                    self.delete_selected()
+                    self.message.clear()
+                    self.delete.trigger()
+                    message = self.message.text()
+                    if path.exists() and message.startswith(('Deletion blocked.', 'Could not delete')):
+                        QMessageBox.warning(self, 'Recording kept', message)
                 return
 
     def offer_cleanup(self):

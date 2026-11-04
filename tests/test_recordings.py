@@ -249,7 +249,7 @@ class RecordingActionsChecks(unittest.TestCase):
         self.dialog.recording_deleted.connect(deleted.append)
         self.dialog.files.setCurrentRow(1)
         with patch('untangle.recordings.QMessageBox.question', return_value=QMessageBox.Cancel) as confirm:
-            QTest.mouseClick(self.dialog.delete, Qt.LeftButton)
+            self.dialog.delete.trigger()
         self.assertIn(str(self.old), confirm.call_args.args[2])
         self.assertTrue(self.old.exists())
         self.assertEqual(self.dialog.files.count(), 2)
