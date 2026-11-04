@@ -105,6 +105,7 @@ class CameraBubble(QWidget):
     pause_requested = Signal()
     zoom_requested = Signal()
     open_requested = Signal()
+    resized = Signal(float)
     moved = Signal()
     pixel_size_changed = Signal(int, int)
 
@@ -122,8 +123,12 @@ class CameraBubble(QWidget):
         self.setAttribute(Qt.WA_NativeWindow)
         self.setAttribute(Qt.WA_ShowWithoutActivating)
         self.setCursor(Qt.OpenHandCursor)
-        self.setToolTip('Drag to move · Right-click for recording controls\nCtrl + Shift + F8 toggles pointer zoom')
+        self.setMouseTracking(True)
+        self.setToolTip('Drag boundary to resize · Drag inside to move · Right-click for recording controls\nCtrl + Shift + F8 toggles pointer zoom')
         self._drag_offset = None
+        self._resize_start = None
+        self.resize_enabled = True
+        self.size_limits = (.12, .42)
         self._screen = None
         self._placement_key = None
         self._drag_position = None
@@ -191,6 +196,7 @@ class CameraBubble(QWidget):
         painter.end()
 
     def hideEvent(self, event):
+        self._resize_start = None
         self._drag_offset = None
         self.setCursor(Qt.OpenHandCursor)
         release_window_input(self)
@@ -296,7 +302,8 @@ class CameraBubble(QWidget):
         self._screen = screen
         bounds = screen.availableGeometry()
         side = round(min(bounds.width(), bounds.height()) * fraction)
-        side = max(100, min(side, round(min(bounds.width(), bounds.height()) * .5)))
+        minimum, maximum = self._side_limits()
+        side = max(minimum, min(side, maximum))
         self.setFixedSize(side, side)
         margin = 20
         x = bounds.left() + margin if 'left' in position else bounds.right() - side - margin + 1
@@ -304,6 +311,8 @@ class CameraBubble(QWidget):
         if self._drag_position is not None:
             x = bounds.left() + round(self._drag_position[0] * (bounds.width() - side))
             y = bounds.top() + round(self._drag_position[1] * (bounds.height() - side))
+        x = max(bounds.left(), min(bounds.right() - side + 1, x))
+        y = max(bounds.top(), min(bounds.bottom() - side + 1, y))
         self.move(x, y)
         self.apply_shape(shape, mask_path, mirror_mask)
 
@@ -324,17 +333,84 @@ class CameraBubble(QWidget):
         if self.isVisible() and QApplication.platformName() == 'xcb':
             self._update_input_shape()
 
+    def _side_limits(self):
+        bounds = self._screen.availableGeometry()
+        short = min(bounds.width(), bounds.height())
+        maximum = max(1, round(short * self.size_limits[1]))
+        return min(maximum, max(100, round(short * self.size_limits[0]))), maximum
+
+    def _resize_direction(self, point):
+        if not self.resize_enabled or self.recording or self._screen is None:
+            return None
+        # Hit-test the visible silhouette, including curved and custom edges.
+        mask = camera_mask(self._shape, self.width(), self.height(),
+                           self._custom_mask, self._mirror_mask)
+        x, y = point.x(), point.y()
+        def covered(px, py):
+            return (0 <= px < mask.width() and 0 <= py < mask.height()
+                    and mask.pixelColor(px, py).alpha() > 0)
+        if not covered(x, y) or all(covered(x + dx, y + dy)
+                for dx, dy in ((-8, 0), (8, 0), (0, -8), (0, 8))):
+            return None
+        nx, ny = 2 * x / self.width() - 1, 2 * y / self.height() - 1
+        direction = (0 if abs(nx) < .45 else (1 if nx > 0 else -1),
+                0 if abs(ny) < .45 else (1 if ny > 0 else -1))
+        return direction if any(direction) else None
+
+    def _resize_cursor(self, direction):
+        if not direction:
+            return Qt.OpenHandCursor
+        x, y = direction
+        return (Qt.SizeVerCursor if not x else Qt.SizeHorCursor if not y
+                else Qt.SizeFDiagCursor if x == y else Qt.SizeBDiagCursor)
+
+    def _remember_position(self):
+        if self._screen is not None:
+            bounds = self._screen.availableGeometry()
+            self._drag_position = (
+                min(1., max(0., (self.x() - bounds.left()) / max(1, bounds.width() - self.width()))),
+                min(1., max(0., (self.y() - bounds.top()) / max(1, bounds.height() - self.height()))))
+
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
-            self._drag_offset = event.globalPosition().toPoint() - self.pos()
-            self.setCursor(Qt.ClosedHandCursor)
+            direction = self._resize_direction(event.position().toPoint())
+            if direction:
+                self._resize_start = (event.globalPosition().toPoint(), self.geometry(), direction)
+                self.setCursor(self._resize_cursor(direction))
+            else:
+                self._drag_offset = event.globalPosition().toPoint() - self.pos()
+                self.setCursor(Qt.ClosedHandCursor)
             event.accept()
         else:
             super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
+        # Lost releases and a recording transition must end a resize immediately.
+        if self._resize_start is not None and (
+                not event.buttons() & Qt.LeftButton or not self.resize_enabled or self.recording):
+            self._resize_start = None
+            self.setCursor(Qt.OpenHandCursor)
+            if QWidget.mouseGrabber() is self:
+                self.releaseMouse()
+        if self._resize_start is not None:
+            start, rect, (sx, sy) = self._resize_start
+            delta = event.globalPosition().toPoint() - start
+            change = (delta.x() * sx + delta.y() * sy) / (abs(sx) + abs(sy))
+            minimum, maximum = self._side_limits()
+            side = max(minimum, min(maximum, round(rect.width() + change)))
+            bounds = self._screen.availableGeometry()
+            # Keep the opposite edge/corner fixed, centering the unused axis.
+            x = rect.x() + round((rect.width() - side) * (1 - sx) / 2)
+            y = rect.y() + round((rect.height() - side) * (1 - sy) / 2)
+            x = max(bounds.left(), min(bounds.right() - side + 1, x))
+            y = max(bounds.top(), min(bounds.bottom() - side + 1, y))
+            self.setFixedSize(side, side)
+            self.move(x, y)
+            self._remember_position()
+            self.resized.emit(side / min(bounds.width(), bounds.height()))
+            event.accept()
+            return
         # A release can be lost when a menu or another window takes the grab.
-        # Never continue moving the camera after the physical button is up.
         if self._drag_offset is not None and not event.buttons() & Qt.LeftButton:
             self._drag_offset = None
             self.setCursor(Qt.OpenHandCursor)
@@ -349,15 +425,13 @@ class CameraBubble(QWidget):
             self.move(point)
             event.accept()
         else:
+            self.setCursor(self._resize_cursor(self._resize_direction(event.position().toPoint())))
             super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.LeftButton:
-            if self._drag_offset is not None and self._screen is not None:
-                bounds = self._screen.availableGeometry()
-                self._drag_position = (
-                    min(1., max(0., (self.x() - bounds.left()) / max(1, bounds.width() - self.width()))),
-                    min(1., max(0., (self.y() - bounds.top()) / max(1, bounds.height() - self.height()))))
+            self._remember_position()
+            self._resize_start = None
             self._drag_offset = None
             self.setCursor(Qt.OpenHandCursor)
             self.moved.emit()

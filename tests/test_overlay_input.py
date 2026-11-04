@@ -181,6 +181,19 @@ def overlay_worker():
         assert connection.get_input_focus().focus.id == target_window.id
         select_text()
 
+        # Resize through the native visible edge, never a transparent corner.
+        size = bubble.width()
+        edge = bubble.mapToGlobal(QPoint(2, bubble.height() // 2))
+        pointer(edge)
+        assert root.query_pointer().child.id == native.id
+        button(X.ButtonPress)
+        pointer(edge - QPoint(30, 0))
+        button(X.ButtonRelease)
+        assert bubble.width() > size, 'boundary drag did not resize camera'
+        assert bubble.width() == bubble.height(), 'resize stretched the shape'
+        assert connection.get_input_focus().focus.id == target_window.id
+        select_text()
+
         # The captured app remains a normal window that can resize and accept
         # keyboard input. OBS has no replacement window above it.
         target.move(35, 35)

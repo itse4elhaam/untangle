@@ -275,6 +275,7 @@ class Window(QMainWindow):
         self.bubble.zoom_requested.connect(self.toggle_zoom)
         self.bubble.open_requested.connect(self.reveal)
         self.bubble.moved.connect(self.move_camera_overlay)
+        self.bubble.resized.connect(self.resize_camera_overlay)
         VIDEOS.mkdir(parents=True, exist_ok=True)
         STATE.mkdir(parents=True, exist_ok=True)
         self.upload_store = UploadStore(STATE / 'uploads.json')
@@ -1322,6 +1323,17 @@ class Window(QMainWindow):
             self.engine.detach_camera_preview()
         self.bubble.hide()
 
+    def resize_camera_overlay(self, fraction):
+        if (self.mode != 'screen' or not self.engine or not self.configuration_valid
+                or self.recording or self.busy or self.counting):
+            return
+        # Do not arrange the bubble here: that would move its anchored edge.
+        self.size.blockSignals(True)
+        self.size.setValue(round(fraction * 100))
+        self.size.blockSignals(False)
+        self.apply_camera_framing(size=fraction)
+        self.move_camera_overlay()
+
     def move_camera_overlay(self):
         if self.engine and self.mode == 'screen' and self.capture_kind.currentData() == 'window':
             bounds = QApplication.screens()[self.screen.currentIndex()].availableGeometry()
@@ -2084,6 +2096,7 @@ class Window(QMainWindow):
                 self.stop()
 
     def lock_controls(self, locked):
+        self.bubble.resize_enabled = not locked
         self.settings_button.setEnabled(not locked)
         self.focus_button.setEnabled(not locked)
         self.live_microphone.setEnabled(not locked)
