@@ -16,7 +16,7 @@ from PySide6.QtMultimediaWidgets import QVideoWidget
 from PySide6.QtWidgets import (
     QAbstractItemView, QWidget, QFrame, QSplitter, QStackedWidget, QLineEdit, QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
     QPushButton, QComboBox, QSizePolicy, QSlider, QVBoxLayout, QApplication, QMessageBox, QStyle, QStyleOptionSlider,
-    QStyledItemDelegate, QStyleOptionViewItem, QToolButton, QCheckBox,
+    QStyledItemDelegate, QStyleOptionViewItem, QToolButton,
 )
 
 
@@ -313,16 +313,6 @@ class Recordings(QWidget):
                                      'Existing Drive copies and uploads already in progress are unchanged.')
         library_layout.addWidget(self.drive_exclude)
 
-        self.delete_without_backup = QCheckBox('Allow deletion without a backup')
-        self.delete_without_backup.setToolTip('Applies only to the next deletion attempt. '
-                                             'Permanent deletion still requires confirmation.')
-        library_layout.addWidget(self.delete_without_backup)
-
-        self.deletion_note = QLabel('Before deleting, every selected file needs a current copy on Drive or Loom. '
-                                    'Upload selected first, or explicitly allow deletion without a backup.')
-        self.deletion_note.setWordWrap(True)
-        self.deletion_note.setObjectName('muted')
-        library_layout.addWidget(self.deletion_note)
         self.active_transfer = QPushButton('View active transfer…')
         self.active_transfer.clicked.connect(self.view_active_transfer)
         preview_layout.addWidget(self.active_transfer)
@@ -796,7 +786,7 @@ class Recordings(QWidget):
                     self.message.clear()
                     self.delete.trigger()
                     message = self.message.text()
-                    if path.exists() and message.startswith(('Deletion blocked.', 'Could not delete')):
+                    if path.exists() and message.startswith('Could not delete'):
                         QMessageBox.warning(self, 'Recording kept', message)
                 return
 
@@ -813,7 +803,7 @@ class Recordings(QWidget):
             return
         self.delete_paths(paths, 'Clean up archived recordings?',
             'Delete these local recordings archived at least 7 days ago? '
-            'Their remote copies will be checked before deletion.\n\n' + self.listing(paths))
+            'This permanently deletes the local files. Remote copies are unchanged.\n\n' + self.listing(paths))
 
     def delete_selected(self):
         paths = [path for path in self.checked_paths() if path.is_file()]
@@ -842,21 +832,10 @@ class Recordings(QWidget):
     @observed("recordings.delete_paths")
     def delete_paths(self, paths, title, question):
         self.update_actions()
-        override = self.delete_without_backup.isChecked()
-        self.delete_without_backup.setChecked(False)
         if not paths or any(self.deletion_blocked(path) for path in paths):
             return
         identities = {path: UploadStore.file_identity(path) for path in paths}
-        # Explain blocked deletion before asking for permanent-delete consent.
-        if not override and not self.verify_remote_copies(paths):
-            self.message.setText('Deletion blocked. Every recording needs a verified copy on Google Drive or Loom. '
-                                 'Use Upload selected to Google Drive, or check Allow deletion without a backup '
-                                 'and retry. Local files are kept.')
-            return
-        warning = ('\n\nDELETE WITHOUT A BACKUP: No remote copy will be checked. '
-                   'This may permanently delete the only copy of these recordings.' if override else
-                   '\n\nA remote copy was found. It will be checked again before any local file is deleted.')
-        answer = QMessageBox.question(self, title, question + warning,
+        answer = QMessageBox.question(self, title, question,
             QMessageBox.Yes | QMessageBox.Cancel, QMessageBox.Cancel)
         if answer != QMessageBox.Yes:
             return
@@ -865,10 +844,6 @@ class Recordings(QWidget):
             self.message.setText('A recording is in use. Try again when saving or uploading finishes.'
                 if len(paths) > 1 else 'This recording is in use. Try again when saving or uploading finishes.')
             self.update_actions()
-            return
-        if not override and not self.verify_remote_copies(paths):
-            self.message.setText('Deletion blocked. Every recording needs a verified copy on Google Drive or Loom. '
-                                 'Local files are kept. Upload selected first, then retry.')
             return
         self.release()
         deleted, failures, metadata_errors = [], [], []
@@ -906,29 +881,6 @@ class Recordings(QWidget):
             self.message.setText(text)
         for path in deleted:
             self.recording_deleted.emit(str(path))
-
-    def verify_remote_copies(self, paths):
-        from .archive import has_remote_copy
-        from .drive_dialog import DriveTask
-        from PySide6.QtCore import QEventLoop
-        from PySide6.QtWidgets import QProgressDialog
-        progress = QProgressDialog('Verifying remote copies…', '', 0, 0, self)
-        progress.setCancelButton(None)
-        progress.setWindowModality(Qt.ApplicationModal)
-        progress.setMinimumDuration(0)
-        loop = QEventLoop()
-        result = []
-        task = DriveTask(lambda emit: all(has_remote_copy(path, self.upload_store)
-                                         for path in paths), self)
-        task.done.connect(result.append)
-        task.finished.connect(loop.quit)
-        progress.show()
-        task.start()
-        loop.exec()
-        task.wait()
-        progress.close()
-        task.deleteLater()
-        return result == [True]
 
     def reject(self):
         self.stop_thumbnails()

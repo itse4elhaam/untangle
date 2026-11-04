@@ -30,9 +30,6 @@ class AutomaticNameTests(unittest.TestCase):
 
 class LibraryCleanupTests(unittest.TestCase):
     def setUp(self):
-        remote = patch('untangle.archive.has_remote_copy', return_value=True)
-        remote.start()
-        self.addCleanup(remote.stop)
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
         self.named = [self.root / 'A1R Reel.mp4', self.root / 'how we work take 2.mp4']
@@ -106,11 +103,11 @@ class LibraryCleanupTests(unittest.TestCase):
         self.assertFalse(self.unnamed[1].exists())
         self.assertIn('Could not delete 1', self.library.message.text())
 
-    def test_unarchived_recordings_survive_confirmed_bulk_delete(self):
-        with YES, patch('untangle.archive.has_remote_copy', return_value=False):
+    def test_unarchived_recordings_can_be_deleted_after_confirmation(self):
+        with YES, patch('untangle.archive.has_remote_copy', side_effect=OSError('offline')) as remote:
             self.library.delete_unnamed()
-        self.assertTrue(all(path.exists() for path in self.unnamed))
-        self.assertIn('Deletion blocked', self.library.message.text())
+        self.assertTrue(all(not path.exists() for path in self.unnamed))
+        remote.assert_not_called()
 
     def test_busy_blocks_bulk_delete(self):
         self.library.deletion_blocked = lambda path: True
@@ -146,9 +143,6 @@ class NameDialogDiscardTests(unittest.TestCase):
 
 class RecorderDiscardTests(unittest.TestCase):
     def setUp(self):
-        remote = patch('untangle.archive.has_remote_copy', return_value=True)
-        remote.start()
-        self.addCleanup(remote.stop)
         self.case = test_app.AppChecks('test_visible_identity_uses_untangle_and_bundled_mark')
         self.case.setUp()
         self.addCleanup(self.case.tearDown)
@@ -173,7 +167,7 @@ class RecorderDiscardTests(unittest.TestCase):
         self.assertTrue(take.exists())
         self.assertFalse(w.busy)
         self.assertFalse(w._discarding)
-        self.assertIn('before deleting', w.status.text())
+        self.assertIn('recordings library', w.status.text())
         self.assertTrue(w.discard_saved_button.isHidden())
 
     def test_discard_from_name_prompt_skips_auto_upload(self):
@@ -201,11 +195,25 @@ class RecorderDiscardTests(unittest.TestCase):
         with CANCEL:
             w.discard_saved_button.click()
         self.assertTrue(path.exists())
-        with YES:
+        with YES, patch('untangle.archive.has_remote_copy', side_effect=OSError('offline')) as remote:
             w.discard_saved_button.click()
+            remote.assert_not_called()
         self.assertFalse(path.exists())
         self.assertTrue(w.discard_saved_button.isHidden())
         self.assertIsNone(w.last_file)
+
+    def test_saved_discard_keeps_file_changed_during_confirmation(self):
+        w = self.window
+        path = self.root / 'kept.mp4'
+        path.write_bytes(b'original recording')
+        w.finish_save(path, '')
+        def replace(*args):
+            path.write_bytes(b'replacement file, changed during confirmation')
+            return QMessageBox.Yes
+        with patch('PySide6.QtWidgets.QMessageBox.question', side_effect=replace):
+            w.discard_saved_recording()
+        self.assertTrue(path.exists())
+        self.assertIn('changed during confirmation', w.status.text())
 
     def test_discard_after_save_is_refused_during_upload(self):
         w = self.window

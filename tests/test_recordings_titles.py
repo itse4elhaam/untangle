@@ -126,7 +126,7 @@ class RecordingTitleTests(unittest.TestCase):
         self.assertTrue((self.root / 'Renamed take.mkv').exists())
         self.assertTrue(other.exists())
 
-    def test_row_delete_confirms_only_clicked_recording_and_keeps_remote_protection(self):
+    def test_row_delete_confirms_only_clicked_recording_without_remote_check(self):
         from PySide6.QtWidgets import QToolButton, QMessageBox
         from PySide6.QtCore import Qt
         other = self.root / 'Other take.mp4'
@@ -137,29 +137,14 @@ class RecordingTitleTests(unittest.TestCase):
                       if Path(self.dialog.files.item(i).data(Qt.UserRole)) == self.source)
         button = self.dialog.files.itemWidget(target).findChild(QToolButton, 'deleteRecordingRow')
         with patch('untangle.recordings.QMessageBox.question', return_value=QMessageBox.Cancel) as confirm, \
-                patch('untangle.archive.has_remote_copy', return_value=True):
+                patch('untangle.archive.has_remote_copy', side_effect=OSError('offline')) as remote:
             button.click()
-        self.assertIn(str(self.source), confirm.call_args.args[2])
-        self.assertNotIn(str(other), confirm.call_args.args[2])
-        with patch('untangle.recordings.QMessageBox.question', return_value=QMessageBox.Yes), \
-                patch('untangle.recordings.QMessageBox.warning') as blocked, \
-                patch('untangle.archive.has_remote_copy', return_value=False):
+            self.assertIn(str(self.source), confirm.call_args.args[2])
+            self.assertNotIn(str(other), confirm.call_args.args[2])
+            self.assertTrue(self.source.exists())
+            confirm.return_value = QMessageBox.Yes
             button.click()
-        self.assertTrue(self.source.exists())
-        self.assertTrue(other.exists())
-        self.assertIn('Deletion blocked', self.dialog.message.text())
-        blocked.assert_called_once()
-        self.assertIn('Upload selected', blocked.call_args.args[2])
-        with patch('untangle.recordings.QMessageBox.question', return_value=QMessageBox.Cancel), \
-                patch('untangle.recordings.QMessageBox.warning') as blocked, \
-                patch('untangle.archive.has_remote_copy', return_value=True):
-            button.click()
-        blocked.assert_not_called()
-        with patch('untangle.recordings.QMessageBox.question', return_value=QMessageBox.Yes), \
-                patch('untangle.recordings.QMessageBox.warning') as blocked, \
-                patch('untangle.archive.has_remote_copy', return_value=True):
-            button.click()
-        blocked.assert_not_called()
+            remote.assert_not_called()
         self.assertFalse(self.source.exists())
         self.assertTrue(other.exists())
 

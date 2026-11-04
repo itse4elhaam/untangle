@@ -1921,19 +1921,15 @@ class Window(QMainWindow):
         emit(self, 'save.result', outcome='kept')
         self.ready_after_save()
         self.set_last(path)
-        self.notice(f'Recording kept at {path}. Upload it to Google Drive or Loom before deleting it.')
+        self.notice(f'Recording kept at {path}. You can delete it from the recordings library.')
         if self.quit_after_save:
             self.close()
 
     def delete_saved_recording(self, path):
         """Delete a just-saved recording and anything remembered about it."""
         path = Path(path)
-        from .archive import has_remote_copy
-        identity = self.upload_store.file_identity(path)
-        if not has_remote_copy(path, self.upload_store):
-            raise OSError('A verified copy on Google Drive or Loom is required before deletion.')
-        if path.is_symlink() or self.upload_store.file_identity(path) != identity:
-            raise OSError('The recording changed during verification.')
+        if path.is_symlink():
+            raise OSError('The recording is a symbolic link.')
         path.unlink()
         try:
             self.upload_store.remove(path)
@@ -1953,12 +1949,15 @@ class Window(QMainWindow):
             self.discard_saved_button.hide()
             self.notice('That recording is already gone.')
             return
+        identity = self.upload_store.file_identity(path)
         answer = QMessageBox.question(self, 'Discard this recording?',
             f'Permanently delete this recording?\n\n{path.name}\n\nThis cannot be undone.',
             QMessageBox.Yes | QMessageBox.Cancel, QMessageBox.Cancel)
         if answer != QMessageBox.Yes or self.recording_file_busy(path):
             return
         try:
+            if self.upload_store.file_identity(path) != identity:
+                raise OSError('The recording changed during confirmation.')
             self.delete_saved_recording(path)
         except OSError as exc:
             self.notice(f'Could not discard {path.name}: {exc}')

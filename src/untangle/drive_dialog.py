@@ -170,7 +170,7 @@ class DriveDialog(QDialog):
         answer = QMessageBox.question(self, 'Upload to Google Drive',
             f'Upload {len(self.paths)} recording(s) to {self.folders.currentText()}? '
             'Excluded recordings will be skipped. Existing archive copies are reused in their '
-            'original destination; new uploads use the chosen folder. Copies are verified before cleanup.')
+            'original destination; new uploads use the chosen folder. Copies are verified after upload.')
         if answer != QMessageBox.Yes:
             return
         self.settings.setValue('drive/folder', folder)
@@ -194,7 +194,7 @@ class DriveDialog(QDialog):
                       'Skipped: Do not upload to Google Drive' if row.get('status') == 'excluded' else
                       'Failed or unconfirmed; check Drive before retrying')
             lines.append(f'{row["name"]}: {result}')
-        lines.append('Verified copies satisfy the deletion check. Cleanup is offered after 7 days. '
+        lines.append('Copies are checksum-verified. Cleanup is offered after 7 days. '
                      'Retries reuse the saved archive copy in its original destination.')
         self.status.setText('\n'.join(lines))
 
