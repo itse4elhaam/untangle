@@ -27,4 +27,4 @@ exec bwrap --unshare-all --die-with-parent --new-session \
     PIPEWIRE_REMOTE=untangle-no-pipewire \
     DBUS_SESSION_BUS_ADDRESS=unix:path=/run/untangle-tests/no-session-bus \
     DBUS_SYSTEM_BUS_ADDRESS=unix:path=/run/untangle-tests/no-system-bus \
-    "$python_path" -m unittest discover -s tests
+    "$python_path" -m unittest discover -s tests -p "${UNTANGLE_TEST_PATTERN:-test*.py}"

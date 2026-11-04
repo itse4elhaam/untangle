@@ -2,7 +2,7 @@
 from .diagnostics import observed, failure as diagnostic_failure
 from PySide6.QtCore import QThread, Signal, QSettings
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QLabel, QPushButton, QComboBox,
-                               QFileDialog, QMessageBox)
+                               QFileDialog, QMessageBox, QCheckBox)
 from .drive import DriveClient
 
 
@@ -38,7 +38,7 @@ class DriveDialog(QDialog):
         layout = QVBoxLayout(self)
         note = QLabel('Sign in with Google, choose a destination folder, then upload only the '
                       'recordings you selected. Google will ask for Drive access to browse '
-                      'folders and upload files. Nothing uploads automatically.')
+                      'folders and upload files. Background archiving is optional.')
         note.setWordWrap(True)
         layout.addWidget(note)
         self.configure = QPushButton('Set up Google OAuth client…')
@@ -52,6 +52,17 @@ class DriveDialog(QDialog):
         layout.addWidget(self.refresh)
         self.folders = QComboBox()
         layout.addWidget(self.folders)
+        from .archive import config
+        self.archive_enabled = QCheckBox('Archive automatically in the background')
+        self.archive_enabled.setChecked(bool(config().get('enabled')))
+        layout.addWidget(self.archive_enabled)
+        self.archive_save = QPushButton('Save archive destination and settings')
+        self.archive_save.clicked.connect(self.save_archive)
+        layout.addWidget(self.archive_save)
+        retention = QLabel('Cleanup is offered after 7 days from verified upload. '
+                           'Local deletion always requires confirmation in the library.')
+        retention.setWordWrap(True)
+        layout.addWidget(retention)
         self.upload = QPushButton(f'Upload {len(paths)} selected recording(s)')
         self.upload.clicked.connect(self.upload_files)
         layout.addWidget(self.upload)
@@ -62,7 +73,7 @@ class DriveDialog(QDialog):
                              if not self.client.token_file.exists() else 'Sign-in saved. Load folders to continue.')
         self.status.setWordWrap(True)
         layout.addWidget(self.status)
-        self.controls = [self.configure, self.login, self.refresh, self.folders, self.upload, self.disconnect]
+        self.controls = [self.archive_enabled, self.archive_save, self.configure, self.login, self.refresh, self.folders, self.upload, self.disconnect]
         self.upload.setEnabled(False)
 
     @observed("drive_dialog.configure_client")
@@ -111,10 +122,20 @@ class DriveDialog(QDialog):
         self.folders.clear()
         for name, identifier in sorted(folders):
             self.folders.addItem(f'{name} ({identifier})', identifier)
-        index = self.folders.findData(self.settings.value('drive/folder', 'root'))
+        from .archive import config
+        index = self.folders.findData(config().get('folder') or self.settings.value('drive/folder', 'root'))
         self.folders.setCurrentIndex(max(index, 0))
         self.upload.setEnabled(bool(self.paths) and bool(folders))
         self.status.setText('Choose a folder for the selected recordings.')
+
+    def save_archive(self):
+        from .archive import configure
+        try:
+            configure(self.archive_enabled.isChecked(), self.folders.currentData())
+            self.settings.setValue('drive/folder', self.folders.currentData())
+            self.status.setText('Archive settings saved. Background scheduling requires the separate setup script.')
+        except (OSError, ValueError) as exc:
+            self.status.setText(str(exc))
 
     @observed("drive_dialog.upload_files")
     def upload_files(self):

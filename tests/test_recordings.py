@@ -29,6 +29,9 @@ def wait_for(predicate, timeout=8):
 
 class PlaybackChecks(unittest.TestCase):
     def setUp(self):
+        remote = patch('untangle.archive.has_remote_copy', return_value=True)
+        remote.start()
+        self.addCleanup(remote.stop)
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
         self.dialog = Recordings(self.root)
@@ -136,6 +139,9 @@ class PlaybackChecks(unittest.TestCase):
 
 class RecordingActionsChecks(unittest.TestCase):
     def setUp(self):
+        remote = patch('untangle.archive.has_remote_copy', return_value=True)
+        remote.start()
+        self.addCleanup(remote.stop)
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
         self.old = self.root / 'Earlier take.mp4'
@@ -297,6 +303,11 @@ class RecordingActionsChecks(unittest.TestCase):
 
 
 class LatestRecordingDeletionChecks(unittest.TestCase):
+    def setUp(self):
+        remote = patch('untangle.archive.has_remote_copy', return_value=True)
+        remote.start()
+        self.addCleanup(remote.stop)
+
     def test_delete_signal_updates_last_file_and_busy_protects_files(self):
         from untangle import app
         from contextlib import ExitStack
