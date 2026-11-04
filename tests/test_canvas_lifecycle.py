@@ -133,6 +133,9 @@ class CanvasLifecycleTests(unittest.TestCase):
         w.prefs.setValue('framing', 'stretch')
         for saved_zoom, expected in (('nan', 100), (-50, 100), (999, 300)):
             with self.subTest(saved_zoom=saved_zoom):
+                # Simulate an unmigrated install for each legacy value.
+                w.prefs.remove('camera_zoom_camera')
+                w.prefs.remove('camera_zoom_screen')
                 w.prefs.setValue('camera_zoom', saved_zoom)
                 w.restore_preferences()
                 self.assertEqual(w.canvas.currentData(), 'landscape')

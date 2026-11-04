@@ -12,7 +12,7 @@ import sys
 import threading
 import time
 
-from PySide6.QtCore import Qt, QTimer, Signal, QThread, QProcess, QUrl, QSettings
+from PySide6.QtCore import Qt, QTimer, Signal, QThread, QProcess, QUrl, QSettings, QEvent
 from PySide6.QtGui import QColor, QDesktopServices, QIcon, QPainter, QPen, QPixmap, QShortcut, QKeySequence, QCursor
 from .diagnostics import event as diagnostic_event, failure as diagnostic_failure, observed, snapshot, install as install_diagnostics
 from .floating import CameraBubble, ZoomMotion, release_window_input
@@ -30,7 +30,8 @@ from .loom import (parse_account_status, parse_video_info, parse_upload_result,
 from .audio_devices import AudioDevices, AudioDeviceError
 from .audio_debug import AudioTrace, emit
 from .engine import recording_audio_warning
-from .composition import canvas_dimensions
+from .composition import canvas_dimensions, camera_composition
+from .camera_framing import CropPosition, load_framing
 from .microphone_meter import MicrophoneMeter
 from .idle_audio import IdleAudio
 from PySide6.QtWidgets import (
@@ -648,7 +649,7 @@ class Window(QMainWindow):
         self.camera_zoom.setRange(100, 300)
         self.camera_zoom.setSingleStep(10)
         self.camera_zoom.setPageStep(25)
-        self.camera_zoom.setToolTip('Center crop your camera from 100% to 300%. Camera widget size and pointer zoom are separate.')
+        self.camera_zoom.setToolTip('Crop your camera from 100% to 300%. Camera widget size and pointer zoom are separate.')
         camera_zoom_row.addWidget(self.camera_zoom, 1)
         camera_zoom_row.addWidget(self.camera_zoom_plus)
         self.camera_zoom_value = label('100%')
@@ -767,7 +768,32 @@ class Window(QMainWindow):
             navigation.addWidget(button, 1)
         content.addWidget(self.navigation_footer, 1, 0, Qt.AlignLeft | Qt.AlignBottom)
         layout.addLayout(content, 1)
-        self.config_controls = [self.screen_button, self.camera_button, self.capture_kind, self.capture_window, self.refresh_button, self.screen, self.camera, self.camera_toggle, self.microphone, self.clean_microphone, self.desktop_audio, self.shape, self.size, self.position, self.mask_button, self.mirror, self.quality, self.canvas, self.framing, self.camera_zoom, self.camera_zoom_reset, self.camera_zoom_minus, self.camera_zoom_plus, self.camera_settings_button]
+        self.settings_layout.addWidget(label('Camera image position', 'section'))
+        self.crop_setup_label = label('')
+        self.settings_layout.addWidget(self.crop_setup_label)
+        self.settings_layout.addWidget(label('Drag the image control; watch the recorder preview.\nZoom in for more room to move. The camera shape stays fixed.'))
+        self.crop_position = CropPosition()
+        self.crop_position.changed.connect(self.camera_offset_dragged)
+        self.settings_layout.addWidget(self.crop_position)
+        self.crop_drag_enabled = QCheckBox('Drag image in live camera preview')
+        self.crop_drag_enabled.setToolTip('While Settings is open, drag the camera preview to reposition its image. Turn off to move the floating widget again.')
+        self.settings_layout.addWidget(self.crop_drag_enabled)
+        self.preview.installEventFilter(self)
+        self.bubble.installEventFilter(self)
+        self._crop_drag = None
+        self.camera_offset_x = QSlider(Qt.Horizontal)
+        self.camera_offset_y = QSlider(Qt.Horizontal)
+        for slider, title in ((self.camera_offset_x, 'Image left / right'),
+                              (self.camera_offset_y, 'Image up / down')):
+            slider.setRange(-100, 100)
+            slider.setAccessibleName(title)
+            self.settings_layout.addWidget(label(title))
+            self.settings_layout.addWidget(slider)
+            slider.valueChanged.connect(self.camera_offset_changed)
+        self.camera_offset_reset = QPushButton('Center image')
+        self.camera_offset_reset.clicked.connect(lambda: self.camera_offset_dragged(0., 0.))
+        self.settings_layout.addWidget(self.camera_offset_reset)
+        self.config_controls = [self.crop_position, self.camera_offset_x, self.camera_offset_y, self.camera_offset_reset, self.crop_drag_enabled, self.screen_button, self.camera_button, self.capture_kind, self.capture_window, self.refresh_button, self.screen, self.camera, self.camera_toggle, self.microphone, self.clean_microphone, self.desktop_audio, self.shape, self.size, self.position, self.mask_button, self.mirror, self.quality, self.canvas, self.framing, self.camera_zoom, self.camera_zoom_reset, self.camera_zoom_minus, self.camera_zoom_plus, self.camera_settings_button]
         for combo in (self.screen, self.capture_window, self.microphone):
             combo.currentIndexChanged.connect(self.schedule_configure)
         self.camera.currentIndexChanged.connect(self.camera_changed)
@@ -880,6 +906,8 @@ class Window(QMainWindow):
         self.camera_toggle.setEnabled(self.camera.count() > 1 and not (self.recording or self.busy or self.counting))
         self.camera_zoom.setEnabled(enabled)
         self.camera_settings_button.setEnabled(enabled)
+        for control in (self.crop_position, self.camera_offset_x, self.camera_offset_y, self.camera_offset_reset, self.crop_drag_enabled):
+            control.setEnabled(enabled)
         self.camera_zoom_minus.setEnabled(enabled and self.camera_zoom.value() > 100)
         self.camera_zoom_plus.setEnabled(enabled and self.camera_zoom.value() < 300)
         self.camera_zoom_reset.setEnabled(enabled and self.camera_zoom.value() != 100)
@@ -925,7 +953,72 @@ class Window(QMainWindow):
             self.notice(f'Could not update camera framing: {exc}')
 
     def camera_zoom_changed(self):
+        self.save_mode_framing()
         self.apply_camera_framing(camera_zoom=self.camera_zoom.value() / 100)
+
+    def eventFilter(self, watched, event):
+        editing = (hasattr(self, 'crop_drag_enabled') and self.crop_drag_enabled.isChecked()
+            and self.settings_dialog.isVisible() and not (self.recording or self.busy or self.counting)
+            and self.configuration_valid and bool(self.camera.currentData())
+            and watched is (self.preview if self.mode == 'camera' else self.bubble))
+        if not editing:
+            self._crop_drag = None
+            return super().eventFilter(watched, event)
+        if event.type() == QEvent.MouseButtonPress and event.button() == Qt.LeftButton:
+            self._crop_drag = (event.position(), self.camera_offset())
+            return True
+        if event.type() == QEvent.MouseMove and self._crop_drag is not None:
+            dimensions = getattr(self.engine, '_camera_dimensions', None)
+            if not isinstance(dimensions, tuple) or len(dimensions) != 2:
+                return True
+            crop, _ = camera_composition(*self.output_dimensions(), *dimensions,
+                mode=self.mode, framing=self.effective_framing(), camera_zoom=self.camera_zoom.value() / 100)
+            scale = min(watched.width() / crop[2], watched.height() / crop[3])
+            start, offset = self._crop_drag
+            delta = event.position() - start
+            travel_x = (dimensions[0] - crop[2]) * scale / 2
+            travel_y = (dimensions[1] - crop[3]) * scale / 2
+            self.camera_offset_dragged(
+                max(-1., min(1., offset[0] + delta.x() / travel_x)) if travel_x else offset[0],
+                max(-1., min(1., offset[1] + delta.y() / travel_y)) if travel_y else offset[1])
+            return True
+        if event.type() == QEvent.MouseButtonRelease and self._crop_drag is not None:
+            self._crop_drag = None
+            return True
+        return super().eventFilter(watched, event)
+
+    def camera_offset(self):
+        return self.camera_offset_x.value() / 100, self.camera_offset_y.value() / 100
+
+    def camera_offset_dragged(self, x, y):
+        if self.recording or self.busy or self.counting or not self.camera.currentData():
+            return
+        for slider, value in ((self.camera_offset_x, x), (self.camera_offset_y, y)):
+            slider.blockSignals(True)
+            slider.setValue(round(value * 100))
+            slider.blockSignals(False)
+        self.camera_offset_changed()
+
+    def camera_offset_changed(self):
+        self.crop_position.set_offset(*self.camera_offset())
+        self.save_mode_framing()
+        self.apply_camera_framing(camera_offset=self.camera_offset())
+
+    def save_mode_framing(self):
+        self.prefs.setValue('camera_zoom_' + self.mode, self.camera_zoom.value())
+        self.prefs.setValue('camera_offset_' + self.mode, list(self.camera_offset()))
+        self.prefs.sync()
+
+    def restore_mode_framing(self):
+        zoom, offset = load_framing(self.prefs, self.mode)
+        for slider, value in ((self.camera_zoom, zoom),
+                              (self.camera_offset_x, round(offset[0] * 100)),
+                              (self.camera_offset_y, round(offset[1] * 100))):
+            slider.blockSignals(True)
+            slider.setValue(value)
+            slider.blockSignals(False)
+        self.crop_position.set_offset(*self.camera_offset())
+        self.crop_setup_label.setText('Camera only' if self.mode == 'camera' else 'Screen + camera')
 
     def camera_framing_changed(self):
         self.apply_camera_framing(framing=self.effective_framing())
@@ -1008,11 +1101,6 @@ class Window(QMainWindow):
             widget.setCurrentIndex(max(0, widget.findData(self.prefs.value(name, default))))
             widget.blockSignals(False)
         self._framing_explicit = self.prefs.value('framing_explicit', False, type=bool)
-        try:
-            zoom = int(self.prefs.value('camera_zoom', 100))
-        except (TypeError, ValueError, OverflowError):
-            zoom = 100
-        self.camera_zoom.setValue(max(100, min(300, zoom)))
         self.set_mode(self.prefs.value('mode', 'camera'), configure=False)
         self.sidebar_button.setChecked(self.prefs.value('sidebar_visible', True, type=bool))
         self.set_sidebar_visible(self.sidebar_button.isChecked())
@@ -1039,7 +1127,7 @@ class Window(QMainWindow):
         self.prefs.setValue('canvas', self.canvas.currentData())
         self.prefs.setValue('framing', self.framing.currentData())
         self.prefs.setValue('framing_explicit', self._framing_explicit)
-        self.prefs.setValue('camera_zoom', self.camera_zoom.value())
+        self.save_mode_framing()
         self.prefs.setValue('mode', self.mode)
         self.prefs.setValue('mask', self.mask_path)
         self.prefs.sync()
@@ -1079,7 +1167,7 @@ class Window(QMainWindow):
             self.engine.set_canvas(*self.output_dimensions())
             if self.camera.currentData():
                 self.engine.set_camera_framing(framing=self.effective_framing(),
-                    camera_zoom=self.camera_zoom.value() / 100,
+                    camera_zoom=self.camera_zoom.value() / 100, camera_offset=self.camera_offset(),
                     size=self.size.value() / 100, mirror=self.mirror.isChecked())
             self._live_update_failed = False
             self.configuration_valid = True
@@ -1095,7 +1183,10 @@ class Window(QMainWindow):
     def set_mode(self, mode, configure=True):
         if self.recording or self.busy or self.counting:
             return
+        if configure:
+            self.save_mode_framing()
         self.mode = mode if mode in ('screen', 'camera') else 'screen'
+        self.restore_mode_framing()
         if configure and self.mode == 'camera' and not self._framing_explicit:
             self.select_default_framing()
         self.configuration_valid = False
@@ -1220,7 +1311,8 @@ class Window(QMainWindow):
                 mask_path=self.mask_path or None, size=self.size.value() / 100,
                 position=self.position.currentData(), screen=self.screen.currentData() or 0,
                 mirror=self.mirror.isChecked(), floating_camera=self.uses_floating_camera(), window_id=window_id,
-                camera_zoom=self.camera_zoom.value() / 100, framing=self.effective_framing())
+                camera_zoom=self.camera_zoom.value() / 100, framing=self.effective_framing(),
+                camera_offset=self.camera_offset())
             if self.mode == 'camera' and self.canvas.currentData() == 'raw':
                 self.engine.set_canvas(*self.output_dimensions())
                 self.update_setup_summary()
