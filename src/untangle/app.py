@@ -373,6 +373,19 @@ class Window(QMainWindow):
         self.drive_setup_guide.setAutoDefault(False)
         self.drive_setup_guide.clicked.connect(lambda: show_drive_setup_guide(self.settings_dialog))
         self.settings_layout.addWidget(self.drive_setup_guide)
+        self.storage_settings_button = QPushButton('Local storage, archive and sharing…')
+        self.storage_settings_button.setAutoDefault(False)
+        self.storage_settings_button.clicked.connect(self.sharing_settings)
+        self.settings_layout.addWidget(self.storage_settings_button)
+        self.settings_layout.addWidget(label('Shortcuts and floating controls', 'section'))
+        self.shortcut_reference = label(
+            'Ctrl+Shift+F9: record / stop\nCtrl+Shift+F10: pause / resume\n'
+            'Ctrl+Shift+F8: pointer zoom while recording a screen\n'
+            'Escape: cancel countdown or microphone preparation\n'
+            'Right-click the floating camera for recording controls. Drag its edge to resize while idle.\n'
+            'If another app owns a global shortcut, use the tray or recorder controls. Bindings are unchanged.', 'muted')
+        self.shortcut_reference.setWordWrap(True)
+        self.settings_layout.addWidget(self.shortcut_reference)
         self.settings_layout.addWidget(label('Recording names', 'section'))
         self.auto_titles = QCheckBox('Generate a name from the recording')
         self.auto_titles.setChecked(self.prefs.value('auto_titles', False, type=bool))
@@ -381,7 +394,7 @@ class Window(QMainWindow):
         self.title_capability = label('', 'muted')
         self.title_capability.setWordWrap(True)
         self.settings_layout.addWidget(self.title_capability)
-        title_privacy = label('Speech is transcribed on this computer. Codex receives transcript text to generate a title using Luna, Medium, Fast. The video stays local.', 'muted')
+        title_privacy = label('Speech is transcribed on this computer. Codex receives transcript text to generate a title using Luna with Medium reasoning and the default service tier. The video stays local.', 'muted')
         title_privacy.setWordWrap(True)
         self.settings_layout.addWidget(title_privacy)
         settings_done = QPushButton('Done')
@@ -727,6 +740,10 @@ class Window(QMainWindow):
         self.discard_saved_button.hide()
         self.discard_saved_button.clicked.connect(self.discard_saved_recording)
         right.addWidget(self.discard_saved_button, 0, Qt.AlignLeft)
+        self.review_saved_button = QPushButton('Review saved recording')
+        self.review_saved_button.hide()
+        self.review_saved_button.clicked.connect(self.review_saved_recording)
+        right.addWidget(self.review_saved_button, 0, Qt.AlignLeft)
         self.upload_panel = QFrame()
         self.upload_panel.setObjectName('panel')
         upload_layout = QVBoxLayout(self.upload_panel)
@@ -743,6 +760,10 @@ class Window(QMainWindow):
         self.upload_link.setTextInteractionFlags(Qt.TextSelectableByMouse)
         self.upload_link.setWordWrap(True)
         upload_layout.addWidget(self.upload_link)
+        self.upload_audience = label('', 'muted')
+        self.upload_audience.setWordWrap(True)
+        self.upload_audience.setTextFormat(Qt.PlainText)
+        upload_layout.addWidget(self.upload_audience)
         self.upload_progress = QProgressBar()
         self.upload_progress.setAccessibleName('Loom upload progress')
         self.upload_progress.setFixedHeight(12)
@@ -1528,10 +1549,22 @@ class Window(QMainWindow):
             self.countdown = 3
             self.lock_controls(True)
             self.record_button.setText('Cancel · 3')
-            self.notice('Starting in 3… Get your explanation ready. Esc cancels.')
+            self._countdown_summary = self.preflight_summary()
+            self.notice('Starting in 3… Esc cancels.\n' + self._countdown_summary)
             self.count_timer = QTimer(self)
             self.count_timer.timeout.connect(self.countdown_tick)
             self.count_timer.start(1000)
+
+    def preflight_summary(self):
+        target = ('Camera only' if self.mode == 'camera' else
+                  self.capture_kind.currentText() + ': ' +
+                  (self.capture_window.currentText() if self.capture_kind.currentData() == 'window'
+                   else self.screen.currentText()))
+        camera = self.camera.currentText() if self.camera.currentData() else 'off'
+        microphone = self.microphone.currentText() if self.microphone.currentData() else 'off'
+        desktop = 'on' if self.desktop_audio.isChecked() else 'off'
+        return (f'{target} · Camera: {camera}\nMicrophone: {microphone} · Desktop audio: {desktop}\n'
+                'Audio readiness is checked before capture. A meter does not verify saved speech.')
 
     def countdown_tick(self):
         if self.in_library():
@@ -1539,7 +1572,7 @@ class Window(QMainWindow):
         self.countdown -= 1
         if self.countdown:
             self.record_button.setText(f'Cancel · {self.countdown}')
-            self.notice(f'Starting in {self.countdown}… Esc cancels.')
+            self.notice(f'Starting in {self.countdown}… Esc cancels.\n' + self._countdown_summary)
         else:
             self.count_timer.stop()
             # Hide before capture starts, avoiding the preview recursion in the recording.
@@ -1986,6 +2019,8 @@ class Window(QMainWindow):
             self._title_job.cancel()
 
     def complete_saved_video(self, path, error, *, prompt=True):
+        self._review_path = None
+        self.review_saved_button.hide()
         self.cancel_title_button.setEnabled(True)
         if path and path.exists():
             if not error and not self.quit_after_save and not self._closing:
@@ -2010,11 +2045,21 @@ class Window(QMainWindow):
                         return
             self._discard_path = path
             self.discard_saved_button.show()
+            self._review_path = Path(path)
+            self.review_saved_button.show()
         self.notice(error or 'Saved. Play it back, or upload to Loom when you are ready.')
         if not error and self.prefs.value('auto_upload', False, type=bool):
             self.upload()
         if self.quit_after_save and not self.busy:
             self.close()
+
+    def review_saved_recording(self):
+        path = getattr(self, '_review_path', None)
+        if path is None or not path.is_file():
+            self.review_saved_button.hide()
+            self.notice('That saved recording is missing. Open Recordings to refresh the list.')
+            return
+        self.open_recordings(path)
 
     @observed("app.toggle_pause")
     def toggle_pause(self):
@@ -2381,6 +2426,7 @@ class Window(QMainWindow):
             self.recordings.recording_deleted.connect(self.recording_deleted)
             self.recordings.recording_renamed.connect(self.recording_renamed)
             self.recordings.upload_requested.connect(self.upload_recording)
+            self.recordings.active_transfer_requested.connect(self.show_active_transfer)
             self.recordings.check_remote_requested.connect(self.check_loom_video)
             self.recordings.back_requested.connect(self.back_to_recorder)
             self.recordings.theme_requested.connect(self.set_theme)
@@ -2399,17 +2445,31 @@ class Window(QMainWindow):
         self.recordings.search.clear()
         self.recordings.refresh(path)
 
+    def show_active_transfer(self, path):
+        if (self._upload_active and getattr(self, '_upload_file', None)
+                and Path(path).resolve() == self._upload_file.resolve()):
+            self.back_to_recorder()
+            self.upload_panel.show()
+            self.upload_retry.setFocus()
+        elif self.recordings:
+            self.recordings.message.setText('That transfer has finished. Refresh the recording status.')
+
     def recording_file_busy(self, path):
         return (self.recording or self.counting or self.busy
                 or (self._upload_active and Path(path).resolve() == self._upload_file.resolve()))
 
     def recording_renamed(self, old_path, new_path):
+        if getattr(self, '_review_path', None) == Path(old_path):
+            self._review_path = Path(new_path)
         if self.last_file is not None and Path(old_path) == self.last_file:
             self.set_last(new_path)
         if self._discard_path == Path(old_path):
             self._discard_path = Path(new_path)
 
     def recording_deleted(self, path):
+        if getattr(self, '_review_path', None) == Path(path):
+            self._review_path = None
+            self.review_saved_button.hide()
         if self._discard_path == Path(path):
             self._discard_path = None
             self.discard_saved_button.hide()
@@ -2480,7 +2540,7 @@ class Window(QMainWindow):
             return
         dialog = QDialog(self)
         self._sharing_dialog = dialog
-        dialog.setWindowTitle('Untangle · Sharing')
+        dialog.setWindowTitle('Untangle · Storage and sharing')
         dialog.setMinimumWidth(540)
         dialog.resize(580, 740)
         outer = QVBoxLayout(dialog)
@@ -2492,6 +2552,19 @@ class Window(QMainWindow):
         layout = QVBoxLayout(content)
         layout.setContentsMargins(24, 24, 24, 24)
         layout.setSpacing(12)
+        layout.addWidget(label('Local storage, archive and sharing', 'section'))
+        overview = label(f'Local originals save to {VIDEOS}. Google Drive is an optional archive; '
+            'manual uploads do not start retention. Loom creates a viewing link with its own audience. '
+            'Drive and Loom use independent credentials. Disconnecting TWG does not disconnect Drive.')
+        overview.setWordWrap(True)
+        layout.addWidget(overview)
+        drive = QPushButton('Google Drive destination and archive status…')
+        drive.setAutoDefault(False)
+        def open_drive():
+            from .drive_dialog import DriveDialog
+            DriveDialog([], self).exec()
+        drive.clicked.connect(open_drive)
+        layout.addWidget(drive)
         layout.addWidget(label('LOOM', 'eyebrow'))
         text = label('Recordings save locally first. Connect through browser OAuth using Atlassian’s official Teamwork Graph CLI.')
         text.setWordWrap(True)
@@ -2701,6 +2774,7 @@ class Window(QMainWindow):
             self.upload_progress.setValue(round(percent))
         url = valid_share_url(getattr(self, '_upload_url', ''))
         self.upload_link.setText(url)
+        self.update_audience_status()
         self.upload_link.setVisible(bool(url))
         for button in (self.upload_open, self.upload_copy):
             button.setVisible(bool(url))
@@ -2708,6 +2782,18 @@ class Window(QMainWindow):
         self.upload_retry.setVisible(active or retry)
         self.upload_retry.setText('Cancel upload…' if active else 'Retry upload…')
         self.upload_library.setEnabled(not (self.busy or self.recording or self.counting))
+
+    def update_audience_status(self):
+        path = getattr(self, '_upload_file', None)
+        state = self.upload_store.get(path) if path else {}
+        state = state or {}
+        audience = {'owner': 'Only me', 'workspace': 'Loom workspace', 'public': 'Anyone with the link'}.get(
+            state.get('visibility'), 'Unknown audience')
+        verified = (state.get('visibility_verified', False) and not state.get('visibility_warning')
+                    and not self._upload_active and not getattr(self, '_upload_metadata_warning', ''))
+        status = 'command accepted; review current permissions in Loom' if verified else 'UNVERIFIED: review permissions before sending'
+        self.upload_audience.setText(f'Audience: {audience} · {status}')
+        self.upload_audience.setVisible(bool(getattr(self, '_upload_url', None)))
 
     def update_upload_elapsed(self):
         if not self._upload_active:
@@ -2727,7 +2813,8 @@ class Window(QMainWindow):
         url = valid_share_url(getattr(self, '_upload_url', ''))
         if url:
             QApplication.clipboard().setText(url)
-            self.upload_detail.setText('Loom link copied. Review its sharing permissions before sending.')
+            self.update_audience_status()
+            self.upload_detail.setText('Loom link copied. ' + self.upload_audience.text())
 
     def refresh_upload_link(self):
         path = getattr(self, '_upload_file', None)
@@ -2836,7 +2923,7 @@ class Window(QMainWindow):
         self._upload_output = self._upload_errors = ''
         self._upload_result = {}
         self.save_upload_metadata(self._upload_file, expected_identity=self._upload_identity, status='uploading', error='',
-                                  visibility_warning='', title_warning='', visibility=self._upload_visibility)
+                                  visibility_warning='', title_warning='', visibility_verified=False, visibility=self._upload_visibility)
         self.update_upload_panel('Preparing Loom upload', 'Checking the installed CLI. Your local recording stays safe.', active=True)
         self.upload_timer.start()
         self.notice('Preparing Loom upload…')
@@ -3068,7 +3155,9 @@ class Window(QMainWindow):
             if title_warning:
                 text += ' ' + title_warning
             fields = dict(status=state, error=text if state in ('failed', 'uncertain') else '',
-                          visibility_warning=visibility_warning, title_warning=title_warning)
+                          visibility_warning=visibility_warning, title_warning=title_warning,
+                          visibility_verified=(state in ('uploaded', 'processing') and not visibility_warning),
+                          visibility=getattr(self, '_upload_visibility', 'owner'))
             if getattr(self, '_upload_url', None):
                 fields['url'] = self._upload_url
             self.save_upload_metadata(self._upload_file, expected_identity=self._upload_identity, **fields)

@@ -200,6 +200,7 @@ class AppChecks(unittest.TestCase):
         def inspect_dialog(dialog):
             buttons = dialog.findChildren(glint.QPushButton)
             self.assertEqual([button.text() for button in buttons], [
+                'Google Drive destination and archive status…',
                 'Reconnect Loom account ↗', 'Check connection', 'Disconnect TWG account…',
                 'Loom automatic-title settings ↗', 'Open Loom workspace settings ↗',
                 'Open Loom connection instructions ↗', 'Done',
@@ -207,9 +208,9 @@ class AppChecks(unittest.TestCase):
             self.assertEqual(dialog.findChildren(glint.QLineEdit), [])
             text = ' '.join(item.text() for item in dialog.findChildren(glint.QLabel)).lower()
             self.assertIn('browser oauth', text)
-            for rejected in ('google', 'drive', 'api key', 'cloud console', 'client json', 'token'):
+            for rejected in ('api key', 'cloud console', 'client json', 'token'):
                 self.assertNotIn(rejected, text)
-            buttons[0].click()
+            buttons[1].click()
             dialog.findChildren(glint.QCheckBox)[0].setChecked(True)
             dialog.findChildren(glint.QComboBox)[0].setCurrentIndex(1)
             return glint.QDialog.Accepted

@@ -44,7 +44,7 @@ Do not deploy, install, activate timers, upload recordings, or launch the app wi
 
 - [x] High-effort GPT-6.1 Sol audit delivered for review in PR #21, head c3b6d6b9e3c8b7f5a76bdccbb3f7166d53172fca, based on feat/recorder-setup. Root inspected the diff and report; scope matches copy/tooltips/accessible names only. Delegate reports 609 safe tests passed, 3 skipped; no hosted checks/review decision reported.
 - [x] Integrate UX polish with other completed workstreams and verify the combined head. Current pixels remain unverified; older synthetic screenshots do not establish current layout acceptance.
-- [ ] User decision on the eleven larger proposals in docs/ux-audit-2026-11-04.md (PR #21). None is approved or implemented by this report. Priorities include explaining deletion requirements before confirmation, showing actual archive scheduler status, Review saved recording, current library layout verification, capture/audio preflight summary, sharing/storage overview, operation-specific Drive feedback, audience visibility beside copying, shortcut discoverability, and future editor/separate-track architecture.
+- [x] User authorized implementation of the eleven larger proposals on 4 November 2026, superseding the earlier pending decision. Historical proposal text follows: User decision on the eleven larger proposals in docs/ux-audit-2026-11-04.md (PR #21). None is approved or implemented by this report. Priorities include explaining deletion requirements before confirmation, showing actual archive scheduler status, Review saved recording, current library layout verification, capture/audio preflight summary, sharing/storage overview, operation-specific Drive feedback, audience visibility beside copying, shortcut discoverability, and future editor/separate-track architecture.
 - Cancellation correction: Cancel upload already exists; only its discoverability from the library is proposed.
 
 ## Drive wizard integration
@@ -80,3 +80,22 @@ Do not deploy, install, activate timers, upload recordings, or launch the app wi
 - [x] Re-run isolated safe suite: 625 tests in 74.078s, 3 skipped; Python compile of 30 sources and shell syntax pass.
 - [x] Add newly rendered light/dark screenshots, source/PNG hashes and limitations in docs/pr26-ui; embed key views in the PR. Prior current-pixel limitations above describe earlier verification; these captures now provide inspected synthetic Qt layout evidence only. Native/hardware/live-service limits remain.
 - The user subsequently authorized all eleven UX proposals in the dedicated Complete Untangle UX follow-through thread. Earlier entries saying unapproved are historical and superseded. That separate thread owns implementation and conclude-thread; PR #26 does not claim those new features.
+
+
+## Authorized UX follow-through, 4 November 2026
+
+The new focused request supersedes earlier unapproved/unimplemented and no-install statements for this batch. Conclude-thread authorizes merge and local installation after pushed versioned changes pass safe checks. No live capture, speech, authentication, uploads or timer activation is authorized.
+
+- [x] 1. Library active transfer navigates to recorder cancellation controls. Existing confirmation and uncertain outcomes retained. `test_recordings_loom.py`.
+- [x] 2. Remote-copy prerequisite and safe Archive selected action precede deletion consent. Fresh final remote and file-identity checks retained; offline/missing/changed/partial cases covered in `test_recordings_loom.py`.
+- [x] 3. Drive separately shows destination saved, archive enabled, explicit read-only scheduler observation and historical verified upload. `test_archive_status.py`, `test_drive_dialog.py`; guide retained.
+- [x] 4. Review saved recording selects final named file, stays silent until Play, follows later rename, handles missing/deleted files. Existing naming/error/discard suites plus `test_ux_follow_through.py`.
+- [x] 5. Current 960x760 library clipping repaired with separate archive/action rows and reserved status line. Four fresh long-title uploaded/error captures in `docs/ux-follow-through-images/`, source hashes recorded. Synthetic geometry checks pass.
+- [x] 6. Countdown includes target/camera/microphone/desktop-audio summary and honest readiness text. Existing Escape/readiness paths preserved; `test_ux_follow_through.py` plus countdown/audio suites.
+- [x] 7. Settings opens shared local/archive/sharing overview linking Drive and Loom, independent credentials explained, TWG-wide sign-out warning retained. `test_app.py`, `test_drive_dialog.py`.
+- [x] 8. Operation-specific Drive progress, per-file success/unconfirmed outcomes and destination. Partial success retained, duplicate warning and manual-retention limits explicit. `test_drive.py`, `test_drive_dialog.py`.
+- [x] 9. Audience and command-verification status beside both Copy Loom link locations. Unverified copy remains possible with explicit warning; title/permission failures separate. Retry clears verification. `test_ux_follow_through.py`, existing Loom workflow tests.
+- [x] 10. Read-only Settings shortcut list and right-click/resize bubble discovery. Existing registration detects conflicts and reports tray fallback; no remapping needed or changed. `test_ux_follow_through.py` and existing shortcut coverage.
+- [x] 11. Safe source/track schema and versioned-export design in `docs/editing-projects.md`; working accurate trim editor preserves source and versions. Existing composed video/mixed audio explicitly baked; future independent capture/layout needs schema extension, no false separate-source capture claim. Ten `test_editing.py` checks cover actual synthetic export, cancellation, disk-full, recovery, locks and dialog cleanup.
+
+Integrated safe runner: 648 tests in 80.678s, OK with 3 skips. Shell syntax and diff checks passed. All capture/service/native limits remain. Local lifecycle recorded below after delivery.

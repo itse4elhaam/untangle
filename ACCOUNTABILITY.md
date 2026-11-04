@@ -122,3 +122,12 @@ Remaining limits are concrete and must survive final checklist closure:
 - Remote review/merge, installation and deployment remain outside this completion claim. No current-batch runtime update, app launch, capture/audio/speech change, OAuth, upload or timer activation was performed by accountability.
 
 Parent read through position 388; no later user request was found in that read. Root's final screenshot mapping was reconciled against source and synthetic coverage, not current visual acceptance. Root may record the final accountability check as reconciled **for source/test delivery with these explicit limits**. No implementation omission was identified within that scope. Preserve draft state until root makes its review-readiness decision; no permission to merge or deploy is implied. No polling or monitoring scheduled.
+
+
+## Focused UX follow-through authorization and evidence
+
+New user request explicitly authorizes all eleven audit proposals, replacing prior pending-decision status. TODO now tracks eleven separate evidence-backed checkboxes. Follow-through includes actual non-destructive trim/export controls and metadata, not an editor placeholder. Existing media is baked; separate capture and post-record layout editing are not claimed.
+
+Root integrated source passes safe bubblewrap suite: 648 tests in 80.678s, 3 skips. Existing native X11/hardware/live-service limits remain. Four refreshed library screenshots at 960x760 cover long filenames and uploaded/failed states, with hashes in docs/ux-follow-through-images/manifest.json. Parent supplied PR26 exact head a017e283 and current screenshot gallery separately; no duplicate parent checkout changes.
+
+Static review caught stale audience verification on retry and on metadata failure; corrected by clearing verification on start and forcing pending/unverified text during active transfer or metadata errors. Default-tier naming removes the existing priority override in compliance with user instruction. Conclude-thread now authorizes final merge and local installation only after versioned push and safe checks. No capture/speech/auth/upload/timer activation is implied.

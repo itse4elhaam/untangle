@@ -136,7 +136,8 @@ class RecordingTitleTests(unittest.TestCase):
         target = next(self.dialog.files.item(i) for i in range(self.dialog.files.count())
                       if Path(self.dialog.files.item(i).data(Qt.UserRole)) == self.source)
         button = self.dialog.files.itemWidget(target).findChild(QToolButton, 'deleteRecordingRow')
-        with patch('untangle.recordings.QMessageBox.question', return_value=QMessageBox.Cancel) as confirm:
+        with patch('untangle.recordings.QMessageBox.question', return_value=QMessageBox.Cancel) as confirm, \
+                patch('untangle.archive.has_remote_copy', return_value=True):
             button.click()
         self.assertIn(str(self.source), confirm.call_args.args[2])
         self.assertNotIn(str(other), confirm.call_args.args[2])

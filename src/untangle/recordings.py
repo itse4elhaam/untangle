@@ -10,7 +10,7 @@ from .upload_store import UploadStore
 from .loom import valid_share_url
 
 from PySide6.QtCore import Qt, QUrl, Signal, QSize, QSignalBlocker, QProcess, QTimer, QEvent
-from PySide6.QtGui import QDesktopServices, QIcon, QPixmap, QShortcut, QKeySequence
+from PySide6.QtGui import QDesktopServices, QIcon, QPixmap, QShortcut, QKeySequence, QPalette
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtMultimediaWidgets import QVideoWidget
 from PySide6.QtWidgets import (
@@ -25,11 +25,36 @@ class RecordingRowDelegate(QStyledItemDelegate):
     action_width = 76
 
     def paint(self, painter, option, index):
-        style = option.widget.style()
-        style.drawPrimitive(QStyle.PE_PanelItemViewItem, option, painter, option.widget)
         content = QStyleOptionViewItem(option)
-        content.rect.adjust(0, 0, -self.action_width, 0)
-        super().paint(painter, content, index)
+        self.initStyleOption(content, index)
+        style = content.widget.style()
+        background = QStyleOptionViewItem(content)
+        background.text = ''
+        background.icon = QIcon()
+        style.drawControl(QStyle.CE_ItemViewItem, background, painter, content.widget)
+        icon_width = content.decorationSize.width()
+        icon = content.rect.adjusted(6, 4, 0, -28)
+        icon.setWidth(icon_width)
+        content.icon.paint(painter, icon, Qt.AlignCenter)
+        rect = content.rect.adjusted(icon_width + 16, 8, -self.action_width, -8)
+        painter.save()
+        painter.setFont(content.font)
+        role = QPalette.HighlightedText if content.state & QStyle.State_Selected else QPalette.Text
+        painter.setPen(content.palette.color(role))
+        metrics = content.fontMetrics
+        lines = str(index.data(Qt.DisplayRole) or '').split('\n')
+        # Bound each line separately: a long title must not hide transfer status.
+        for number, text in enumerate(lines[:3]):
+            if number == 1:
+                # Transfer outcome gets the full bottom line, outside row actions.
+                line = content.rect.adjusted(8, 0, -8, -8)
+                line.setTop(line.bottom() - metrics.height() + 1)
+            else:
+                line = rect.adjusted(0, (number // 2) * metrics.height(), 0, 0)
+                line.setHeight(metrics.height())
+            painter.drawText(line, Qt.AlignLeft | Qt.AlignVCenter,
+                             metrics.elidedText(text, Qt.ElideMiddle, max(0, line.width())))
+        painter.restore()
 
 
 class PlaybackSlider(QSlider):
@@ -62,6 +87,7 @@ class Recordings(QWidget):
     check_remote_requested = Signal(str)
     theme_requested = Signal(str)
     settings_requested = Signal()
+    active_transfer_requested = Signal(str)
 
     def __init__(self, directory, parent=None, deletion_blocked=None, upload_store=None, upload_blocked=None):
         super().__init__(parent)
@@ -138,7 +164,7 @@ class Recordings(QWidget):
         self.files.setObjectName('recordingFiles')
         self.files.setItemDelegate(RecordingRowDelegate(self.files))
         self.files.setMinimumWidth(230)
-        self.files.setIconSize(QSize(112, 64))
+        self.files.setIconSize(QSize(64, 45))
         self.files.setSpacing(4)
         self.files.setWordWrap(True)
         self.files.setAccessibleName('Recordings, newest first')
@@ -217,12 +243,14 @@ class Recordings(QWidget):
         loom_actions.addWidget(self.copy_loom)
         self.check_loom = QPushButton('Check Loom link')
         self.check_loom.clicked.connect(self.check_selected_loom)
-        loom_actions.addWidget(self.check_loom)
+        loom_secondary = QHBoxLayout()
+        loom_secondary.addWidget(self.check_loom)
         self.forget_loom = QPushButton('Forget Loom link')
         self.forget_loom.setToolTip('Clear the saved link on this computer. The recording on Loom is unchanged.')
         self.forget_loom.clicked.connect(self.forget_selected_loom)
-        loom_actions.addWidget(self.forget_loom)
+        loom_secondary.addWidget(self.forget_loom)
         preview_layout.addLayout(loom_actions)
+        preview_layout.addLayout(loom_secondary)
         controls = QHBoxLayout()
         self.toggle = QPushButton('Play')
         self.toggle.setObjectName('playRecording')
@@ -273,11 +301,22 @@ class Recordings(QWidget):
 
         self.cleanup = QPushButton('Review archived recordings…')
         self.cleanup.clicked.connect(self.review_archived)
-        library_tools.addWidget(self.cleanup)
-        self.drive = QPushButton('Google Drive…')
+        library_layout.addWidget(self.cleanup)
+        self.drive = QPushButton('Archive selected to Google Drive…')
         self.drive.clicked.connect(self.open_drive)
-        library_tools.addWidget(self.drive)
+        library_layout.addWidget(self.drive)
 
+        self.deletion_note = QLabel('Before deleting, every selected file needs a current copy on Drive or Loom. '
+                                    'Archive selected first to keep a safe copy. We check again after confirmation.')
+        self.deletion_note.setWordWrap(True)
+        self.deletion_note.setObjectName('muted')
+        library_layout.addWidget(self.deletion_note)
+        self.active_transfer = QPushButton('View active transfer…')
+        self.active_transfer.clicked.connect(self.view_active_transfer)
+        preview_layout.addWidget(self.active_transfer)
+        self.edit = QPushButton('Edit a copy…')
+        self.edit.clicked.connect(self.edit_selected)
+        preview_layout.addWidget(self.edit)
         self.upload = QPushButton('Upload to Loom')
         self.upload.clicked.connect(self.upload_selected)
         actions.addWidget(self.upload)
@@ -415,7 +454,9 @@ class Recordings(QWidget):
             item = self.files.item(index)
             row_path = Path(item.data(Qt.UserRole))
             state = self.upload_metadata(row_path)
-            text = item.data(Qt.UserRole + 2) + '\n' + self.upload_state_text(state)
+            title, metadata = item.data(Qt.UserRole + 2).split('\n', 1)
+            text = title + '\n' + self.upload_state_text(state) + '\n' + metadata
+            item.setToolTip(str(row_path) + '\n' + self.upload_state_text(state))
             if item.text() != text:
                 item.setText(text)
         path = self.selected_path()
@@ -437,6 +478,10 @@ class Recordings(QWidget):
         self.upload.setText(upload_text)
         self.upload.setEnabled(exists and not blocked and not self.upload_blocked()
                                and status not in ('uploading', 'processing'))
+        self.active_transfer.setVisible(status in ('uploading', 'processing'))
+        self.active_transfer.setEnabled(exists and status in ('uploading', 'processing'))
+        self.edit.setEnabled(exists and not blocked and status not in ('uploading', 'processing'))
+        self.drive.setEnabled(not any(self.deletion_blocked(target) for target in self.checked_paths()))
         self.copy.setEnabled(exists)
         self.rename.setEnabled(exists and not blocked)
         for index in range(self.files.count()):
@@ -472,6 +517,8 @@ class Recordings(QWidget):
         for field in ('error', 'visibility_warning', 'title_warning'):
             if state.get(field):
                 details += '\n' + str(state[field])
+        if url:
+            details += '\n' + self.audience_status(state)
         self.loom_status.setText(details)
         self.loom_status.setVisible(bool(details))
         title = state.get('title')
@@ -508,11 +555,21 @@ class Recordings(QWidget):
         if url:
             QDesktopServices.openUrl(QUrl(url))
 
+    @staticmethod
+    def audience_status(state):
+        audience = {'owner': 'Only me', 'workspace': 'Loom workspace', 'public': 'Anyone with the link'}.get(
+            state.get('visibility'), 'Unknown audience')
+        accepted = (state.get('visibility_verified') and not state.get('visibility_warning')
+                    and state.get('status') in ('uploaded', 'processing'))
+        result = 'command accepted; review current permissions in Loom' if accepted else 'UNVERIFIED: review permissions before sending'
+        return f'Audience: {audience} · {result}'
+
     def copy_selected_loom(self):
         url = self.selected_loom_url()
         if url:
             QApplication.clipboard().setText(url)
-            self.message.setText('Loom link copied.')
+            state = self.upload_metadata(self.selected_path())
+            self.message.setText('Loom link copied. ' + self.audience_status(state))
 
     def check_selected_loom(self):
         url = self.selected_loom_url()
@@ -602,6 +659,22 @@ class Recordings(QWidget):
         if (path.is_file() and self.selected_path() == path
                 and self.upload.isEnabled() and not self.deletion_blocked(path)):
             self.upload_requested.emit(str(path))
+
+    def view_active_transfer(self):
+        path = self.selected_path()
+        if path is not None and path.is_file() and self.upload_metadata(path).get('status') in ('uploading', 'processing'):
+            self.active_transfer_requested.emit(str(path))
+
+    def edit_selected(self):
+        path = self.selected_path()
+        self.update_actions()
+        if path is None or not self.edit.isEnabled():
+            return
+        from .editing_dialog import EditingDialog
+        self.release()
+        dialog = EditingDialog(path, self)
+        dialog.exec()
+        self.refresh(path)
 
     def copy_selected_path(self):
         path = self.selected_path()
@@ -723,7 +796,13 @@ class Recordings(QWidget):
         if not paths or any(self.deletion_blocked(path) for path in paths):
             return
         identities = {path: UploadStore.file_identity(path) for path in paths}
-        answer = QMessageBox.question(self, title, question,
+        # Explain blocked deletion before asking for permanent-delete consent.
+        if not self.verify_remote_copies(paths):
+            self.message.setText('Deletion blocked. Every recording needs a verified copy on Google Drive or Loom. '
+                                 'Use Archive selected to Google Drive, then retry. Local files are kept.')
+            return
+        answer = QMessageBox.question(self, title, question + '\n\nA remote copy was found. '
+            'It will be checked again before any local file is deleted.',
             QMessageBox.Yes | QMessageBox.Cancel, QMessageBox.Cancel)
         if answer != QMessageBox.Yes:
             return
@@ -733,28 +812,9 @@ class Recordings(QWidget):
                 if len(paths) > 1 else 'This recording is in use. Try again when saving or uploading finishes.')
             self.update_actions()
             return
-        from .archive import has_remote_copy
-        from .drive_dialog import DriveTask
-        from PySide6.QtCore import QEventLoop
-        from PySide6.QtWidgets import QProgressDialog
-        progress = QProgressDialog('Verifying remote copies…', '', 0, 0, self)
-        progress.setCancelButton(None)
-        progress.setWindowModality(Qt.ApplicationModal)
-        progress.setMinimumDuration(0)
-        loop = QEventLoop()
-        result = []
-        task = DriveTask(lambda emit: all(has_remote_copy(path, self.upload_store)
-                                         for path in paths), self)
-        task.done.connect(result.append)
-        task.finished.connect(loop.quit)
-        progress.show()
-        task.start()
-        loop.exec()
-        task.wait()
-        progress.close()
-        task.deleteLater()
-        if result != [True]:
-            self.message.setText('Deletion blocked. Every recording needs a verified copy on Google Drive or Loom.')
+        if not self.verify_remote_copies(paths):
+            self.message.setText('Deletion blocked. Every recording needs a verified copy on Google Drive or Loom. '
+                                 'Local files are kept. Archive selected first, then retry.')
             return
         self.release()
         deleted, failures, metadata_errors = [], [], []
@@ -792,6 +852,29 @@ class Recordings(QWidget):
             self.message.setText(text)
         for path in deleted:
             self.recording_deleted.emit(str(path))
+
+    def verify_remote_copies(self, paths):
+        from .archive import has_remote_copy
+        from .drive_dialog import DriveTask
+        from PySide6.QtCore import QEventLoop
+        from PySide6.QtWidgets import QProgressDialog
+        progress = QProgressDialog('Verifying remote copies…', '', 0, 0, self)
+        progress.setCancelButton(None)
+        progress.setWindowModality(Qt.ApplicationModal)
+        progress.setMinimumDuration(0)
+        loop = QEventLoop()
+        result = []
+        task = DriveTask(lambda emit: all(has_remote_copy(path, self.upload_store)
+                                         for path in paths), self)
+        task.done.connect(result.append)
+        task.finished.connect(loop.quit)
+        progress.show()
+        task.start()
+        loop.exec()
+        task.wait()
+        progress.close()
+        task.deleteLater()
+        return result == [True]
 
     def reject(self):
         self.stop_thumbnails()
