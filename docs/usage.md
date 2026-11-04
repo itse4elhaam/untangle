@@ -137,3 +137,7 @@ ffmpeg -i recording.mkv -c copy -movflags +faststart recovered.mp4
 
 Logs: `~/.local/state/glint/glint.log`. Once the log exceeds 10 MB, the launcher retains one previous log on the next launch.
 
+
+## Optional camera compression
+
+In Settings, **Smaller camera recording files** enables quality based H.264 compression for camera recordings only. It is off by default. Fine textures and edges may change, so keep it off when preserving the original recording quality is the priority. Screen recordings always use the original encoding settings, even with this option checked. Switching to screen presentation is unavailable during a compressed camera recording; turn the option off before recording to include your screen. Resolution, frame rate, audio, and MP4 stream-copy preparation are unchanged. Disabling it restores the original settings for subsequent camera recordings. Saved recordings are never recompressed.

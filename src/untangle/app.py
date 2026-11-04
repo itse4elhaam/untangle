@@ -586,6 +586,11 @@ class Window(QMainWindow):
         self.quality.addItem('1080p · 30 fps', (1920, 1080))
         quality_row.addWidget(self.quality)
         controls.addLayout(quality_row)
+        self.compact_recordings = QCheckBox('Smaller camera recording files')
+        self.compact_recordings.setChecked(self.prefs.value('compact_camera_recordings', False, type=bool))
+        self.compact_recordings.setToolTip('Optional compression for camera-only recordings. Fine detail may change. Turn off to include your screen. Screen recordings always use the original recording settings.')
+        self.compact_recordings.toggled.connect(lambda value: self.prefs.setValue('compact_camera_recordings', value))
+        controls.addWidget(self.compact_recordings)
         content.addWidget(self.controls_panel, 0, 0)
 
         right = QVBoxLayout()
@@ -768,7 +773,7 @@ class Window(QMainWindow):
             navigation.addWidget(button, 1)
         content.addWidget(self.navigation_footer, 1, 0, Qt.AlignLeft | Qt.AlignBottom)
         layout.addLayout(content, 1)
-        self.config_controls = [self.screen_button, self.camera_button, self.capture_kind, self.capture_window, self.refresh_button, self.screen, self.camera, self.camera_toggle, self.microphone, self.clean_microphone, self.desktop_audio, self.shape, self.size, self.position, self.mask_button, self.mirror, self.quality, self.canvas, self.framing, self.camera_zoom, self.camera_zoom_reset, self.camera_zoom_minus, self.camera_zoom_plus, self.camera_settings_button]
+        self.config_controls = [self.screen_button, self.camera_button, self.capture_kind, self.capture_window, self.refresh_button, self.screen, self.camera, self.camera_toggle, self.microphone, self.clean_microphone, self.desktop_audio, self.shape, self.size, self.position, self.mask_button, self.mirror, self.quality, self.compact_recordings, self.canvas, self.framing, self.camera_zoom, self.camera_zoom_reset, self.camera_zoom_minus, self.camera_zoom_plus, self.camera_settings_button]
         for combo in (self.screen, self.capture_window, self.microphone):
             combo.currentIndexChanged.connect(self.schedule_configure)
         self.camera.currentIndexChanged.connect(self.camera_changed)
@@ -1256,6 +1261,9 @@ class Window(QMainWindow):
 
     @observed("app.toggle_presentation")
     def toggle_presentation(self):
+        if self.recording and getattr(self, '_recording_compact', False):
+            self.notice('Screen presentation requires the original recording mode. Turn off Smaller camera recording files before starting a new recording.')
+            return
         if not self.recording or self.busy or not self.camera.currentData():
             return
         self.presentation_target = 0. if self.presentation_target else 1.
@@ -1594,15 +1602,16 @@ class Window(QMainWindow):
             self.recording_error = ''
             self.recording_error_baseline = len(self.engine.errors)
             self.presentation_amount = self.presentation_target = self.presentation_committed = 1. if self.mode == 'camera' else 0.
-            self.engine.start(self.record_path)
+            self._recording_compact = self.mode == 'camera' and self.compact_recordings.isChecked()
+            self.engine.start(self.record_path, compact=self._recording_compact)
             encoder = self.engine.stats().get('encoder', '')
             self.encoder_label.setText('Intel hardware · H.264' if encoder == 'ffmpeg_vaapi' else 'CPU encoding · H.264')
             self.started = time.monotonic()
             self.paused_duration = 0
             self.paused = False
             self.recording = True
-            self.presentation_button.setEnabled(bool(self.camera.currentData()))
-            self.tray_presentation.setEnabled(bool(self.camera.currentData()))
+            self.presentation_button.setEnabled(bool(self.camera.currentData()) and not self._recording_compact)
+            self.tray_presentation.setEnabled(bool(self.camera.currentData()) and not self._recording_compact)
             self._audio_warning_since = None
             self.bubble.recording = True
             self.zoom_button.setEnabled(self.mode == 'screen')
