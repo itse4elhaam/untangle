@@ -56,6 +56,12 @@ After installation, open Untangle from your application launcher or run `untangl
 
 For Loom, open Sharing to check your connected account or connect through Atlassian's sign-in flow. Uploads show activity and elapsed time, then a Loom link you can open or copy. Recordings keeps the link and upstream title across restarts. Connecting does not upload a recording. The optional official CLI needs to be installed separately; [the usage guide](docs/usage.md#loom) covers setup, account limits, and AI-title availability.
 
+For Google Drive setup or sign-in recovery, run `./scripts/setup-drive-wizard.sh`.
+The [Drive guide](docs/google-drive.md) covers prerequisites, Desktop OAuth, private
+credentials, destination, optional scheduling and cleanup checks. The same guide
+is available in Settings and the Google Drive dialog. The wizard leaves all
+installation, sign-in, uploads and timer activation to explicit manual actions.
+
 ## Recording controls
 
 Use the visible setup controls on the left to choose the recording mode, capture source, camera, and microphone. Less frequent settings are under More options. Choose Camera for camera-only video, or Screen for screen and camera recording. In Camera mode, choose your canvas and Fit or Fill above the preview. Social presets use Fill to crop the center; Fit keeps the whole image with bars. Camera zoom has a slider, −/+ buttons, percentage and Reset beside the camera selector. Framing edits update the existing feed. Quality remains under More options. In screen mode, choose your display or a specific window. Check the microphone, then start recording.
