@@ -85,3 +85,40 @@ Inspected root's guide-button `setAutoDefault(False)` diff in `26bc61c`, and cro
 A single read of `/tmp/untangle-combined-framing-wizard.log` returned ongoing Qt test output without a final summary. Full combined verification remains pending. UI cleanup delegate delivery is still pending, including collapsed lower details, moving Quick audio check to Settings and removing redundant texts. TODO leaves final delivery checks unchecked. Its framing/wizard checkmarks represent implementation delivery only, not acceptance of real setup, native events or output pixels.
 
 Read parent messages through position 338. No new requests beyond the current batch were reported. Keep real OAuth/setup, scheduling/upload, native event delivery, camera/output pixels and current visual acceptance gaps open. No app/device/speech/auth/upload/install/deploy actions were performed by this audit. Resume parent reads after position 338; no polling scheduled. Final reconciliation awaits root's completion event.
+
+## Final reconciliation: source and synthetic delivery complete for review
+
+Final event audited against implementation source `7550d2d7b24bedf38341b1153b57c23355eda8a3`. Published [draft PR #26](https://github.com/itse4elhaam/untangle/pull/26) was verified OPEN/DRAFT at `500e2b07a9754a00e5c4635e50870fe63c3b299c`, based on `feat/recorder-setup` from #20. The difference from the tested source to that published head changes only TODO.md. This accountability append is documentation only and awaits root's normal commit/push path.
+
+No missing implementation item was found in the final request-to-source reconciliation. Verified each component commit is an ancestor of the tested integrated head: row actions `ebd7fec`, camera ranking `76083e2`, UX polish `c3b6d6b`, resize `f0b26a7`, wizard `a44526a`, UI cleanup `3ab5cc1`, and mode-specific framing/crop `dc03de1`.
+
+| Request | Final evidence and delivery status |
+| --- | --- |
+| Recording row rename/delete icons | #19 implementation retained in integrated ancestry; clicked-row actions still use existing rename and protected deletion paths. |
+| Highest-quality default camera | #20 ranks advertised colour resolution usable at 30 fps, then fps, with manual selection retained. This is an advertised-capability proxy, not optical-quality measurement. |
+| Collapsed lower details, visible important feedback | #24 adds unchecked Recording details disclosure, keeps urgent status/monitor warnings outside it, and tests disclosure changes without changing audio ownership. |
+| Quick audio check in Settings | #24 relocates the existing launch control, disables automatic default-button behavior, and covers Settings dismissal, cleanup/focus and collapsed/expanded return state synthetically. |
+| Remove redundant heading and mode helper | #24 removes both constructions and the helper update; mode controls remain. |
+| Separate camera/screen framing preferences | #25 persists mode-specific zoom and crop offsets, migrates legacy zoom without overwriting existing mode values, and tests switching/restoration/malformed preferences and engine-unavailable edits. |
+| Move image inside fixed shape | #25 provides Settings drag pad, keyboard sliders, reset and explicit live-preview drag editing. Geometry tests cover bounds/mirroring and preservation of size, shape and overlay placement. Root adds lost-release regression coverage. |
+| Boundary resize in focused thread | #22 implements bounded uniform resizing and idle/busy guards, retains movement, and uses size-only framing calls that preserve zoom/offsets. Native desktop scenario remains skipped. |
+| Complete repeatable Drive wizard | #23 provides ten manual stages, local guide and app entry points covering prerequisites, project/API, consent/Desktop client, private config/sign-in, destination/opt-in, scheduling, verification/recovery/disable/revocation. Root fixes guide default actions and `/bin/bash` shebang. Wizard execution/live setup was not performed. |
+| App-wide UX audit and limited polish | #21 report and metadata/copy changes inspected earlier; complete audit delegate and component PR link verified. Eleven larger proposals remain unapproved and unimplemented. |
+| Written checklist and independent accountability | TODO and this historical ledger cover the current batch. Final source/test reconciliation is complete with the acceptance limits below. |
+
+Verified component PRs #19 through #25 remain OPEN; #26 is still DRAFT. #19 targets `feat/drive-archive`, #20 targets `feat/recording-row-actions`, #21–#25 and #26 target `feat/recorder-setup`. Parent holds #19/#20/#26 links; dedicated UX, resize, wizard, UI and framing threads hold their corresponding #21–#25 links. Integration ancestry does not mean component PRs are remotely merged. No hosted check rollup or review decision was returned for these PRs.
+
+Observed `/tmp/untangle-final-integrated.log`: **625 tests run in 73.762 seconds, OK with three skips**. Root reports captured runner exit 0 from session 52993. This is final root-run evidence, not a new accountability test execution. Independently reran `bash -n scripts/*.sh bin/*` and `git diff --check`; both exited 0. Earlier missing-dependency failures, the terminated guide-modal hang and the superseded partial run are not counted as successful final checks.
+
+Read [Final integrated Untangle review](t3-thread://v1/thread:delegated-task:command%3Amcp%3A2d97cd13-8434-437b-9730-8bb5494950c4%3Adelegate-task%3A39739caa-0c6f-47e3-ad37-5e15a607ba71) directly. It reports no actionable findings at `7550d2d`, with static-only limits and no test execution/root-log inspection. Read the UI, framing and wizard delivery threads directly and verified their component PR links. No implementation delegate result remains outstanding in this batch.
+
+Remaining limits are concrete and must survive final checklist closure:
+
+- Screenshot subjects are mapped to implemented controls in TODO, but original screenshot pixels were not independently accessible through this thread reader. Current app layout/pixels and exact visual agreement are not accepted by this audit.
+- Native X11 drag/event delivery and the Xvfb resize scenario remain unverified/skipped. Synthetic event coverage does not establish native behavior.
+- Real camera selection behavior, optical quality, native OBS output and encoded crop/resize pixels remain unverified.
+- Real OAuth, permissions, timer activation/scheduling, remote upload verification and end-to-end wizard completion remain unverified. Guide content is delivered; live setup is not claimed complete.
+- The eleven UX proposals still require user decisions. Neither the audit report nor the green suite approves those changes.
+- Remote review/merge, installation and deployment remain outside this completion claim. No current-batch runtime update, app launch, capture/audio/speech change, OAuth, upload or timer activation was performed by accountability.
+
+Parent read through position 388; no later user request was found in that read. Root's final screenshot mapping was reconciled against source and synthetic coverage, not current visual acceptance. Root may record the final accountability check as reconciled **for source/test delivery with these explicit limits**. No implementation omission was identified within that scope. Preserve draft state until root makes its review-readiness decision; no permission to merge or deploy is implied. No polling or monitoring scheduled.
