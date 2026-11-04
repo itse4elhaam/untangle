@@ -1745,26 +1745,23 @@ class Window(QMainWindow):
         self.stop()
 
     def finish_discard(self, path):
-        restart = self._restarting
         self._restarting = False
-        emit(self, 'save.result', outcome='discarded')
+        emit(self, 'save.result', outcome='kept')
         self.ready_after_save()
-        try:
-            path.unlink(missing_ok=True)
-        except OSError as exc:
-            self.set_last(path)
-            self.notice(f'Could not discard the recording: {exc}. It is still at {path}.')
-        else:
-            self.notice('Recording discarded. Nothing was saved.')
-            if restart and not self.quit_after_save and not self._closing:
-                self.counting = True
-                self.start()
+        self.set_last(path)
+        self.notice(f'Recording kept at {path}. Upload it to Google Drive or Loom before deleting it.')
         if self.quit_after_save:
             self.close()
 
     def delete_saved_recording(self, path):
         """Delete a just-saved recording and anything remembered about it."""
         path = Path(path)
+        from .archive import has_remote_copy
+        identity = self.upload_store.file_identity(path)
+        if not has_remote_copy(path, self.upload_store):
+            raise OSError('A verified copy on Google Drive or Loom is required before deletion.')
+        if path.is_symlink() or self.upload_store.file_identity(path) != identity:
+            raise OSError('The recording changed during verification.')
         path.unlink()
         try:
             self.upload_store.remove(path)

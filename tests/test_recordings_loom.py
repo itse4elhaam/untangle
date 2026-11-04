@@ -20,6 +20,9 @@ LOOM_URL = 'https://www.loom.com/share/0123456789abcdef0123456789abcdef'
 
 class LoomLibraryTests(unittest.TestCase):
     def setUp(self):
+        remote = patch('untangle.archive.has_remote_copy', return_value=True)
+        remote.start()
+        self.addCleanup(remote.stop)
         self.stack = ExitStack()
         self.addCleanup(self.stack.close)
         self.temp = self.stack.enter_context(tempfile.TemporaryDirectory())

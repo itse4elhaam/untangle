@@ -101,6 +101,9 @@ class InertProcess(QObject):
 class LoomWorkflowChecks(unittest.TestCase):
     # Delegate the fixture instead of inheriting and rediscovering AppChecks.
     def setUp(self):
+        remote = patch('untangle.archive.has_remote_copy', return_value=True)
+        remote.start()
+        self.addCleanup(remote.stop)
         for replacement in (
             patch.object(glint, 'Preview', render_helpers.SoftwarePreview),
             patch.object(glint, 'QProcess', InertProcess),
