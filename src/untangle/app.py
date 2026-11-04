@@ -57,6 +57,7 @@ def label(text, kind=None):
 
 
 def cameras():
+    from .camera_devices import camera_quality
     result = []
     for path in sorted(Path('/sys/class/video4linux').glob('video*')):
         device = '/dev/' + path.name
@@ -64,10 +65,11 @@ def cameras():
             info = subprocess.run(['v4l2-ctl', '-d', device, '--list-formats-ext'], capture_output=True, text=True, timeout=2).stdout
             # Ignore metadata and infrared devices. Preserve capture devices with colour formats.
             if any(fmt in info for fmt in ('MJPG', 'YUYV', 'NV12', 'RGB3', 'H264')):
-                result.append((path.joinpath('name').read_text().strip(), device))
+                result.append((camera_quality(info), path.joinpath('name').read_text().strip(), device))
         except (OSError, subprocess.TimeoutExpired):
             continue
-    return result
+    result.sort(key=lambda camera: camera[0], reverse=True)
+    return [(name, device) for _, name, device in result]
 
 
 def microphones():
