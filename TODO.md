@@ -19,7 +19,7 @@ Do not deploy, install, activate timers, upload recordings, or launch the app wi
 
 ## Dedicated workstreams requested by user
 
-- [ ] Create a focused camera-widget resize thread. Implement user resizing by dragging/extending its boundary, preserving the existing shape and recording geometry; no deployment.
+- [x] Implement floating camera boundary resizing. Preserves square alpha shape, movement, screen bounds and window-capture composition; uses the 12–42% size range and blocks resizing during recording/countdown/preparation/saving. Synthetic interaction and composition checks pass through `scripts/test.sh` (612 tests, 3 skipped; Xvfb unavailable). Review branch `feat/camera-widget-resize`, stacked on `feat/recorder-setup`; not deployed.
 - [ ] Create a UX/UI audit thread using GPT-6.1 Sol at high. Audit the complete app against Loom and Supercut, implement only small changes with negligible risk, and propose the others to the user. No change has literally zero risk; keep device, capture, upload, auth, and deletion behavior out of automatic polish.
 - [ ] Create an independent accountability thread to check every item here, track evidence/PRs and omissions, and report incomplete work without marking assumptions as done.
 

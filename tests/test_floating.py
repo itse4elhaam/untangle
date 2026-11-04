@@ -2,7 +2,9 @@
 import os
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 import unittest
-from PySide6.QtCore import QEvent, QPoint, QPointF, Qt
+import tempfile
+from pathlib import Path
+from PySide6.QtCore import QEvent, QPoint, QPointF, QRect, Qt
 from PySide6.QtGui import QImage, QMouseEvent
 from PySide6.QtWidgets import QApplication
 from untangle.floating import CameraBubble, ZoomMotion, release_window_input
@@ -96,6 +98,74 @@ class FloatingChecks(unittest.TestCase):
         self.assertTrue(screen.availableGeometry().contains(bubble.geometry()))
         bubble.arrange(screen, .3, 'top-left', 'circle')
         self.assertEqual(bubble.pos(), screen.availableGeometry().topLeft() + QPoint(20, 20))
+
+    def resize_drag(self, bubble, local, delta, *, release=True):
+        start = bubble.pos() + local
+        bubble.mousePressEvent(QMouseEvent(QEvent.MouseButtonPress,
+            QPointF(local), QPointF(start), Qt.LeftButton, Qt.LeftButton, Qt.NoModifier))
+        bubble.mouseMoveEvent(QMouseEvent(QEvent.MouseMove,
+            QPointF(local), QPointF(start + delta), Qt.NoButton, Qt.LeftButton, Qt.NoModifier))
+        if release:
+            bubble.mouseReleaseEvent(QMouseEvent(QEvent.MouseButtonRelease,
+                QPointF(local), QPointF(start + delta), Qt.LeftButton, Qt.NoButton, Qt.NoModifier))
+
+    def test_boundary_resize_preserves_shape_anchor_and_clamps_on_offset_screen(self):
+        screen = Mock()
+        bounds = QRect(-1200, 100, 1200, 800)
+        screen.availableGeometry.return_value = bounds
+        for shape in ('circle', 'rounded', 'square', 'custom'):
+            with self.subTest(shape=shape):
+                bubble = CameraBubble()
+                self.addCleanup(bubble.close)
+                bubble.arrange(screen, .25, 'bottom-right', 'square')
+                if shape == 'custom':
+                    # A supplied alpha image stays the same shape when resized.
+                    directory = tempfile.TemporaryDirectory()
+                    self.addCleanup(directory.cleanup)
+                    path = Path(directory.name) / 'mask.png'
+                    mask = QImage(40, 40, QImage.Format_ARGB32_Premultiplied)
+                    mask.fill('white')
+                    self.assertTrue(mask.save(str(path)))
+                    bubble.apply_shape(shape, path)
+                else:
+                    bubble.apply_shape(shape)
+                frame = QImage(20, 20, QImage.Format_ARGB32_Premultiplied)
+                frame.fill('orange')
+                bubble.set_frame(frame)
+                values = []
+                bubble.resized.connect(values.append)
+                original = bubble.geometry()
+                self.resize_drag(bubble, QPoint(1, bubble.height() // 2), QPoint(-70, 0))
+                self.assertEqual(bubble.width(), 270)
+                self.assertEqual(bubble.height(), 270)
+                self.assertEqual(bubble.geometry().right(), original.right())
+                self.assertEqual(bubble.frame_image(1).pixelColor(0, 0).alpha() > 0,
+                                 shape in ('square', 'custom'))
+                self.assertAlmostEqual(values[-1], 270 / 800)
+                for delta, expected in ((QPoint(-5000, 0), 336), (QPoint(5000, 0), 100)):
+                    self.resize_drag(bubble, QPoint(1, bubble.height() // 2), delta)
+                    self.assertEqual(bubble.width(), expected)
+                    self.assertEqual(bubble.height(), expected)
+                    self.assertTrue(bounds.contains(bubble.geometry()))
+                bubble.arrange(screen, values[-1], 'bottom-right', shape if shape != 'custom' else 'square')
+                self.assertTrue(bounds.contains(bubble.geometry()))
+
+    def test_resize_stops_on_lost_release_and_recording_lock_preserves_move(self):
+        bubble = CameraBubble()
+        self.addCleanup(bubble.close)
+        bubble.arrange(qt.primaryScreen(), .25, 'bottom-right', 'rounded')
+        self.resize_drag(bubble, QPoint(1, bubble.height() // 2), QPoint(-20, 0), release=False)
+        original = bubble.geometry()
+        bubble.mouseMoveEvent(QMouseEvent(QEvent.MouseMove, QPointF(1, 50), QPointF(0, 0),
+            Qt.NoButton, Qt.NoButton, Qt.NoModifier))
+        self.assertEqual(bubble.geometry(), original)
+        for attr in ('recording', 'resize_enabled'):
+            setattr(bubble, attr, attr == 'recording')
+            size = bubble.size()
+            self.resize_drag(bubble, QPoint(1, bubble.height() // 2), QPoint(-20, -20))
+            self.assertEqual(bubble.size(), size)
+            self.assertNotEqual(bubble.pos(), original.topLeft())
+            setattr(bubble, attr, attr != 'recording')
 
     def test_zoom_starts_at_pointer_and_eases_back(self):
         motion = ZoomMotion()
