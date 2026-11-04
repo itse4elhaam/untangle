@@ -122,3 +122,32 @@ class FramingPreferencesTests(unittest.TestCase):
         self.assertGreater(w.camera_offset()[0], 0)
         self.assertEqual(w.camera_offset()[1], 0)  # No vertical crop at 1x.
         self.assertEqual(w.bubble.geometry(), bubble_geometry)
+
+    def test_lost_release_stops_crop_drag_in_pad_and_live_preview(self):
+        from PySide6.QtCore import QEvent, QPointF
+        from PySide6.QtGui import QMouseEvent
+        w = self.window
+        w.engine._camera_dimensions = (1920, 1080)
+        w.camera_zoom.setValue(200)
+        self.reveal(w.crop_drag_enabled)
+        self.case.click(w.crop_drag_enabled)
+        for target in (w.crop_position, w.preview):
+            with self.subTest(target=target.accessibleName()):
+                self.reveal(w.crop_position if target is w.crop_position else w.crop_drag_enabled)
+                point = target.rect().center()
+                QTest.mousePress(target, Qt.LeftButton, pos=point)
+                before = w.camera_offset()
+                w.engine.reset_mock()
+                for buttons in (Qt.NoButton, Qt.LeftButton):
+                    event = QMouseEvent(QEvent.MouseMove, QPointF(point + QPoint(30, 15)),
+                                        QPointF(target.mapToGlobal(point + QPoint(30, 15))),
+                                        Qt.NoButton, buttons, Qt.NoModifier)
+                    # Qt drops no-button move events for widgets without mouse
+                    # tracking; inject this lost-release boundary explicitly.
+                    if target is w.crop_position:
+                        target.mouseMoveEvent(event)
+                    else:
+                        w.eventFilter(target, event)
+                QTest.mouseRelease(target, Qt.LeftButton, pos=point)
+                self.assertEqual(w.camera_offset(), before)
+                w.engine.set_camera_framing.assert_not_called()

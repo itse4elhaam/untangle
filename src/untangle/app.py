@@ -800,6 +800,7 @@ class Window(QMainWindow):
             self.settings_layout.addWidget(slider)
             slider.valueChanged.connect(self.camera_offset_changed)
         self.camera_offset_reset = QPushButton('Center image')
+        self.camera_offset_reset.setAutoDefault(False)
         self.camera_offset_reset.clicked.connect(lambda: self.camera_offset_dragged(0., 0.))
         self.settings_layout.addWidget(self.camera_offset_reset)
         self.config_controls = [self.crop_position, self.camera_offset_x, self.camera_offset_y, self.camera_offset_reset, self.crop_drag_enabled, self.screen_button, self.camera_button, self.capture_kind, self.capture_window, self.refresh_button, self.screen, self.camera, self.camera_toggle, self.microphone, self.clean_microphone, self.desktop_audio, self.shape, self.size, self.position, self.mask_button, self.mirror, self.quality, self.canvas, self.framing, self.camera_zoom, self.camera_zoom_reset, self.camera_zoom_minus, self.camera_zoom_plus, self.camera_settings_button]
@@ -977,6 +978,9 @@ class Window(QMainWindow):
             self._crop_drag = (event.position(), self.camera_offset())
             return True
         if event.type() == QEvent.MouseMove and self._crop_drag is not None:
+            if not event.buttons() & Qt.LeftButton:
+                self._crop_drag = None
+                return super().eventFilter(watched, event)
             dimensions = getattr(self.engine, '_camera_dimensions', None)
             if not isinstance(dimensions, tuple) or len(dimensions) != 2:
                 return True

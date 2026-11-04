@@ -53,7 +53,15 @@ class CropPosition(QWidget):
             self.setCursor(Qt.ClosedHandCursor)
             event.accept()
 
+    def hideEvent(self, event):
+        self._drag = None
+        self.setCursor(Qt.OpenHandCursor)
+        super().hideEvent(event)
+
     def mouseMoveEvent(self, event):
+        if self._drag is not None and not event.buttons() & Qt.LeftButton:
+            self._drag = None
+            self.setCursor(Qt.OpenHandCursor)
         if self._drag is not None:
             start, offset = self._drag
             delta = event.position() - start

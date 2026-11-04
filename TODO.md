@@ -12,9 +12,9 @@ Do not deploy, install, activate timers, upload recordings, or launch the app wi
 - [x] Default to the highest-quality available camera. Rank advertised colour resolution at 30 fps, then frame rate; allow manual selection. Implementation committed in 76083e2; PR #20 is open. Root safe suite passed 609 tests, 3 skipped, in 69.161s. Not deployed in this batch.
 - [ ] Collapse the lower recorder status/details area shown in the screenshot behind a disclosure control; collapsed by default. Preserve important errors and recording state visibility.
 - [ ] Move Quick audio check from the primary setup pane to Settings, preserving its existing checks and cleanup behavior.
-- [ ] Keep camera framing/zoom preferences separate for camera-only and screen-plus-camera setups, including reload and mode switching.
+- [x] Keep camera framing/zoom preferences separate for camera-only and screen-plus-camera setups, including reload and mode switching.
 - [ ] Remove the redundant “Recording setup” heading and the “Screen + optional camera.” / equivalent mode helper text, preserving mode controls.
-- [ ] Add a Settings control to reposition the camera image inside its fixed shape, like moving an image within a crop. Preserve the shape position/size; persist framing per setup and test boundaries.
+- [x] Add a Settings control to reposition the camera image inside its fixed shape, like moving an image within a crop. Preserve the shape position/size; persist framing per setup and test boundaries.
 - [x] Provide a complete repeatable Google Drive setup guide using the wizard skill for every human prerequisite: Google project/API, OAuth consent/Desktop client, local configuration/sign-in, destination, background scheduling, verification, troubleshooting and disabling. Do not run the wizard or activate anything.
 
 ## Dedicated workstreams requested by user
@@ -53,3 +53,9 @@ Do not deploy, install, activate timers, upload recordings, or launch the app wi
 - Root merged it locally with UX/resize. Delegate full suite lacked PySide6; root therefore reruns using the project environment.
 - Root found and fixed a keyboard regression: guide buttons must not become default dialog actions when Enter commits a combo. All 8 Settings UI tests pass after setting autoDefault false. Root also changed the wizard shebang to /bin/bash per AGENTS.md; template helpers remain unchanged.
 - Full combined suite is pending after that fix. No wizard execution, OAuth, installation, timer activation, uploads, or live setup verification.
+
+## Framing integration
+
+- PR #25, dc03de17d1864c5e62b3a8c5d16718dd98639abb: independent camera/screen zoom and offsets, legacy preference migration, Settings drag pad/sliders/reset, explicit live-preview crop editing, and bounded mirror-aware source crop geometry. Root merged locally with size-only resize API intact.
+- Root fixed lost-release crop dragging and disabled autoDefault on Center image. Five framing interaction tests and eight Settings UI tests pass after those fixes; shell syntax/diff checks pass. Full combined verification is still pending.
+- Camera sensor/output and native X11 event delivery remain unverified; no app/device launch or deployment. Crop pad is schematic; real image feedback uses the existing recorder/bubble preview.
