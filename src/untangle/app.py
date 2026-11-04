@@ -25,7 +25,8 @@ from .naming_dialog import prompt_recording_name
 from .local_titles import LocalTitleJob, local_title_capability
 from .upload_store import UploadStore
 from .loom import (parse_account_status, parse_video_info, parse_upload_result,
-                   parse_upload_progress, valid_share_url, video_id)
+                   parse_upload_progress, valid_share_url, video_id, CliHelpCache,
+                   rename_title_args, supports_option)
 from .audio_devices import AudioDevices, AudioDeviceError
 from .audio_debug import AudioTrace, emit
 from .engine import recording_audio_warning
@@ -213,6 +214,12 @@ class Window(QMainWindow):
         self.resize(1120, 840)
         self.setMinimumSize(960, 760)
         self.prefs = QSettings('TrueDevs', 'Glint')  # Preserve existing preferences.
+        if not self.prefs.value('manual_titles_default_v1', False, type=bool):
+            # Older versions enabled AI naming by default. Make it an explicit
+            # opt-in once, then preserve any choice made after this migration.
+            self.prefs.setValue('auto_titles', False)
+            self.prefs.setValue('loom_auto_titles', False)
+            self.prefs.setValue('manual_titles_default_v1', True)
         self.engine = None
         self._framing_explicit = False
         self.audio_devices = AudioDevices()
@@ -277,6 +284,7 @@ class Window(QMainWindow):
         self._upload_errors = ''
         self._upload_active = False
         self._upload_process = None
+        self._loom_help_cache = CliHelpCache()
         self._title_job = None
         self.build()
         self.set_theme(self.prefs.value('theme', 'light'))
@@ -358,7 +366,7 @@ class Window(QMainWindow):
         self.settings_layout.addWidget(self.theme_choice)
         self.settings_layout.addWidget(label('Recording names', 'section'))
         self.auto_titles = QCheckBox('Generate a name from the recording')
-        self.auto_titles.setChecked(self.prefs.value('auto_titles', True, type=bool))
+        self.auto_titles.setChecked(self.prefs.value('auto_titles', False, type=bool))
         self.auto_titles.toggled.connect(lambda value: self.prefs.setValue('auto_titles', value))
         self.settings_layout.addWidget(self.auto_titles)
         self.title_capability = label('', 'muted')
@@ -1737,26 +1745,23 @@ class Window(QMainWindow):
         self.stop()
 
     def finish_discard(self, path):
-        restart = self._restarting
         self._restarting = False
-        emit(self, 'save.result', outcome='discarded')
+        emit(self, 'save.result', outcome='kept')
         self.ready_after_save()
-        try:
-            path.unlink(missing_ok=True)
-        except OSError as exc:
-            self.set_last(path)
-            self.notice(f'Could not discard the recording: {exc}. It is still at {path}.')
-        else:
-            self.notice('Recording discarded. Nothing was saved.')
-            if restart and not self.quit_after_save and not self._closing:
-                self.counting = True
-                self.start()
+        self.set_last(path)
+        self.notice(f'Recording kept at {path}. Upload it to Google Drive or Loom before deleting it.')
         if self.quit_after_save:
             self.close()
 
     def delete_saved_recording(self, path):
         """Delete a just-saved recording and anything remembered about it."""
         path = Path(path)
+        from .archive import has_remote_copy
+        identity = self.upload_store.file_identity(path)
+        if not has_remote_copy(path, self.upload_store):
+            raise OSError('A verified copy on Google Drive or Loom is required before deletion.')
+        if path.is_symlink() or self.upload_store.file_identity(path) != identity:
+            raise OSError('The recording changed during verification.')
         path.unlink()
         try:
             self.upload_store.remove(path)
@@ -2429,7 +2434,7 @@ class Window(QMainWindow):
         auto.setEnabled(bool(cli))
         layout.addWidget(auto)
         titles = QCheckBox('Let Loom generate titles when available')
-        titles.setChecked(self.prefs.value('loom_auto_titles', True, type=bool))
+        titles.setChecked(self.prefs.value('loom_auto_titles', False, type=bool))
         layout.addWidget(titles)
         title_status = label('Enabled here: Untangle sends no title override. Loom controls AI titles and requires a transcript of at least 30 seconds. Automatic titles for imported videos are not confirmed; the CLI cannot read or enable this Loom setting.', 'muted')
         title_status.setWordWrap(True)
@@ -2437,7 +2442,7 @@ class Window(QMainWindow):
         def describe_titles(enabled):
             title_status.setText(
                 'Enabled here: no title override is sent. The CLI cannot read or enable Loom’s AI setting. Automatic titles for imported videos are not confirmed. Loom requires a transcript of at least 30 seconds.' if enabled else
-                'Untangle will request your local recording title when the installed CLI supports it.')
+                'Use the local filename without its extension as the Loom title.')
         titles.toggled.connect(describe_titles)
         describe_titles(titles.isChecked())
         title_help = QPushButton('Loom automatic-title settings ↗')
@@ -2677,7 +2682,11 @@ class Window(QMainWindow):
         self._upload_visibility = self.prefs.value('visibility', 'owner')
         if self._upload_visibility not in ('owner', 'workspace', 'public'):
             self._upload_visibility = 'owner'
-        self._upload_auto_title = self.prefs.value('loom_auto_titles', True, type=bool)
+        self._upload_auto_title = self.prefs.value('loom_auto_titles', False, type=bool)
+        self._upload_title = self._upload_file.stem
+        self._upload_title_warning = ''
+        self._upload_setting_title = False
+        self._upload_cli_identity = CliHelpCache.identity(cli)
         self._upload_url = None
         self._upload_metadata_warning = ''
         self._upload_active = True
@@ -2686,11 +2695,15 @@ class Window(QMainWindow):
         self._upload_output = self._upload_errors = ''
         self._upload_result = {}
         self.save_upload_metadata(self._upload_file, expected_identity=self._upload_identity, status='uploading', error='',
-                                  visibility_warning='', visibility=self._upload_visibility)
+                                  visibility_warning='', title_warning='', visibility=self._upload_visibility)
         self.update_upload_panel('Preparing Loom upload', 'Checking the installed CLI. Your local recording stays safe.', active=True)
         self.upload_timer.start()
         self.notice('Preparing Loom upload…')
-        self.start_upload_process(['loom', 'video', 'upload', '--help'], self.upload_help)
+        help_text = self._loom_help_cache.get(self._upload_cli_identity, 'upload')
+        if help_text is not None:
+            self.begin_loom_transfer(help_text)
+        else:
+            self.start_upload_process(['loom', 'video', 'upload', '--help'], self.upload_help)
 
     def start_upload_process(self, args, finished, *, stream=False):
         previous = self._upload_process
@@ -2710,6 +2723,11 @@ class Window(QMainWindow):
             def expired():
                 if self._upload_process is process and self._upload_active:
                     process.kill()
+                    if self._upload_process is not process or not self._upload_active:
+                        return
+                    if finished in (self.upload_title_help, self.upload_title_done):
+                        self.upload_title_failed()
+                        return
                     if getattr(self, '_upload_url', None):
                         self.upload_end('Uploaded, but the sharing check timed out. Review permissions in Loom before sharing.', state=self._upload_result.get('status', 'uploaded'), visibility_warning='Sharing permissions were not confirmed.')
                     else:
@@ -2733,6 +2751,9 @@ class Window(QMainWindow):
 
     def upload_process_error(self, error):
         if error == QProcess.FailedToStart:
+            if getattr(self, '_upload_setting_title', False):
+                self.upload_title_failed()
+                return
             if getattr(self, '_upload_url', None):
                 self.upload_end('Uploaded, but the sharing command could not start. Review permissions in Loom before sharing. Your local file is saved.', state=getattr(self, '_upload_result', {}).get('status', 'uploaded'), visibility_warning='Sharing permissions were not confirmed.')
             else:
@@ -2743,14 +2764,23 @@ class Window(QMainWindow):
         if code != 0 or status != QProcess.NormalExit:
             self.upload_end('This TWG CLI does not support video uploads. Update it and connect your Loom account.', state='failed')
             return
-        from .loom import upload_args, supports_option
+        self.begin_loom_transfer(help_text)
+
+    def cache_loom_help(self, command, help_text):
+        identity = CliHelpCache.identity(self._upload_cli)
+        if identity == self._upload_cli_identity:
+            self._loom_help_cache.put(identity, command, help_text)
+
+    def begin_loom_transfer(self, help_text):
+        from .loom import upload_args
         try:
             args = upload_args(self._upload_file, help_text, self._upload_visibility,
-                               title=recording_title(self._upload_file),
+                               title=self._upload_title,
                                prefer_loom_titles=self._upload_auto_title)
         except ValueError:
             self.upload_end('Upload syntax could not be verified. Open Sharing for connection instructions.', state='failed')
             return
+        self.cache_loom_help('upload', help_text)
         self._upload_sets_visibility = supports_option(help_text, '--visibility')
         self._upload_transfer_started = True
         self.update_upload_panel('Uploading to Loom', 'The CLI does not report byte progress. Your local recording stays safe.', active=True)
@@ -2793,15 +2823,16 @@ class Window(QMainWindow):
         if self._upload_url or result.get('remote_id'):
             self.save_upload_metadata(self._upload_file, expected_identity=self._upload_identity, **result)
         if code == 0 and status == QProcess.NormalExit and self._upload_url:
-            if not self._upload_sets_visibility:
-                self.update_upload_panel('Applying Loom sharing permissions', 'The video was received. Confirming who can watch it…', active=True)
-                if not (self.busy or self.recording or self.counting):
-                    self.notice('Uploaded. Applying your Loom sharing setting…')
-                self.start_upload_process(['loom', 'video', 'visibility', 'set', self._upload_url,
-                    '--visibility', self._upload_visibility, '-o', 'json', '--output-summary', 'none'], self.visibility_done)
-                return
-            QApplication.clipboard().setText(self._upload_url)
-            self.upload_end('Uploaded to Loom. Link copied. Loom may still be processing the video.', state=result['status'])
+            if not self._upload_auto_title and result.get('title') != self._upload_title:
+                self._upload_setting_title = True
+                self.update_upload_panel('Setting your Loom title', 'Using the recording name without its extension.', active=True)
+                help_text = self._loom_help_cache.get(CliHelpCache.identity(self._upload_cli), 'rename')
+                if help_text is not None:
+                    self.set_uploaded_title(help_text)
+                else:
+                    self.start_upload_process(['loom', 'video', 'rename', '--help'], self.upload_title_help)
+            else:
+                self.finish_loom_upload()
         elif code == 0 and status == QProcess.NormalExit:
             self.upload_end('The upload command finished without a Loom link. Check your Loom library before retrying.', state='uncertain')
         else:
@@ -2815,6 +2846,57 @@ class Window(QMainWindow):
             else:
                 advice = 'Check your connection and Loom library before retrying. A failed command may leave a remote video.'
             self.upload_end('Loom upload failed. Your local recording is safe. ' + advice, state=result['status'])
+
+    def upload_title_help(self, code, status):
+        help_text = bytes(self._upload_process.readAllStandardOutput()).decode(errors='replace')
+        help_text += bytes(self._upload_process.readAllStandardError()).decode(errors='replace')
+        if code != 0 or status != QProcess.NormalExit:
+            self.upload_title_failed()
+            return
+        self.set_uploaded_title(help_text)
+
+    def set_uploaded_title(self, help_text):
+        if not self.upload_source_matches():
+            self.upload_end('', state='uncertain')
+            return
+        try:
+            args = rename_title_args(self._upload_url, self._upload_title, help_text)
+        except ValueError:
+            self.upload_title_failed()
+            return
+        self.cache_loom_help('rename', help_text)
+        self.start_upload_process(args, self.upload_title_done)
+
+    def upload_title_done(self, code, status):
+        if not self.upload_source_matches():
+            self.upload_end('', state='uncertain')
+            return
+        if code != 0 or status != QProcess.NormalExit:
+            self.upload_title_failed()
+            return
+        self._upload_setting_title = False
+        self._upload_result['title'] = self._upload_title
+        self.save_upload_metadata(self._upload_file, expected_identity=self._upload_identity, title=self._upload_title)
+        self.finish_loom_upload()
+
+    def upload_title_failed(self):
+        self._upload_setting_title = False
+        self._upload_title_warning = 'Loom received the video, but its title could not be set. Rename it in Loom; do not upload another copy.'
+        self.finish_loom_upload()
+
+    def finish_loom_upload(self):
+        if not self.upload_source_matches():
+            self.upload_end('', state='uncertain')
+            return
+        if not self._upload_sets_visibility:
+            self.update_upload_panel('Applying Loom sharing permissions', 'The video was received. Confirming who can watch it…', active=True)
+            if not (self.busy or self.recording or self.counting):
+                self.notice('Uploaded. Applying your Loom sharing setting…')
+            self.start_upload_process(['loom', 'video', 'visibility', 'set', self._upload_url,
+                '--visibility', self._upload_visibility, '-o', 'json', '--output-summary', 'none'], self.visibility_done)
+            return
+        QApplication.clipboard().setText(self._upload_url)
+        self.upload_end('Uploaded to Loom. Link copied. Loom may still be processing the video.', state=self._upload_result['status'])
 
     @observed("app.visibility_done")
     def visibility_done(self, code, status):
@@ -2831,6 +2913,7 @@ class Window(QMainWindow):
     def upload_end(self, text, state='failed', visibility_warning=''):
         diagnostic_event('upload.result', outcome=state)
         self._upload_active = False
+        self._upload_setting_title = False
         self.upload_timer.stop()
         source_matches = self.upload_source_matches()
         if not source_matches:
@@ -2840,8 +2923,11 @@ class Window(QMainWindow):
             text = 'The local recording changed during upload. Check Loom for the original video; no link was attached to this file.'
             state = 'uncertain'
         if getattr(self, '_upload_file', None) and source_matches:
+            title_warning = getattr(self, '_upload_title_warning', '')
+            if title_warning:
+                text += ' ' + title_warning
             fields = dict(status=state, error=text if state in ('failed', 'uncertain') else '',
-                          visibility_warning=visibility_warning)
+                          visibility_warning=visibility_warning, title_warning=title_warning)
             if getattr(self, '_upload_url', None):
                 fields['url'] = self._upload_url
             self.save_upload_metadata(self._upload_file, expected_identity=self._upload_identity, **fields)

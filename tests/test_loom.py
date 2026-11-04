@@ -112,8 +112,9 @@ class LoomParserTests(unittest.TestCase):
         self.assertFalse(supports_option('  --title-prefix <value>', '--title'))
         with self.assertRaises(ValueError):
             upload_args('/synthetic.mp4', 'Unsupported upload command')
-        with self.assertRaises(ValueError):
-            upload_args('/synthetic.mp4', old_help, title='Manual', prefer_loom_titles=False)
+        # Older upload commands can still be followed by video rename.
+        self.assertNotIn('--title', upload_args('/synthetic.mp4', old_help,
+                         title='Manual', prefer_loom_titles=False))
 
     def test_manual_remote_rename_requires_advertised_title_option(self):
         args = rename_title_args('abc123', ' New title ', '  --title <title> New video title')

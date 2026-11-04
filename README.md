@@ -17,7 +17,7 @@ This is a native Linux app built with Qt and OBS. Python handles the interface a
 - Browse, play, rename, delete, and copy paths to saved recordings.
 - Connect your Loom account and upload a selected video through Atlassian's official CLI.
 
-Recording starts in MKV so an interrupted session has a better chance of recovery. After you stop, FFmpeg prepares an MP4 without re-encoding. The local file stays yours if sharing fails.
+Recording starts in MKV so an interrupted session has a better chance of recovery. New recordings use quality based H.264 encoding at the selected resolution and frame rate, with a compatible hardware bitrate fallback. After you stop, FFmpeg prepares an MP4 without re-encoding. Existing recordings are uploaded unchanged. The local file stays yours if sharing fails.
 
 ## Where it stands
 

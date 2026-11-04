@@ -6,6 +6,7 @@ import shutil
 from pathlib import Path
 from .naming import has_automatic_name, recording_title, recording_files, rename_recording
 from .naming_dialog import prompt_recording_name
+from .upload_store import UploadStore
 from .loom import valid_share_url
 
 from PySide6.QtCore import Qt, QUrl, Signal, QSize, QSignalBlocker, QProcess, QTimer, QEvent
@@ -254,6 +255,9 @@ class Recordings(QWidget):
         self.delete_unnamed_button.clicked.connect(self.delete_unnamed)
         library_layout.addWidget(self.delete_unnamed_button)
 
+        self.cleanup = QPushButton('Review archived recordings…')
+        self.cleanup.clicked.connect(self.review_archived)
+        library_tools.addWidget(self.cleanup)
         self.drive = QPushButton('Google Drive…')
         self.drive.clicked.connect(self.open_drive)
         library_tools.addWidget(self.drive)
@@ -284,6 +288,10 @@ class Recordings(QWidget):
         self.player.seekableChanged.connect(self.seek.setEnabled)
         self.player.errorOccurred.connect(self.failed)
         self.refresh()
+        self.cleanup_timer = QTimer(self)
+        self.cleanup_timer.setSingleShot(True)
+        self.cleanup_timer.timeout.connect(self.offer_cleanup)
+        self.cleanup_timer.start(0)
 
     @observed("recordings.refresh")
     def refresh(self, selected=None):
@@ -435,7 +443,7 @@ class Recordings(QWidget):
             details += '\nNo usable Loom link is saved. Check Loom before uploading another copy.'
         if exists and status == 'deleted':
             details += '\nYour local recording is still on this computer.'
-        for field in ('error', 'visibility_warning'):
+        for field in ('error', 'visibility_warning', 'title_warning'):
             if state.get(field):
                 details += '\n' + str(state[field])
         self.loom_status.setText(details)
@@ -605,6 +613,21 @@ class Recordings(QWidget):
             names.append(f'…and {len(paths) - limit} more')
         return '\n'.join(names)
 
+    def offer_cleanup(self):
+        from .archive import cleanup_candidates
+        if cleanup_candidates(self.directory):
+            self.review_archived()
+
+    def review_archived(self):
+        from .archive import cleanup_candidates
+        paths = cleanup_candidates(self.directory)
+        if not paths:
+            self.message.setText('No verified Drive uploads have reached the 7-day retention period.')
+            return
+        self.delete_paths(paths, 'Clean up archived recordings?',
+            'Delete these local recordings archived at least 7 days ago? '
+            'Their remote copies will be checked before deletion.\n\n' + self.listing(paths))
+
     def delete_selected(self):
         paths = [path for path in self.checked_paths() if path.is_file()]
         if len(paths) == 1:
@@ -634,6 +657,7 @@ class Recordings(QWidget):
         self.update_actions()
         if not paths or any(self.deletion_blocked(path) for path in paths):
             return
+        identities = {path: UploadStore.file_identity(path) for path in paths}
         answer = QMessageBox.question(self, title, question,
             QMessageBox.Yes | QMessageBox.Cancel, QMessageBox.Cancel)
         if answer != QMessageBox.Yes:
@@ -644,10 +668,36 @@ class Recordings(QWidget):
                 if len(paths) > 1 else 'This recording is in use. Try again when saving or uploading finishes.')
             self.update_actions()
             return
+        from .archive import has_remote_copy
+        from .drive_dialog import DriveTask
+        from PySide6.QtCore import QEventLoop
+        from PySide6.QtWidgets import QProgressDialog
+        progress = QProgressDialog('Verifying remote copies…', '', 0, 0, self)
+        progress.setCancelButton(None)
+        progress.setWindowModality(Qt.ApplicationModal)
+        progress.setMinimumDuration(0)
+        loop = QEventLoop()
+        result = []
+        task = DriveTask(lambda emit: all(has_remote_copy(path, self.upload_store)
+                                         for path in paths), self)
+        task.done.connect(result.append)
+        task.finished.connect(loop.quit)
+        progress.show()
+        task.start()
+        loop.exec()
+        task.wait()
+        progress.close()
+        task.deleteLater()
+        if result != [True]:
+            self.message.setText('Deletion blocked. Every recording needs a verified copy on Google Drive or Loom.')
+            return
         self.release()
         deleted, failures, metadata_errors = [], [], []
         for path in paths:
             try:
+                if (self.deletion_blocked(path) or path.is_symlink()
+                        or UploadStore.file_identity(path) != identities[path]):
+                    raise OSError('The recording changed or is in use.')
                 path.unlink()
             except OSError as exc:
                 failures.append((path, exc))

@@ -28,15 +28,22 @@ action. The helpers in `untangle.loom` never execute commands.
   actual boolean is returned. A successful get cannot establish processing
   completion when that field is absent.
 * Upload: `twg loom video upload <absolute-file> -o json --output-summary none`.
-  Probe `--help` first. The installed CLI uses a positional file and has no
-  `--visibility`. Apply `twg loom video visibility set <id-or-url> --visibility owner|workspace|public -o json --output-summary none`
+  Probe `--help` first and cache verified help for the current app session,
+  invalidating it when the CLI path, inode, size, or timestamps change. Failed
+  checks and unstatable binaries are not cached. The installed CLI uses a
+  positional file and has no `--visibility`. Apply `twg loom video visibility set <id-or-url> --visibility owner|workspace|public -o json --output-summary none`
   separately. Newer releases can advertise visibility on upload. The
   [official changelog](https://developer.atlassian.com/cloud/twg-cli/changelog/)
   also documents exit code 3 when publication succeeds but visibility fails.
-* Manual title edit, when explicitly requested: probe `loom video rename --help`,
+* Title edit: probe `loom video rename --help`,
   then `twg loom video rename <id-or-url> --title <title> -o json --output-summary none`.
   `rename_title_args` and `upload_args` require advertised title options before
-  using them. `supports_option` matches option declarations exactly.
+  using them. The default upload title is the exact filename stem. The installed
+  upload command preserves the original extension even with `--title`, so a
+  differing returned title is corrected with rename after successful publication.
+  Older upload commands without `--title` use the same rename step. A failed
+  rename keeps the uploaded link and a warning, and sharing permissions are
+  still applied. `supports_option` matches option declarations exactly.
 
 These operations are listed in the official [command catalog](https://developer.atlassian.com/cloud/twg-cli/commands/commands-catalog/).
 The installed upload response contains `data.video`, including `id`, `name`,
@@ -65,8 +72,8 @@ No destructive probe is appropriate.
 
 Loom says auto titles are available on every plan and need a transcript with
 speech and at least 30 seconds of video. Editing the title before generation
-can prevent it. Therefore the default upload path omits `--title`, including
-filename-derived titles. See [Loom's auto-title guidance](https://support.atlassian.com/loom/docs/how-auto-titles-summaries-and-chapters-work/).
+can prevent it. The optional **Let Loom generate titles when available** setting
+omits `--title` and skips the post-upload rename. It is off by default. See [Loom's auto-title guidance](https://support.atlassian.com/loom/docs/how-auto-titles-summaries-and-chapters-work/).
 
 This does **not** establish auto-title support for imported Untangle videos.
 Atlassian's [request to apply AI features to uploaded videos](https://jira.atlassian.com/browse/LOOM-21)
