@@ -213,6 +213,34 @@ class CameraControlsTests(unittest.TestCase):
         engine.close.assert_not_called()
         self.assertFalse(w.configure_timer.isActive())
 
+    def test_boundary_resize_updates_slider_preferences_and_window_composition(self):
+        w = self.window
+        self.case.click(w.screen_button)
+        QTest.qWait(220)
+        w.engine.reset_mock()
+        origin = w.bubble.geometry()
+        w.resize_camera_overlay(.31)
+        self.assertEqual(w.size.value(), 31)
+        self.assertEqual(int(w.prefs.value('size')), 31)
+        self.assertEqual(w.engine.set_camera_framing.call_args.kwargs, {'size': .31})
+        self.assertEqual(w.bubble.geometry(), origin)
+        with patch.object(w.capture_kind, 'currentData', return_value='window'):
+            w.resize_camera_overlay(.32)
+        w.engine.set_camera_position.assert_called()
+        w.engine.configure.assert_not_called()
+        w.engine.close.assert_not_called()
+        for state in ('counting', 'busy', 'recording'):
+            setattr(w, state, True)
+            w.lock_controls(True)
+            w.engine.reset_mock()
+            w.resize_camera_overlay(.4)
+            self.assertFalse(w.bubble.resize_enabled)
+            self.assertEqual(w.size.value(), 32)
+            w.engine.set_camera_framing.assert_not_called()
+            setattr(w, state, False)
+        w.lock_controls(False)
+        self.assertTrue(w.bubble.resize_enabled)
+
     def test_busy_states_and_camera_off_lock_every_zoom_input(self):
         w = self.window
         self.case.click(w.camera_zoom_plus)

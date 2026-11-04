@@ -24,7 +24,7 @@ from pathlib import Path
 import tempfile
 import threading
 import time
-from .composition import camera_composition
+from .composition import camera_composition, bounded_offset
 from .audio_telemetry import LevelsCallback, MicrophoneTelemetry
 from .audio_debug import AudioTrace, emit, traced
 from .audio_devices import AudioDevices, AudioStreamPending
@@ -562,7 +562,7 @@ class Engine:
                   desktop_audio=False, shape="circle", mask_path=None, size=.22,
                   position="bottom-right", screen=0, mirror=True, floating_camera=False,
                   window_id: int | None = None, *, microphone_processing=True,
-                  camera_zoom=1.0, framing="fit"):
+                  camera_zoom=1.0, framing="fit", camera_offset=(0., 0.)):
         """Replace the scene and detach any camera display. Reattach afterward.
 
         In screen mode floating_camera omits the camera scene item: XShm captures
@@ -577,6 +577,7 @@ class Engine:
         Framing fits the entire source or fills the canvas by centered cropping.
         Pointer zoom multiplies that base framing. Camera zoom is a centered
         source crop shared by recording and native preview, clamped to 1–3.
+        camera_offset moves that crop in displayed axes without moving its shape.
         The caller must hide the desktop bubble and disable floating_camera for
         nonlandscape canvases or fill framing, using the composited overlay.
         """
@@ -591,6 +592,10 @@ class Engine:
                 or not math.isfinite(camera_zoom)):
             raise EngineError("Camera zoom must be a finite number.")
         camera_zoom = max(1.0, min(3.0, camera_zoom))
+        try:
+            camera_offset = bounded_offset(camera_offset)
+        except ValueError as exc:
+            raise EngineError(str(exc)) from exc
         if mode not in ("screen", "camera") or shape not in ("circle", "square", "rounded", "custom"):
             raise EngineError("Unknown recording mode or camera shape.")
         if position not in ("top-left", "top-right", "bottom-left", "bottom-right", "center"):
@@ -663,11 +668,13 @@ class Engine:
                 cw, ch = self._dimensions(source, f"Camera {camera}")
                 self._camera_dimensions = (cw, ch)
                 self._camera_framing = dict(mode=mode, camera_zoom=camera_zoom,
-                                            framing=framing, size=size, position=position)
+                                            framing=framing, size=size, position=position,
+                                            camera_offset=camera_offset)
                 self._camera_masked = mode != 'camera' and shape != 'square' and compose_camera
                 crop, placement = camera_composition(
                     self.width, self.height, cw, ch, mode=mode,
-                    camera_zoom=camera_zoom, framing=framing, size=size, position=position)
+                    camera_zoom=camera_zoom, framing=framing, size=size, position=position,
+                    camera_offset=camera_offset, mirror=bool(mirror))
                 left, top, crop_w, crop_h = crop
                 x, y, scale = placement
                 dw, dh = crop_w * scale, crop_h * scale
@@ -1201,13 +1208,15 @@ class Engine:
         self.set_screen_zoom(*getattr(self, '_screen_zoom', (1.0, .5, .5)))
 
     def set_camera_framing(self, *, camera_zoom=None, framing=None, size=None,
-                           position=None, mirror=None):
+                           position=None, mirror=None, camera_offset=None):
         """Reframe the existing camera, idle only, without touching capture/audio.
 
         None preserves that setting. Zoom is a continuous 1–3 factor, clamped
         after finite-number validation. Framing, size and position use the same
         values as configure(). Screen pointer zoom is independent. Floating
         camera window geometry/silhouette remains the caller's responsibility.
+        camera_offset is normalized image displacement in displayed axes,
+        clamped to -1..1. Positive moves right/down, including with mirror.
         """
         self._check_open()
         if self._output:
@@ -1217,6 +1226,11 @@ class Engine:
                     or not math.isfinite(camera_zoom)):
                 raise EngineError("Camera zoom must be a finite number.")
             camera_zoom = max(1.0, min(3.0, camera_zoom))
+        if camera_offset is not None:
+            try:
+                camera_offset = bounded_offset(camera_offset)
+            except ValueError as exc:
+                raise EngineError(str(exc)) from exc
         if framing is not None and framing not in ('fit', 'fill'):
             raise EngineError("Framing must be 'fit' or 'fill'.")
         if size is not None and (isinstance(size, bool) or not isinstance(size, (int, float))
@@ -1231,17 +1245,17 @@ class Engine:
             return
         settings = dict(self._camera_framing)
         for key, value in (('camera_zoom', camera_zoom), ('framing', framing),
-                           ('size', size), ('position', position)):
+                           ('size', size), ('position', position), ('camera_offset', camera_offset)):
             if value is not None:
                 settings[key] = value
+        mirrored = self._camera_mirror if mirror is None else mirror
         crop, (x, y, scale) = camera_composition(
-            self.width, self.height, *self._camera_dimensions, **settings)
+            self.width, self.height, *self._camera_dimensions, mirror=mirrored, **settings)
         left, top, cw, ch = crop
         dw, dh = cw * scale, ch * scale
         normalized = None if position is not None else self._camera_position
         if settings['mode'] == 'screen' and normalized is not None:
             x, y = normalized[0] * (self.width - dw), normalized[1] * (self.height - dh)
-        mirrored = self._camera_mirror if mirror is None else mirror
         mask_size = (min(cw, max(1, round(dw))), min(ch, max(1, round(dh))))
         mask_path = None
         if (self._camera_mask_filter and self._camera_mask_shape in ('circle', 'rounded')
@@ -1307,7 +1321,7 @@ class Engine:
         for mode in ('screen', 'camera'):
             settings['mode'] = mode
             crop, (x, y, scale) = camera_composition(
-                self.width, self.height, *self._camera_dimensions, **settings)
+                self.width, self.height, *self._camera_dimensions, mirror=self._camera_mirror, **settings)
             if mode == 'screen' and self._camera_position is not None:
                 x = self._camera_position[0] * (self.width - crop[2] * scale)
                 y = self._camera_position[1] * (self.height - crop[3] * scale)
@@ -1346,7 +1360,7 @@ class Engine:
         dw, dh = self._camera_display_size
         # Filter video dimensions can lag a queued OBS update by one frame.
         crop, _ = camera_composition(self.width, self.height,
-                                     *self._camera_dimensions, **self._camera_framing)
+                                     *self._camera_dimensions, mirror=self._camera_mirror, **self._camera_framing)
         source_width = crop[2]
         o = self._obs
         o.obs_sceneitem_defer_update_begin(self._camera_item)

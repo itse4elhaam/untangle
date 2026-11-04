@@ -68,6 +68,118 @@ class LoomLibraryTests(unittest.TestCase):
             title='Upstream Loom title', **fields)
         self.dialog.update_actions()
 
+    def test_active_transfer_navigation_stays_available_while_file_is_locked(self):
+        requested = []
+        self.dialog.active_transfer_requested.connect(requested.append)
+        self.blocked = True
+        for status in ('uploading', 'processing'):
+            self.store.update(self.path, status=status)
+            self.dialog.update_actions()
+            self.assertFalse(self.dialog.upload.isEnabled())
+            self.assertFalse(self.dialog.edit.isEnabled())
+            self.assertTrue(self.dialog.active_transfer.isEnabled())
+            self.dialog.active_transfer.click()
+        self.assertEqual(requested, [str(self.path), str(self.path)])
+        self.store.update(self.path, status='uncertain')
+        self.dialog.update_actions()
+        self.dialog.view_active_transfer()
+        self.assertEqual(len(requested), 2)
+        self.assertIn('Check Loom before retrying', self.dialog.loom_status.text())
+        self.path.unlink()
+        self.dialog.view_active_transfer()
+        self.assertEqual(len(requested), 2)
+
+    def test_deletion_preflight_explains_archive_route_before_confirmation(self):
+        for result in (False, OSError('offline')):
+            with self.subTest(result=result), patch('untangle.recordings.QMessageBox.question') as confirm:
+                with patch('untangle.archive.has_remote_copy', **(
+                        {'side_effect': result} if isinstance(result, Exception) else {'return_value': result})):
+                    self.dialog.delete_selected()
+                confirm.assert_not_called()
+                self.assertTrue(self.path.exists())
+                self.assertIn('Archive selected', self.dialog.message.text())
+        with patch('untangle.drive_dialog.DriveDialog') as drive:
+            self.dialog.drive.click()
+            self.assertEqual(drive.call_args.args[0], [self.path])
+            drive.return_value.exec.assert_called_once()
+
+    def test_deletion_final_remote_and_file_identity_checks_survive_confirmation(self):
+        with patch('untangle.archive.has_remote_copy', side_effect=[True, False]) as remote, \
+                patch('untangle.recordings.QMessageBox.question', return_value=QMessageBox.Yes):
+            self.dialog.delete_selected()
+        self.assertEqual(remote.call_count, 2)
+        self.assertTrue(self.path.exists())
+        def replace_during_confirmation(*args):
+            self.path.write_bytes(b'replacement recording with different identity')
+            return QMessageBox.Yes
+        with patch('untangle.archive.has_remote_copy', return_value=True), \
+                patch('untangle.recordings.QMessageBox.question', side_effect=replace_during_confirmation):
+            self.dialog.delete_selected()
+        self.assertTrue(self.path.exists())
+        self.assertIn('changed', self.dialog.message.text())
+
+    def test_partial_batch_deletion_keeps_failed_file_and_metadata(self):
+        other = self.directory / 'Second recording.mp4'
+        other.write_bytes(b'second synthetic file')
+        self.dialog.refresh(self.path)
+        self.dialog.files.selectAll()
+        unlink = Path.unlink
+        def delete_one(path, *args, **kwargs):
+            if path == other:
+                raise PermissionError('protected fixture')
+            return unlink(path, *args, **kwargs)
+        with patch('untangle.archive.has_remote_copy', return_value=True), \
+                patch('untangle.recordings.QMessageBox.question', return_value=QMessageBox.Yes), \
+                patch.object(Path, 'unlink', delete_one):
+            self.dialog.delete_selected()
+        self.assertFalse(self.path.exists())
+        self.assertTrue(other.exists())
+        self.assertIn('Deleted 1 recording', self.dialog.message.text())
+        self.assertIn('Could not delete 1', self.dialog.message.text())
+
+    def test_current_library_long_titles_and_transfer_outcomes_fit_960_by_760(self):
+        from PySide6.QtCore import QBuffer, QByteArray, QIODevice
+        from PySide6.QtWidgets import QPushButton, QStyleOptionButton, QStyle
+        from untangle.theme import apply_theme
+        long_path = self.directory / ('A long project walkthrough with detailed decisions and follow-up actions ' * 2 + '.mp4')
+        long_path.write_bytes(b'synthetic pixels only')
+        self.dialog.refresh(long_path)
+        self.dialog.resize(960, 760)
+        self.dialog.show()
+        original_theme = qt.property('untangleTheme') or 'light'
+        try:
+            for theme in ('light', 'dark'):
+                apply_theme(qt, theme)
+                for status in ('uploaded', 'failed'):
+                    self.store.update(long_path, status=status,
+                                      url=LOOM_URL if status == 'uploaded' else '',
+                                      error='Synthetic upload failure. Local file is kept.' if status == 'failed' else '')
+                    self.dialog.update_actions()
+                    qt.processEvents()
+                    self.assertEqual((self.dialog.width(), self.dialog.height()), (960, 760))
+                    for button in (self.dialog.cleanup, self.dialog.drive, self.dialog.edit,
+                                   self.dialog.upload, self.dialog.copy, self.dialog.rename, self.dialog.delete,
+                                   self.dialog.open_loom, self.dialog.copy_loom, self.dialog.check_loom,
+                                   self.dialog.forget_loom):
+                        if not button.isVisible():
+                            continue
+                        option = QStyleOptionButton()
+                        button.initStyleOption(option)
+                        rect = button.style().subElementRect(QStyle.SE_PushButtonContents, option, button)
+                        self.assertGreaterEqual(rect.width(), button.fontMetrics().horizontalAdvance(button.text()), button.text())
+                        self.assertTrue(button.parentWidget().rect().contains(button.geometry()), button.text())
+                    self.assertTrue(self.dialog.player.source().isEmpty())
+                    image = self.dialog.grab()
+                    self.assertFalse(image.isNull())
+                    if os.environ.get('UNTANGLE_LIBRARY_SNAPSHOTS') == '1':
+                        data = QByteArray()
+                        buffer = QBuffer(data)
+                        buffer.open(QIODevice.WriteOnly)
+                        self.assertTrue(image.save(buffer, 'PNG'))
+                        print('LIBRARY_SNAPSHOT ' + theme + '-' + status + ' ' + bytes(data.toBase64()).decode(), flush=True)
+        finally:
+            apply_theme(qt, original_theme)
+
     def test_persisted_link_and_upstream_title_survive_reload_without_renaming_local_file(self):
         self.uploaded(visibility_warning='Loom workspace visibility applies.')
         restored = self.new_dialog(UploadStore(self.state_path))

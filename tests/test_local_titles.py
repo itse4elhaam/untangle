@@ -182,12 +182,12 @@ class LocalTitleJobTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             self.job.start(self.video)
 
-    def test_verified_commands_pin_model_effort_priority_and_keep_transcript_off_argv(self):
+    def test_verified_commands_pin_model_effort_default_tier_and_keep_transcript_off_argv(self):
         process = self.reach_title()
         args = process.arguments
         self.assertEqual(args[args.index('--model') + 1], 'gpt-6-luna')
         self.assertIn('model_reasoning_effort="medium"', args)
-        self.assertIn('service_tier="priority"', args)
+        self.assertIn('service_tier="default"', args)
         self.assertEqual(args[args.index('--sandbox') + 1], 'read-only')
         for value in ('--ignore-user-config', '--strict-config', '--ephemeral',
                       'features.shell_tool=false', 'features.hooks=false', 'features.plugins=false',

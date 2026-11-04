@@ -20,7 +20,7 @@ class SettingsUITests(unittest.TestCase):
 
     def test_only_secondary_controls_move_into_settings(self):
         w = self.window
-        moved = (w.theme_choice, w.auto_titles, w.live_microphone, w.desktop_audio, w.mirror,
+        moved = (w.audio_check_button, w.theme_choice, w.auto_titles, w.live_microphone, w.desktop_audio, w.mirror,
                  w.clean_microphone, w.quality, w.shape, w.size, w.position)
         for control in moved:
             with self.subTest(control=control.accessibleName() or type(control).__name__):
@@ -28,7 +28,7 @@ class SettingsUITests(unittest.TestCase):
                 self.assertFalse(control.isVisible())
                 self.assertFalse(w.controls_panel.isAncestorOf(control))
         for control in (w.camera, w.microphone, w.camera_zoom, w.canvas,
-                        w.audio_check_button, w.record_button, w.microphone_meter):
+                        w.record_button, w.details_toggle):
             self.assertIs(control.window(), w)
             self.case.visible_control(control)
         self.case.open_settings()
@@ -96,7 +96,7 @@ class SettingsUITests(unittest.TestCase):
         self.assertFalse(w.navigation_footer.isVisible())
         self.assertEqual(w.prefs.value('sidebar_visible', type=bool), False)
         for control in (w.record_button, w.settings_button, w.sidebar_button,
-                        w.canvas, w.microphone_meter):
+                        w.canvas, w.details_toggle):
             self.case.visible_control(control)
         self.assertEqual(self.case.bounds(w.record_button), action)
         self.case.open_settings()

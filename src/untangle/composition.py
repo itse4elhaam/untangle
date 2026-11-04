@@ -24,9 +24,19 @@ def canvas_dimensions(quality_tuple, preset="landscape"):
     raise ValueError(f"Unknown canvas preset: {preset}")
 
 
+def bounded_offset(value):
+    """Image displacement in displayed axes: -1..1, positive right/down."""
+    if (not isinstance(value, (tuple, list)) or len(value) != 2
+            or any(isinstance(n, bool) or not isinstance(n, (int, float))
+                   or not math.isfinite(n) for n in value)):
+        raise ValueError('Camera offset must contain two finite numbers.')
+    return tuple(max(-1.0, min(1.0, n)) for n in value)
+
+
 def camera_composition(width, height, source_width, source_height, *, mode='camera',
-                       camera_zoom=1.0, framing='fit', size=.22, position='bottom-right'):
-    """Return a centered source crop and uniform scene placement, without IO."""
+                       camera_zoom=1.0, framing='fit', size=.22, position='bottom-right',
+                       camera_offset=(0., 0.), mirror=False):
+    """Return a bounded source crop and uniform scene placement, without IO."""
     if not all(math.isfinite(value) and value > 0
                for value in (width, height, source_width, source_height, camera_zoom)):
         raise ValueError('Camera and canvas dimensions and zoom must be positive and finite.')
@@ -36,6 +46,7 @@ def camera_composition(width, height, source_width, source_height, *, mode='came
         raise ValueError('Camera size must be 0.05–1.0.')
     if position not in ('top-left', 'top-right', 'bottom-left', 'bottom-right', 'center'):
         raise ValueError('Unknown camera position.')
+    offset_x, offset_y = bounded_offset(camera_offset)
     zoom = max(1.0, min(3.0, camera_zoom))
     crop_w, crop_h = source_width, source_height
     if mode == 'screen':
@@ -45,7 +56,11 @@ def camera_composition(width, height, source_width, source_height, *, mode='came
         crop_w, crop_h = min(crop_w, crop_h * aspect), min(crop_h, crop_w / aspect)
     crop_w = max(1, min(source_width, round(crop_w / zoom)))
     crop_h = max(1, min(source_height, round(crop_h / zoom)))
-    crop = ((source_width - crop_w) // 2, (source_height - crop_h) // 2, crop_w, crop_h)
+    # Moving the displayed image right reveals the source's left edge. A mirror
+    # reverses source X, so invert only that axis before choosing the crop.
+    source_x = offset_x if mirror else -offset_x
+    crop = (math.floor((source_width - crop_w) * (1 + source_x) / 2),
+            math.floor((source_height - crop_h) * (1 - offset_y) / 2), crop_w, crop_h)
     if mode == 'camera':
         scale_for = min if framing == 'fit' else max
         scale = scale_for(width / crop_w, height / crop_h)

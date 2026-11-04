@@ -1,0 +1,31 @@
+{
+  "disclosure": "Actual Qt UI. Capture, media, subprocesses, account calls, transcription and inference mocked; synthetic files/preferences only.",
+  "source_sha256": {
+    "src/untangle/app.py": "cdb9d214765ffd2367fd17b781115780fb5ec3772ec3ce0535be6833db2adad2",
+    "src/untangle/theme.py": "dadc6f96c20fe053ede5b95b7233ac9b013339382de01d9f9e066922de1b69d4",
+    "src/untangle/recordings.py": "6995d1d2eacd9e475416d3a463eb6a6b25420b70761ab7062a38fe8fe4023a5a",
+    "src/untangle/camera_framing.py": "ddd0736d26dde9ceddb5887f3d5cc0acc105b0ebf1205b2abec0cf810272f6e7",
+    "src/untangle/drive_help.py": "5e18c60d63ceca1f2d3eecd51380143f398bc462ba9f8d1538a16cc1e1c1bfb1",
+    "scripts/render-settings-ui.py": "45f490a591c6702dc764a1fbe992d00957810f5c7f2914c4f8a3dc37f802f392"
+  },
+  "images": {
+    "recorder-light.png": "a3c506b9247128960b2192307c68574e299e21e34ace285a4ce5e461e5c957f7",
+    "details-expanded-light.png": "a66f152315e7eb8739a3a9e38ab278ab899b15e12fbaf0791f8b22336f063ebe",
+    "screen-light.png": "d318fb787e0de957517f5c83ae406fb6311479f6398b9fc93b101a7cd68f5f46",
+    "collapsed-light.png": "9ba923b4adb7f92393660583c0b18c871d0807336806af67e7c0d0b9dff3328e",
+    "settings-light.png": "76e72f0b964df4b4443dccf43461f632a5cd1747ec87bf5e65acb7f846e0efb6",
+    "settings-audio-light.png": "76e72f0b964df4b4443dccf43461f632a5cd1747ec87bf5e65acb7f846e0efb6",
+    "settings-crop-light.png": "2b7a90bb806624224a9a4797248e697263a6c3bb08408192e907ce76afb50dfe",
+    "drive-guide-light.png": "62c0e384758fb0c51c0ed1007d949b48df2368e356e5093fcb9f1cc1cca262b5",
+    "library-light.png": "c56ca77480916458c28ea977b6e17f925c0df526569a808e7061a5f0656ac8ca",
+    "recorder-dark.png": "45673719cf06c8b127c3a0d26789a2c3fae3be4b9470cbe64e1a56400a1ed547",
+    "details-expanded-dark.png": "c7e0142833673ebb7e72b9859a362b569fcf32288475bdb26f77a6ce551ceda4",
+    "screen-dark.png": "ee3ad938bea9fbd1d206307222e1d2586430395dc3458a5481974a59834dc5ec",
+    "collapsed-dark.png": "fb4b3726d83fe0c7a1d856cdcdf3191469570be508a50f606c5e1c8e44f713a6",
+    "settings-dark.png": "2e80ca64c9e8e29f92a8eb25126cc098d5d349e9ecfcd738099e74c0f018b25d",
+    "settings-audio-dark.png": "2e80ca64c9e8e29f92a8eb25126cc098d5d349e9ecfcd738099e74c0f018b25d",
+    "settings-crop-dark.png": "fd1d05b753735efd3ac87dafe0a4d0d8dcbf6b51380112ee452b2fbf913cdbd7",
+    "drive-guide-dark.png": "d63e7c6b1ad2ef1e575098125d6faa9b6a1a4486afb2b394c4e62be54a186a5f",
+    "library-dark.png": "d27c4c03aab15bbe69c94367333708bde2289c7b3103269bf3b2d00d0c0d4ec5"
+  }
+}

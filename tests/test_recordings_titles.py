@@ -107,3 +107,50 @@ class RecordingTitleTests(unittest.TestCase):
         window.set_last.reset_mock()
         Window.recording_renamed(window, str(self.root / 'other.mp4'), str(target))
         window.set_last.assert_not_called()
+
+    def test_row_rename_targets_clicked_recording_instead_of_current_selection(self):
+        from PySide6.QtWidgets import QToolButton
+        from PySide6.QtCore import Qt
+        other = self.root / 'Other take.mp4'
+        other.write_bytes(b'other synthetic recording')
+        self.dialog.refresh(other)
+        target = next(self.dialog.files.item(i) for i in range(self.dialog.files.count())
+                      if Path(self.dialog.files.item(i).data(Qt.UserRole)) == self.source)
+        button = self.dialog.files.itemWidget(target).findChild(QToolButton, 'renameRecordingRow')
+        def prompt(parent, path, rename):
+            self.assertEqual(path, self.source)
+            return rename('Renamed take')
+        with patch('untangle.recordings.prompt_recording_name', side_effect=prompt):
+            button.click()
+        self.assertFalse(self.source.exists())
+        self.assertTrue((self.root / 'Renamed take.mkv').exists())
+        self.assertTrue(other.exists())
+
+    def test_row_delete_confirms_only_clicked_recording_and_keeps_remote_protection(self):
+        from PySide6.QtWidgets import QToolButton, QMessageBox
+        from PySide6.QtCore import Qt
+        other = self.root / 'Other take.mp4'
+        other.write_bytes(b'other synthetic recording')
+        self.dialog.refresh(other)
+        self.dialog.files.selectAll()
+        target = next(self.dialog.files.item(i) for i in range(self.dialog.files.count())
+                      if Path(self.dialog.files.item(i).data(Qt.UserRole)) == self.source)
+        button = self.dialog.files.itemWidget(target).findChild(QToolButton, 'deleteRecordingRow')
+        with patch('untangle.recordings.QMessageBox.question', return_value=QMessageBox.Cancel) as confirm, \
+                patch('untangle.archive.has_remote_copy', return_value=True):
+            button.click()
+        self.assertIn(str(self.source), confirm.call_args.args[2])
+        self.assertNotIn(str(other), confirm.call_args.args[2])
+        with patch('untangle.recordings.QMessageBox.question', return_value=QMessageBox.Yes), \
+                patch('untangle.archive.has_remote_copy', return_value=False):
+            button.click()
+        self.assertTrue(self.source.exists())
+        self.assertTrue(other.exists())
+        self.assertIn('Deletion blocked', self.dialog.message.text())
+
+    def test_row_actions_disable_while_recording_is_in_use(self):
+        from PySide6.QtWidgets import QToolButton
+        self.dialog.deletion_blocked = lambda path: True
+        self.dialog.update_actions()
+        row = self.dialog.files.itemWidget(self.dialog.files.item(0))
+        self.assertTrue(all(not button.isEnabled() for button in row.findChildren(QToolButton)))

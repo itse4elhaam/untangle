@@ -1,6 +1,6 @@
 """Pinned Clearline UX checks, using real Qt input and synthetic devices only.
 
-Run: QT_QPA_PLATFORM=offscreen PYTHONPATH=src .venv/bin/python -m unittest discover -s tests -p test_ui_clickthrough.py -v
+Run: UNTANGLE_TEST_PATTERN=test_ui_clickthrough.py ./scripts/test.sh
 """
 import os
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
@@ -71,7 +71,7 @@ class ClearlineClickthrough(unittest.TestCase):
     def test_primary_setup_is_available_without_expanding_sections(self):
         for name in ('screen_button', 'camera_button', 'canvas', 'preview_title',
                      'camera', 'camera_zoom', 'camera_zoom_value', 'camera_zoom_reset',
-                     'microphone', 'audio_check_button', 'settings_button', 'sidebar_button'):
+                     'microphone', 'details_toggle', 'settings_button', 'sidebar_button'):
             with self.subTest(control=name):
                 self.assertTrue(getattr(self.window, name).isVisible(),
                     f'{name} must be visible without opening a setup accordion')
@@ -289,6 +289,7 @@ class ClearlineClickthrough(unittest.TestCase):
 
     def test_microphone_selection_and_live_off_have_explicit_visible_status(self):
         w = self.window
+        self.click(w.details_toggle)
         self.choose(w.microphone, 'test-microphone')
         self.assertTrue(w.microphone_meter.isVisible())
         self.open_settings()
@@ -357,6 +358,8 @@ class ClearlineClickthrough(unittest.TestCase):
 
     def test_audio_check_return_is_visible_and_restores_source_controls(self):
         w = self.window
+        self.open_settings()
+        self.reveal_setting(w.audio_check_button)
         self.wait_for(lambda: not w.audio_worker or not w.audio_worker.isRunning(), 'Synthetic audio worker did not finish')
         self.click(w.audio_check_button)
         dialog = getattr(w, 'audio_check_dialog', None)
@@ -459,6 +462,7 @@ class ClearlineClickthrough(unittest.TestCase):
 
     def test_primary_controls_fit_both_window_sizes_in_both_modes_and_themes(self):
         w = self.window
+        self.click(w.details_toggle)
         for width, height in ((960, 760), (1120, 840)):
             w.resize(width, height)
             QTest.qWait(20)
@@ -474,12 +478,13 @@ class ClearlineClickthrough(unittest.TestCase):
                             *([w.canvas] if mode == 'camera' else []),
                             w.camera, w.camera_zoom, w.camera_zoom_value, w.camera_zoom_reset, w.microphone,
                             w.settings_button, w.sidebar_button, w.library_button, w.sharing_button,
-                            w.record_button, w.audio_check_button,
+                            w.record_button, w.details_toggle,
                             w.microphone_meter,
                         ])
 
     def test_expanded_camera_keeps_meter_and_recording_controls_visible(self):
         w = self.window
+        self.click(w.details_toggle)
         for size in ((960, 760), (1120, 840)):
             with self.subTest(size=size):
                 w.resize(*size)
@@ -560,9 +565,12 @@ class ClearlineClickthrough(unittest.TestCase):
             with self.subTest(theme=theme):
                 self.choose_theme(theme)
                 selected = (w.camera.currentData(), w.microphone.currentData())
+                self.open_settings()
+                self.reveal_setting(w.audio_check_button)
                 self.wait_for(lambda: not w.audio_worker or not w.audio_worker.isRunning(),
                               'Synthetic audio worker did not finish')
                 self.click(w.audio_check_button)
+                self.assertFalse(w.settings_dialog.isVisible())
                 dialog = w.audio_check_dialog
                 for widget in (w.camera, w.microphone):
                     self.visible_control(widget)
@@ -577,7 +585,7 @@ class ClearlineClickthrough(unittest.TestCase):
                 self.assertTrue(w.microphone.isEnabled())
                 self.assertTrue(w.camera.isEnabled())
                 self.assertIs(qt.focusWidget(), w.microphone)
-                self.assertTrue(w.microphone_meter.isVisible())
+                self.assertFalse(w.microphone_meter.isVisible())
 
     def test_main_action_bounds_stay_fixed_through_recording_states(self):
         w = self.window
@@ -617,6 +625,8 @@ class ClearlineClickthrough(unittest.TestCase):
         sample = AudioSample(MagicMock(), 123)
         feed(sample, muted=True)
         w.engine.begin_audio_check.return_value = sample
+        self.open_settings()
+        self.reveal_setting(w.audio_check_button)
         self.wait_for(lambda: not w.audio_worker or not w.audio_worker.isRunning(),
                       'Synthetic audio worker did not finish')
         self.click(w.audio_check_button)
@@ -656,9 +666,12 @@ class ClearlineClickthrough(unittest.TestCase):
                     feed(sample, muted=True)
                 w.engine.begin_audio_check.return_value = sample
                 w.audio_devices.restore.return_value = True
+                self.open_settings()
+                self.reveal_setting(w.audio_check_button)
                 self.wait_for(lambda: not w.audio_worker or not w.audio_worker.isRunning(),
                               'Synthetic audio worker did not finish')
                 self.click(w.audio_check_button)
+                self.assertFalse(w.settings_dialog.isVisible())
                 dialog = w.audio_check_dialog
                 self.click(dialog.record)
                 self.wait_for(lambda: dialog.capturing and dialog.worker is None,

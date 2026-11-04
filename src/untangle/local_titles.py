@@ -288,7 +288,7 @@ class LocalTitleJob(QObject):
                 raise TitleError('No usable speech transcript was found. Enter a title manually.')
             self._root.joinpath('schema.json').write_text(json.dumps(_SCHEMA), encoding='utf-8')
             self._root.joinpath('instructions.txt').write_text(_INSTRUCTIONS, encoding='utf-8')
-            configs = ['model_reasoning_effort="medium"', 'service_tier="priority"',
+            configs = ['model_reasoning_effort="medium"', 'service_tier="default"',
                        'approval_policy="never"', 'web_search="disabled"',
                        'features.shell_tool=false', 'features.unified_exec=false',
                        'features.apply_patch_freeform=false', 'features.shell_snapshot=false',

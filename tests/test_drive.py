@@ -45,7 +45,9 @@ class DriveTests(unittest.TestCase):
         fake_http = Mock()
         with patch.dict(sys.modules, {'googleapiclient': Mock(), 'googleapiclient.http': fake_http}), \
                 patch.object(client, 'service', return_value=service):
-            with self.assertRaisesRegex(ValueError, 'bad.mp4'):
-                client.upload([Path('good.mp4'), Path('bad.mp4')], 'chosen-folder', Mock())
+            outcomes = client.upload([Path('good.mp4'), Path('bad.mp4')], 'chosen-folder', Mock())
+        self.assertEqual(outcomes, [
+            {'name': 'good.mp4', 'status': 'uploaded', 'remote_id': 'uploaded'},
+            {'name': 'bad.mp4', 'status': 'unconfirmed'}])
         self.assertEqual(service.files.return_value.create.call_args_list[0].kwargs['body'],
                          {'name': 'good.mp4', 'parents': ['chosen-folder']})
