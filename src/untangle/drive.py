@@ -69,29 +69,8 @@ class DriveClient:
 
     @observed("drive.upload")
     def upload(self, paths, folder_id, progress):
-        from googleapiclient.http import MediaFileUpload
-        service = self.service()
-        outcomes = []
-        for path in paths:
-            path = Path(path)
-            progress(f'Uploading {path.name}…')
-            try:
-                media = MediaFileUpload(str(path), resumable=True, chunksize=8 * 1024 * 1024)
-                request = service.files().create(body={'name': path.name, 'parents': [folder_id]},
-                                                 media_body=media, fields='id')
-                response = None
-                while response is None:
-                    status, response = request.next_chunk(num_retries=3)
-                    if status:
-                        progress(f'{path.name}: {status.progress():.0%}')
-                if not response.get('id'):
-                    raise ValueError('Drive did not return a file identifier')
-                outcomes.append({'name': path.name, 'status': 'uploaded', 'remote_id': response['id']})
-                progress(f'Uploaded {path.name}')
-            except Exception:
-                outcomes.append({'name': path.name, 'status': 'unconfirmed'})
-                progress(f'{path.name}: failed or unconfirmed. Check Drive before retrying.')
-        return outcomes
+        from .archive import upload_paths
+        return upload_paths(paths, folder_id, self, progress)
 
     @observed("drive.disconnect")
     def disconnect(self):

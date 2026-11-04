@@ -20,9 +20,6 @@ LOOM_URL = 'https://www.loom.com/share/0123456789abcdef0123456789abcdef'
 
 class LoomLibraryTests(unittest.TestCase):
     def setUp(self):
-        remote = patch('untangle.archive.has_remote_copy', return_value=True)
-        remote.start()
-        self.addCleanup(remote.stop)
         self.stack = ExitStack()
         self.addCleanup(self.stack.close)
         self.temp = self.stack.enter_context(tempfile.TemporaryDirectory())
@@ -58,7 +55,7 @@ class LoomLibraryTests(unittest.TestCase):
 
     def new_dialog(self, store=None):
         dialog = Recordings(self.directory, deletion_blocked=lambda path: self.blocked,
-            upload_store=self.store if store is None else store)
+            upload_store=self.store if store is None else store, drive_state=self.root / 'drive')
         self.dialogs.append(dialog)
         dialog.files.setCurrentRow(0)
         return dialog
@@ -89,34 +86,64 @@ class LoomLibraryTests(unittest.TestCase):
         self.dialog.view_active_transfer()
         self.assertEqual(len(requested), 2)
 
-    def test_deletion_preflight_explains_archive_route_before_confirmation(self):
-        for result in (False, OSError('offline')):
-            with self.subTest(result=result), patch('untangle.recordings.QMessageBox.question') as confirm:
-                with patch('untangle.archive.has_remote_copy', **(
-                        {'side_effect': result} if isinstance(result, Exception) else {'return_value': result})):
-                    self.dialog.delete_selected()
-                confirm.assert_not_called()
-                self.assertTrue(self.path.exists())
-                self.assertIn('Archive selected', self.dialog.message.text())
-        with patch('untangle.drive_dialog.DriveDialog') as drive:
-            self.dialog.drive.click()
-            self.assertEqual(drive.call_args.args[0], [self.path])
-            drive.return_value.exec.assert_called_once()
+    def test_unarchived_deletion_needs_only_local_confirmation(self):
+        with patch('untangle.archive.has_remote_copy', side_effect=OSError('offline')) as remote, \
+                patch('untangle.recordings.QMessageBox.question', return_value=QMessageBox.Cancel) as confirm:
+            self.dialog.delete_selected()
+            confirm.assert_called_once()
+            self.assertTrue(self.path.exists())
+            confirm.return_value = QMessageBox.Yes
+            self.dialog.delete_selected()
+            self.assertFalse(self.path.exists())
+            remote.assert_not_called()
 
-    def test_deletion_final_remote_and_file_identity_checks_survive_confirmation(self):
-        with patch('untangle.archive.has_remote_copy', side_effect=[True, False]) as remote, \
-                patch('untangle.recordings.QMessageBox.question', return_value=QMessageBox.Yes):
-            self.dialog.delete_selected()
-        self.assertEqual(remote.call_count, 2)
-        self.assertTrue(self.path.exists())
-        def replace_during_confirmation(*args):
-            self.path.write_bytes(b'replacement recording with different identity')
+    def test_deletion_still_blocks_busy_or_changed_files(self):
+        def become_busy(*args):
+            self.blocked = True
             return QMessageBox.Yes
-        with patch('untangle.archive.has_remote_copy', return_value=True), \
-                patch('untangle.recordings.QMessageBox.question', side_effect=replace_during_confirmation):
+        with patch('untangle.recordings.QMessageBox.question', side_effect=become_busy):
             self.dialog.delete_selected()
         self.assertTrue(self.path.exists())
-        self.assertIn('changed', self.dialog.message.text())
+        self.blocked = False
+        def replace(*args):
+            self.path.write_bytes(b'changed fixture')
+            return QMessageBox.Yes
+        with patch('untangle.recordings.QMessageBox.question', side_effect=replace):
+            self.dialog.delete_selected()
+        self.assertTrue(self.path.exists())
+
+    def test_selected_drive_exclusion_survives_rename_and_can_be_cleared(self):
+        from untangle.drive_policy import DrivePolicy
+        self.dialog.drive_exclude.click()
+        self.assertTrue(DrivePolicy(self.root / 'drive').blocked(self.path))
+        self.assertIn('Do not upload to Google Drive', self.dialog.files.currentItem().text())
+        with patch('untangle.recordings.prompt_recording_name',
+                   side_effect=lambda parent, path, rename: rename('Private renamed recording')):
+            self.dialog.rename_selected()
+        renamed = self.dialog.selected_path()
+        self.assertTrue(DrivePolicy(self.root / 'drive').blocked(renamed))
+        self.assertEqual(self.dialog.drive_exclude.text(), 'Allow Google Drive uploads')
+        self.dialog.drive_exclude.click()
+        self.assertFalse(DrivePolicy(self.root / 'drive').blocked(renamed))
+
+    def test_archive_cleanup_keeps_remote_checks_before_and_after_confirmation(self):
+        with patch('untangle.archive.cleanup_candidates', return_value=[self.path]), \
+                patch('untangle.archive.has_remote_copy', return_value=False), \
+                patch('untangle.recordings.QMessageBox.question') as confirm:
+            self.dialog.review_archived()
+            confirm.assert_not_called()
+            self.assertTrue(self.path.exists())
+            self.assertIn('Cleanup blocked', self.dialog.message.text())
+        with patch('untangle.archive.cleanup_candidates', return_value=[self.path]), \
+                patch('untangle.archive.has_remote_copy', side_effect=[True, False]), \
+                patch('untangle.recordings.QMessageBox.question', return_value=QMessageBox.Yes):
+            self.dialog.review_archived()
+            self.assertTrue(self.path.exists())
+        with patch('untangle.archive.cleanup_candidates', return_value=[self.path]), \
+                patch('untangle.archive.has_remote_copy', return_value=True), \
+                patch('untangle.recordings.QMessageBox.question', return_value=QMessageBox.Yes):
+            self.dialog.review_archived()
+            self.assertFalse(self.path.exists())
 
     def test_partial_batch_deletion_keeps_failed_file_and_metadata(self):
         other = self.directory / 'Second recording.mp4'

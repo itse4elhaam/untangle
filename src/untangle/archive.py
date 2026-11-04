@@ -96,17 +96,77 @@ def cleanup_candidates(directory, state=STATE, now=None):
             if store.get(path).get('verified_at', now) <= now - RETENTION]
 
 
+def upload_recording(path, folder, store, client, progress=lambda message: None):
+    """Reserve before transfer, then verify before establishing retention."""
+    from googleapiclient.http import MediaFileUpload
+    identity = store.file_identity(path)
+    if identity is None or path.is_symlink():
+        raise OSError('The recording is missing or is a symbolic link.')
+    row = store.get(path)
+    digest = checksum(path)
+    if store.file_identity(path) != identity:
+        raise OSError('The recording changed.')
+    service = client.service()
+    remote_id = row.get('remote_id')
+    if not remote_id:
+        remote_id = service.files().generateIds(count=1, space='drive').execute()['ids'][0]
+        store.update(path, expected_identity=identity, remote_id=remote_id,
+                     checksum=digest, folder=folder)
+    if not verified_drive(path, store.get(path), client):
+        media = MediaFileUpload(str(path), resumable=True, chunksize=8 * 1024 * 1024)
+        request = service.files().create(body={'id': remote_id, 'name': path.name,
+            'parents': [store.get(path)['folder']]}, media_body=media,
+            fields='id', supportsAllDrives=True)
+        response = None
+        while response is None:
+            status, response = request.next_chunk(num_retries=3)
+            if status:
+                progress(f'{path.name}: {status.progress():.0%}')
+    if not verified_drive(path, store.get(path), client):
+        raise OSError('The Drive copy could not be verified.')
+    store.update(path, expected_identity=identity,
+                 verified_at=row.get('verified_at', time.time()))
+    return remote_id
+
+
+def upload_paths(paths, folder, client, progress):
+    """Explicit manual upload, independent of background opt-in and file age."""
+    from .drive_policy import DrivePolicy
+    outcomes = []
+    with archive_lock(client.state):
+        policy = DrivePolicy(client.state)
+        store = UploadStore(client.state / 'archive-uploads.json')
+        if store.error:
+            raise OSError(store.error)
+        for target in paths:
+            path = Path(target)
+            try:
+                if policy.blocked(path):
+                    outcomes.append({'name': path.name, 'status': 'excluded'})
+                    progress(f'{path.name}: Do not upload to Google Drive is set.')
+                    continue
+                progress(f'Uploading {path.name}…')
+                remote_id = upload_recording(path, folder, store, client, progress)
+                outcomes.append({'name': path.name, 'status': 'uploaded', 'remote_id': remote_id})
+                progress(f'Uploaded and verified {path.name}')
+            except Exception:
+                outcomes.append({'name': path.name, 'status': 'unconfirmed'})
+                progress(f'{path.name}: failed or unconfirmed. Check Drive before retrying.')
+    return outcomes
+
+
 def run(directory=None, state=STATE):
     # Leave active recording sessions alone. A stale app lock conservatively defers work.
     runtime = Path(os.environ.get('XDG_RUNTIME_DIR', f'/run/user/{os.getuid()}'))
     if (runtime / 'truedevs-glint.lock').exists():
         return
-    from googleapiclient.http import MediaFileUpload
     directory = directory or Path.home() / 'Videos/RecIt'
     with archive_lock(state):
         options = config(state)
         if not options.get('enabled') or not options.get('folder'):
             return
+        from .drive_policy import DrivePolicy
+        policy = DrivePolicy(state)
         client = DriveClient(state)
         store = UploadStore(state / 'archive-uploads.json')
         if store.error:
@@ -114,36 +174,15 @@ def run(directory=None, state=STATE):
         for path in recording_files(directory):
             try:
                 # Only archive files observed unchanged across two periodic runs.
-                if path.is_symlink():
+                if path.is_symlink() or policy.blocked(path):
                     continue
-                identity = store.file_identity(path)
                 row = store.get(path)
                 if not row.get('observed_at'):
                     store.update(path, observed_at=time.time())
                     continue
                 if time.time() - row['observed_at'] < 300:
                     continue
-                digest = checksum(path)
-                if store.file_identity(path) != identity:
-                    continue
-                service = client.service()
-                remote_id = row.get('remote_id')
-                if not remote_id:
-                    remote_id = service.files().generateIds(count=1, space='drive').execute()['ids'][0]
-                    # Persist before uploading: retries use the same ID, including after crashes.
-                    store.update(path, expected_identity=identity, remote_id=remote_id,
-                                 checksum=digest, folder=options['folder'])
-                if not verified_drive(path, store.get(path), client):
-                    media = MediaFileUpload(str(path), resumable=True, chunksize=8 * 1024 * 1024)
-                    request = service.files().create(body={'id': remote_id, 'name': path.name,
-                        'parents': [store.get(path)['folder']]}, media_body=media,
-                        fields='id', supportsAllDrives=True)
-                    response = None
-                    while response is None:
-                        _, response = request.next_chunk(num_retries=3)
-                if verified_drive(path, store.get(path), client):
-                    store.update(path, expected_identity=identity,
-                                 verified_at=row.get('verified_at', time.time()))
+                upload_recording(path, options['folder'], store, client)
             except Exception:
                 # One failed upload must not prevent other recordings from being archived.
                 # Do not log HTTP exceptions, which can contain tokens.

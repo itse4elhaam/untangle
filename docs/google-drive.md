@@ -161,10 +161,26 @@ copy. Offline or inaccessible destinations leave local files intact.
 ## Verify only when uploads are authorized
 
 Use an existing disposable, non-sensitive video, not a new live capture. Manual
-uploads require selecting recordings, **Upload selected recordings**, and
-confirmation. Check the destination in Drive before retrying a failed operation;
-earlier files may have succeeded and manual retries create additional copies.
-Manual uploads do not populate the automatic archive retention ledger.
+uploads start from **Upload selected to Google Drive…** in the library. Load the
+folders, choose the destination and confirm the upload. Manual uploads work even
+when background archiving is off. Both manual and automatic uploads save the
+remote ID before transfer and verify Drive size/checksum before starting retention.
+Retries reuse that ID in its original folder, including after a partial failure.
+Changing the chosen folder affects recordings that do not yet have a saved ID.
+Check Drive before retrying an unconfirmed result.
+
+To keep recordings off Drive, select them and choose **Do not upload to Google
+Drive**. The row shows the exclusion, which blocks both manual and background
+uploads and follows local renames and edits of the same file. Select them again
+and choose **Allow Google Drive uploads** to clear it. Mixed selections are all
+excluded when you choose Do not upload. Existing remote copies and transfers
+already in progress are unchanged. A copied/exported file is a new recording
+with its own upload choice. Unreadable exclusion settings block uploads.
+
+Manual local deletion requires confirmation, regardless of whether the recording has
+been uploaded. Google sign-in, connectivity and a remote copy are not required.
+Cancel keeps the files. Busy recordings, symbolic links and files changed during
+confirmation remain protected. Deletion leaves remote copies unchanged.
 
 For automatic verification, close Untangle and allow two timer runs. Check the
 file in Drive and inspect the private local ledger without sharing its contents:
@@ -182,11 +198,11 @@ intentionally quiet to keep OAuth details out of logs.
 
 Seven days after a verified archive upload, the library offers cleanup.
 **Review archived recordings…** opens the review again. Cancel must keep files.
-Only confirm deletion for a disposable recording you intend to remove. Each
-deletion requires a current matching, untrashed Drive copy or a completed Loom
-copy whose saved metadata and remote existence checks pass. Offline or uncertain
-checks block deletion. The timer never deletes. Do not change timestamps to
-simulate this on real recordings; synthetic tests cover the seven-day boundary.
+Only confirm deletion for a recording you intend to remove. No remote-copy
+check runs for manual deletion. Archive cleanup requires a current matching,
+untrashed Drive copy or completed Loom copy and checks it again after
+confirmation. Offline or uncertain checks block archive cleanup. The timer never
+deletes. Do not change timestamps to simulate this on real recordings; synthetic tests cover the seven-day boundary.
 
 ## Recovery, disabling and revocation
 
@@ -230,5 +246,5 @@ For complete local credential removal, stop the timer/service, close Untangle,
 then remove `client.json` and `token.json` in the private Drive directory and the
 original download using your file manager. Remove the wizard's private
 `progress.env` to forget its remembered paths. Preserve `archive-uploads.json`
-unless intentionally giving up archive history and its deletion protection.
+unless intentionally giving up archive history and saved retry identifiers.
 No step deletes remote recordings automatically.
