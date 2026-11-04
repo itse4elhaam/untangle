@@ -74,3 +74,18 @@ class FollowThroughTests(unittest.TestCase):
         self.assertTrue(editor._quit_when_finished)
         editor.worker = None
         editor.deleteLater()
+
+    def test_app_quit_waits_for_drive_worker(self):
+        from untangle.drive_dialog import DriveDialog
+        from unittest.mock import Mock
+        with patch('untangle.drive_dialog.DriveClient'):
+            dialog = DriveDialog([], self.w)
+        task = Mock()
+        task._quit_when_finished = False
+        dialog.task = task
+        event = Mock()
+        self.w.closeEvent(event)
+        event.ignore.assert_called_once()
+        task.finished.connect.assert_called_once()
+        dialog.task = None
+        dialog.deleteLater()

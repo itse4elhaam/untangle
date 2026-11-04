@@ -3284,6 +3284,15 @@ class Window(QMainWindow):
 
     @observed("app.closeEvent")
     def closeEvent(self, event):
+        from .drive_dialog import DriveDialog
+        for drive in self.findChildren(DriveDialog):
+            if drive.task is not None:
+                event.ignore()
+                if not getattr(drive.task, '_quit_when_finished', False):
+                    drive.task._quit_when_finished = True
+                    drive.task.finished.connect(lambda: QTimer.singleShot(0, self.close))
+                drive.status.setText('Waiting for the current Drive operation before closing Untangle.')
+                return
         from .editing_dialog import EditingDialog
         for editor in self.findChildren(EditingDialog):
             if editor.worker is not None:
