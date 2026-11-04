@@ -1397,19 +1397,15 @@ class Engine:
         """Restore configured fit/fill framing. stop() leaves framing unchanged."""
         self.set_screen_zoom(1.0, .5, .5)
 
-    def _create_recording(self, path, encoder_id, *, constant_bitrate=False):
+    def _create_recording(self, path, encoder_id):
         o = self._obs
         bitrate = max(6000, round(self.width*self.height*self.fps / 10000))
         settings = {"bitrate": bitrate, "keyint_sec": 2, "rate_control": "CBR"}
         if encoder_id == "ffmpeg_vaapi":
             settings.update(vaapi_device="/dev/dri/renderD128", vaapi_codec=27,
                             profile=100, level=52, bf=0)
-            if not constant_bitrate:
-                settings.update(rate_control="CQP", qp=18)
         else:
-            settings.update(rate_control="CRF", crf=18, preset="veryfast", profile="high")
-        # Encode once, at the original resolution/rate. MP4 preparation remains
-        # a lossless stream copy. OBS 27 uses qp for VAAPI and crf for x264.
+            settings.update(preset="veryfast", profile="high")
         data = self._data(settings)
         try:
             self._video_encoder = o.obs_video_encoder_create(encoder_id.encode(), b"RecIt H264", data, None)
@@ -1483,16 +1479,6 @@ class Engine:
             except EngineError as exc:
                 failures.append(str(exc))
                 self._release_recording()
-                if candidate == "ffmpeg_vaapi":
-                    # Some drivers cannot start CQP. Keep their existing CBR
-                    # hardware path before falling back to CPU encoding.
-                    try:
-                        self._create_recording(path, candidate, constant_bitrate=True)
-                        self.warnings.append('Hardware quality mode is unavailable; using the compatible fixed bitrate mode.')
-                        break
-                    except EngineError as fallback:
-                        failures.append(str(fallback))
-                        self._release_recording()
         else:
             message = "\n".join(failures)
             self.errors.append(message)
