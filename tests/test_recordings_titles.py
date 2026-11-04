@@ -142,11 +142,26 @@ class RecordingTitleTests(unittest.TestCase):
         self.assertIn(str(self.source), confirm.call_args.args[2])
         self.assertNotIn(str(other), confirm.call_args.args[2])
         with patch('untangle.recordings.QMessageBox.question', return_value=QMessageBox.Yes), \
+                patch('untangle.recordings.QMessageBox.warning') as blocked, \
                 patch('untangle.archive.has_remote_copy', return_value=False):
             button.click()
         self.assertTrue(self.source.exists())
         self.assertTrue(other.exists())
         self.assertIn('Deletion blocked', self.dialog.message.text())
+        blocked.assert_called_once()
+        self.assertIn('Archive selected', blocked.call_args.args[2])
+        with patch('untangle.recordings.QMessageBox.question', return_value=QMessageBox.Cancel), \
+                patch('untangle.recordings.QMessageBox.warning') as blocked, \
+                patch('untangle.archive.has_remote_copy', return_value=True):
+            button.click()
+        blocked.assert_not_called()
+        with patch('untangle.recordings.QMessageBox.question', return_value=QMessageBox.Yes), \
+                patch('untangle.recordings.QMessageBox.warning') as blocked, \
+                patch('untangle.archive.has_remote_copy', return_value=True):
+            button.click()
+        blocked.assert_not_called()
+        self.assertFalse(self.source.exists())
+        self.assertTrue(other.exists())
 
     def test_row_actions_disable_while_recording_is_in_use(self):
         from PySide6.QtWidgets import QToolButton

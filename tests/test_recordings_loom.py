@@ -158,7 +158,7 @@ class LoomLibraryTests(unittest.TestCase):
                     qt.processEvents()
                     self.assertEqual((self.dialog.width(), self.dialog.height()), (960, 760))
                     for button in (self.dialog.cleanup, self.dialog.drive, self.dialog.edit,
-                                   self.dialog.upload, self.dialog.copy, self.dialog.rename, self.dialog.delete,
+                                   self.dialog.upload, self.dialog.copy,
                                    self.dialog.open_loom, self.dialog.copy_loom, self.dialog.check_loom,
                                    self.dialog.forget_loom):
                         if not button.isVisible():

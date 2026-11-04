@@ -510,7 +510,7 @@ class ClearlineClickthrough(unittest.TestCase):
                     self.assert_primary_geometry([
                         page.back, page.settings_button, page.search, page.files,
                         page.toggle, page.seek, page.mute, page.volume,
-                        page.upload, page.copy, page.rename, page.delete,
+                        page.upload, page.copy,
                     ])
 
     def test_tab_navigation_reaches_primary_setup_and_actions(self):

@@ -86,7 +86,7 @@ class LibraryCleanupTests(unittest.TestCase):
         self.select(self.named[1], self.unnamed[0])
         self.assertEqual(self.library.delete.text(), 'Delete 2')
         with YES as confirm:
-            self.library.delete.click()
+            self.library.delete.trigger()
         self.assertIn('2 recordings', confirm.call_args.args[1])
         self.assertFalse(self.named[1].exists())
         self.assertFalse(self.unnamed[0].exists())
