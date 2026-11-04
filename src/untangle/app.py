@@ -366,6 +366,10 @@ class Window(QMainWindow):
         self.settings_layout.setSpacing(12)
         self.settings_layout.addWidget(label('Appearance', 'section'))
         self.settings_layout.addWidget(self.theme_choice)
+        from .drive_help import show_drive_setup_guide
+        self.drive_setup_guide = QPushButton('Google Drive setup and recovery…')
+        self.drive_setup_guide.clicked.connect(lambda: show_drive_setup_guide(self.settings_dialog))
+        self.settings_layout.addWidget(self.drive_setup_guide)
         self.settings_layout.addWidget(label('Recording names', 'section'))
         self.auto_titles = QCheckBox('Generate a name from the recording')
         self.auto_titles.setChecked(self.prefs.value('auto_titles', False, type=bool))

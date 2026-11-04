@@ -41,6 +41,10 @@ class DriveDialog(QDialog):
                       'folders and upload files. Background archiving is optional.')
         note.setWordWrap(True)
         layout.addWidget(note)
+        from .drive_help import show_drive_setup_guide
+        self.setup_guide = QPushButton('Google Drive setup and recovery…')
+        self.setup_guide.clicked.connect(lambda: show_drive_setup_guide(self))
+        layout.addWidget(self.setup_guide)
         self.configure = QPushButton('Set up Google OAuth client…')
         self.configure.clicked.connect(self.configure_client)
         layout.addWidget(self.configure)
