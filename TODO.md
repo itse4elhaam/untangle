@@ -10,18 +10,18 @@ Do not deploy, install, activate timers, upload recordings, or launch the app wi
 ## Active implementation
 
 - [x] Default to the highest-quality available camera. Rank advertised colour resolution at 30 fps, then frame rate; allow manual selection. Implementation committed in 76083e2; PR #20 is open. Root safe suite passed 609 tests, 3 skipped, in 69.161s. Not deployed in this batch.
-- [ ] Collapse the lower recorder status/details area shown in the screenshot behind a disclosure control; collapsed by default. Preserve important errors and recording state visibility.
-- [ ] Move Quick audio check from the primary setup pane to Settings, preserving its existing checks and cleanup behavior.
+- [x] Collapse the lower recorder status/details area shown in the screenshot behind a disclosure control; collapsed by default. Preserve important errors and recording state visibility.
+- [x] Move Quick audio check from the primary setup pane to Settings, preserving its existing checks and cleanup behavior.
 - [x] Keep camera framing/zoom preferences separate for camera-only and screen-plus-camera setups, including reload and mode switching.
-- [ ] Remove the redundant “Recording setup” heading and the “Screen + optional camera.” / equivalent mode helper text, preserving mode controls.
+- [x] Remove the redundant “Recording setup” heading and the “Screen + optional camera.” / equivalent mode helper text, preserving mode controls.
 - [x] Add a Settings control to reposition the camera image inside its fixed shape, like moving an image within a crop. Preserve the shape position/size; persist framing per setup and test boundaries.
 - [x] Provide a complete repeatable Google Drive setup guide using the wizard skill for every human prerequisite: Google project/API, OAuth consent/Desktop client, local configuration/sign-in, destination, background scheduling, verification, troubleshooting and disabling. Do not run the wizard or activate anything.
 
 ## Dedicated workstreams requested by user
 
 - [x] Implement floating camera boundary resizing. Preserves square alpha shape, movement, screen bounds and window-capture composition; uses the 12–42% size range and blocks resizing during recording/countdown/preparation/saving. Synthetic interaction and composition checks pass through `scripts/test.sh` (612 tests, 3 skipped; Xvfb unavailable). Review branch `feat/camera-widget-resize`, stacked on `feat/recorder-setup`; not deployed.
-- [ ] Create a UX/UI audit thread using GPT-6.1 Sol at high. Audit the complete app against Loom and Supercut, implement only small changes with negligible risk, and propose the others to the user. No change has literally zero risk; keep device, capture, upload, auth, and deletion behavior out of automatic polish.
-- [ ] Create an independent accountability thread to check every item here, track evidence/PRs and omissions, and report incomplete work without marking assumptions as done.
+- [x] Create a UX/UI audit thread using GPT-6.1 Sol at high. Audit the complete app against Loom and Supercut, implement only small changes with negligible risk, and propose the others to the user. No change has literally zero risk; keep device, capture, upload, auth, and deletion behavior out of automatic polish.
+- [x] Create an independent accountability thread to check every item here, track evidence/PRs and omissions, and report incomplete work without marking assumptions as done.
 
 ## Delivery checks
 
@@ -59,3 +59,9 @@ Do not deploy, install, activate timers, upload recordings, or launch the app wi
 - PR #25, dc03de17d1864c5e62b3a8c5d16718dd98639abb: independent camera/screen zoom and offsets, legacy preference migration, Settings drag pad/sliders/reset, explicit live-preview crop editing, and bounded mirror-aware source crop geometry. Root merged locally with size-only resize API intact.
 - Root fixed lost-release crop dragging and disabled autoDefault on Center image. Five framing interaction tests and eight Settings UI tests pass after those fixes; shell syntax/diff checks pass. Full combined verification is still pending.
 - Camera sensor/output and native X11 event delivery remain unverified; no app/device launch or deployment. Crop pad is schematic; real image feedback uses the existing recorder/bubble preview.
+
+## Complete implementation assembled for verification
+
+- PR #24, 3ab5cc164e6cd03eae0f87b681726b0bffb402c4, merged locally: collapsed-by-default recorder details, important feedback kept visible, Quick audio check in Settings, redundant setup heading/mode hint removed. New notice(detail=False), engine_notice(detail=False), and set_details_visible interfaces combine with framing and guide additions without conflicts.
+- All implementation streams are now assembled in draft PR #26. Checked implementation items mean delivered code for review, not installation or native hardware acceptance.
+- The earlier combined partial test run was superseded before merging #24, so source would not change during a run. Full suite now runs on the complete integrated source at /tmp/untangle-final-integrated.log. Final high-effort integration review and accountability reconciliation remain pending.
