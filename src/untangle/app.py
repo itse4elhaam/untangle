@@ -447,7 +447,6 @@ class Window(QMainWindow):
         controls.setContentsMargins(0, 0, 10, 0)
         summary = controls
         summary.setContentsMargins(12, 12, 12, 12)
-        summary.addWidget(label('Recording setup', 'section'))
         self.setup_sections = []
 
         def section(title, advanced=False):
@@ -476,9 +475,6 @@ class Window(QMainWindow):
             button.clicked.connect(lambda checked, m=mode: self.set_mode(m))
             modes.addWidget(button)
         controls.addLayout(modes)
-        self.mode_hint = label('Your screen, with you in the corner.', 'muted')
-        self.mode_hint.setWordWrap(True)
-        controls.addWidget(self.mode_hint)
         controls.addSpacing(0)
         self.capture_label = label('Capture', 'section')
         controls.addWidget(self.capture_label)
@@ -539,13 +535,14 @@ class Window(QMainWindow):
             self.microphone.addItem(name, source)
         controls.addWidget(self.microphone)
         self.audio_check_button = QPushButton('Quick audio check')
+        self.audio_check_button.setAutoDefault(False)
         self.audio_check_button.clicked.connect(self.open_audio_check)
-        summary.addWidget(self.audio_check_button)
         self.live_microphone = QCheckBox('Live microphone levels')
         self.live_microphone.setChecked(True)
         self.live_microphone.setToolTip('Uses your microphone while the recorder is visible. Bluetooth headsets use hands-free audio. Turn off to release the microphone.')
         self.live_microphone.toggled.connect(lambda _: self.idle_audio.reconcile())
         self.settings_layout.addWidget(label('Audio', 'section'))
+        self.settings_layout.addWidget(self.audio_check_button)
         self.settings_layout.addWidget(self.live_microphone)
         self.microphone_meter = MicrophoneMeter()
         self.clean_microphone = QCheckBox('Clean microphone')
@@ -676,7 +673,17 @@ class Window(QMainWindow):
         self.preview.resized.connect(self.resize_preview)
         self.preview_frame = CanvasPreview(self.preview)
         right.addWidget(self.preview_frame, 1)
-        right.addWidget(self.microphone_meter)
+        self.details_toggle = QPushButton('▸ Recording details')
+        self.details_toggle.setCheckable(True)
+        self.details_toggle.setAccessibleName('Recording details')
+        self.details_toggle.toggled.connect(self.set_details_visible)
+        right.addWidget(self.details_toggle, 0, Qt.AlignLeft)
+        self.recorder_details = QWidget()
+        details = QVBoxLayout(self.recorder_details)
+        details.setContentsMargins(0, 0, 0, 0)
+        details.addWidget(self.microphone_meter)
+        right.addWidget(self.recorder_details)
+        self.recorder_details.hide()
         self.source_note = label('4K output · source detail depends on your display and camera.', 'muted')
         self.source_note.setWordWrap(True)
         self.output_setup.addWidget(self.source_note)
@@ -699,11 +706,17 @@ class Window(QMainWindow):
             self.zoom_amount.addItem(title, value)
         self.zoom_amount.setCurrentIndex(1)
         zoom_row.addWidget(self.zoom_amount)
-        right.addLayout(zoom_row)
+        details.addLayout(zoom_row)
+        self.monitor_warning = label('', 'muted')
+        self.monitor_warning.setWordWrap(True)
+        self.monitor_warning.hide()
+        right.addWidget(self.monitor_warning)
         self.status = label('Preparing your recording setup…')
         self.status.setWordWrap(True)
         self.status.setMinimumHeight(38)
         right.addWidget(self.status)
+        self._status_detail = True
+        self.status.hide()
         self.cancel_title_button = QPushButton('Name manually')
         self.cancel_title_button.hide()
         self.cancel_title_button.clicked.connect(self.cancel_automatic_title)
@@ -751,7 +764,7 @@ class Window(QMainWindow):
         right.addWidget(self.upload_panel)
         shortcuts = self.shortcuts = label('Ctrl+Shift+F9  record / stop  ·  Ctrl+Shift+F10  pause  ·  Ctrl+Shift+F8  zoom', 'muted')
         shortcuts.setWordWrap(True)
-        right.addWidget(shortcuts)
+        details.addWidget(shortcuts)
         summary.addStretch()
         # Device/window labels must not set the scroll content's minimum width.
         # Qt then resizes it to the viewport, including the vertical scrollbar.
@@ -1222,7 +1235,6 @@ class Window(QMainWindow):
         self.capture_kind.setEnabled(self.mode == 'screen')
         self.capture_window.setEnabled(self.mode == 'screen')
         self.refresh_button.setEnabled(self.mode == 'screen')
-        self.mode_hint.setText('Screen + optional camera.' if self.mode == 'screen' else 'Camera only, in your canvas.')
         self.update_setup_summary()
         if configure:
             self.schedule_configure()
@@ -1334,7 +1346,7 @@ class Window(QMainWindow):
             self.restore_camera_image(camera)
             self.record_button.setEnabled(True)
             self.configuration_valid = True
-            self.engine_notice('Setup selected. Microphone readiness is checked before recording.')
+            self.engine_notice('Setup selected. Microphone readiness is checked before recording.', detail=True)
             self.encoder_label.setText('Recording engine ready')
             screen = QApplication.screens()[self.screen.currentIndex()]
             geo = screen.geometry()
@@ -2029,6 +2041,9 @@ class Window(QMainWindow):
                 (self.audio_worker and self.audio_worker.isRunning())):
             return
         from .audio_check import AudioCheck
+        if self.settings_dialog.isVisible():
+            self.settings_dialog.accept()
+            self.activateWindow()
         self.configure_timer.stop()
         self.start_timer.stop()
         self.idle_audio.stop()
@@ -2040,13 +2055,14 @@ class Window(QMainWindow):
             self.microphone.currentData(), self.clean_microphone.isChecked(),
             self.microphone.currentText(), self, inline=True)
         previous_status = self.status.text()
+        previous_detail = self._status_detail
         def finished():
             self.preview_column.removeWidget(dialog)
             self.microphone_meter.show()
             self.shortcuts.show()
             self.zoom_button.setVisible(self.mode == 'screen')
             self.zoom_amount.setVisible(self.mode == 'screen')
-            self.status.setText(previous_status)
+            self.notice(previous_status, detail=previous_detail)
             self.audio_check_dialog = None
             self.busy = False
             self.lock_controls(False)
@@ -2067,8 +2083,8 @@ class Window(QMainWindow):
         self.shortcuts.hide()
         self.zoom_button.hide()
         self.zoom_amount.hide()
-        self.status.setText('Audio check open. Close it to change the recording setup.')
-        self.preview_column.insertWidget(3, dialog)
+        self.notice('Audio check open. Close it to change the recording setup.')
+        self.preview_column.insertWidget(self.preview_column.indexOf(self.details_toggle), dialog)
         dialog.show()
 
     def release_audio(self):
@@ -2120,6 +2136,12 @@ class Window(QMainWindow):
         return warning
 
     def update_microphone_meter(self):
+        warning = ('Monitor unavailable: ' + self.idle_audio.error
+            if self.idle_audio.error and self.live_microphone.isChecked()
+            and self.microphone.currentData() is not None and not self.recording
+            and not self.preparing_audio and not getattr(self, 'audio_check_dialog', None) else '')
+        self.monitor_warning.setText(warning)
+        self.monitor_warning.setVisible(bool(warning))
         status = self.engine.audio_status() if self.engine else None
         source = status.get('source') if isinstance(status, dict) else None
         if self.idle_audio.source and not self.idle_audio.verified:
@@ -3068,16 +3090,25 @@ class Window(QMainWindow):
         if self.quit_after_save and not (self.busy or self.recording or self.counting):
             self.close()
 
-    def engine_notice(self, text):
+    def set_details_visible(self, visible):
+        # Disclosure is visual only; audio ownership follows the recorder lifecycle.
+        self.recorder_details.setVisible(visible)
+        self.details_toggle.setText(('▾' if visible else '▸') + ' Recording details')
+        self.status.setVisible(visible or not self._status_detail)
+
+    def engine_notice(self, text, detail=False):
         warnings = getattr(self.engine, 'warnings', [])
         if isinstance(warnings, (list, tuple)):
             messages = [warning for warning in warnings if isinstance(warning, str) and warning.strip()]
             if messages:
                 text += '\n' + '\n'.join(messages)
-        self.notice(text)
+                detail = False
+        self.notice(text, detail=detail)
 
-    def notice(self, text):
+    def notice(self, text, detail=False):
+        self._status_detail = detail
         self.status.setText(text)
+        self.status.setVisible(not detail or self.details_toggle.isChecked())
 
     def hide_for_capture(self):
         # libobs owns a native GLX child under preview. Destroy that child

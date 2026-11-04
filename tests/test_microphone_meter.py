@@ -120,6 +120,7 @@ class MeterUiChecks(unittest.TestCase):
 
     def test_active_name_states_and_long_name_sidebar_fit(self):
         window = self.window
+        window.details_toggle.click()
         name = 'A long selected microphone name ' * 10
         window.microphone.addItem(name, 'test-source')
         window.microphone.setCurrentIndex(window.microphone.count() - 1)
