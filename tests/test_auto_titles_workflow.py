@@ -21,6 +21,21 @@ class AutoTitleWorkflowTests(unittest.TestCase):
     setUp = fixture.AppChecks.setUp
     tearDown = fixture.AppChecks.tearDown
 
+    def test_old_ai_defaults_reset_once_and_new_opt_in_survives_restart(self):
+        self.window.prefs.remove('manual_titles_default_v1')
+        self.window.prefs.setValue('auto_titles', True)
+        self.window.prefs.setValue('loom_auto_titles', True)
+        self.window.close()
+        self.window = app.Window()
+        self.assertFalse(self.window.auto_titles.isChecked())
+        self.assertFalse(self.window.prefs.value('loom_auto_titles', type=bool))
+        self.window.auto_titles.setChecked(True)
+        self.window.prefs.setValue('loom_auto_titles', True)
+        self.window.close()
+        self.window = app.Window()
+        self.assertTrue(self.window.auto_titles.isChecked())
+        self.assertTrue(self.window.prefs.value('loom_auto_titles', type=bool))
+
     def begin(self):
         path = self.root / 'saved.mp4'
         path.write_bytes(b'synthetic recording')

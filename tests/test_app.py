@@ -30,6 +30,8 @@ class AppChecks(unittest.TestCase):
         for p in self.patches:
             p.start()
         self.window = glint.Window()
+        # Existing upload checks exercise the optional upstream-title path.
+        self.window.prefs.setValue('loom_auto_titles', True)
         self.window.engine = MagicMock()
         self.window.engine.verify_audio_route.side_effect = lambda **_: self.window.audio_devices.resolve(self.window.selected_source)
         self.window.engine.recording = False
@@ -436,6 +438,9 @@ class AppChecks(unittest.TestCase):
             path.write_bytes(b'synthetic video')
         self.window._upload_file = path
         self.window._upload_identity = self.window.upload_store.file_identity(path)
+        self.window._upload_title = path.stem
+        self.window._upload_cli = '/fake/twg'
+        self.window._upload_cli_identity = None
 
     def test_cancel_stops_pending_start_timer(self):
         self.window.toggle_record()

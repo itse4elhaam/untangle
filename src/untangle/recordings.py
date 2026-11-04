@@ -435,7 +435,7 @@ class Recordings(QWidget):
             details += '\nNo usable Loom link is saved. Check Loom before uploading another copy.'
         if exists and status == 'deleted':
             details += '\nYour local recording is still on this computer.'
-        for field in ('error', 'visibility_warning'):
+        for field in ('error', 'visibility_warning', 'title_warning'):
             if state.get(field):
                 details += '\n' + str(state[field])
         self.loom_status.setText(details)

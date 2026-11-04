@@ -87,11 +87,37 @@ def upload_args(path, help_text, visibility='owner', title=None, prefer_loom_tit
     args = ['loom', 'video', 'upload', *file_args, *JSON_ARGS]
     if supports_option(text, '--visibility'):
         args += ['--visibility', visibility]
-    if not prefer_loom_titles and title:
-        if not supports_option(text, '--title'):
-            raise ValueError('This CLI does not advertise manual upload titles.')
+    if not prefer_loom_titles and title and supports_option(text, '--title'):
         args += ['--title', str(title)]
     return args
+
+
+class CliHelpCache:
+    """Session-only capability cache, invalidated by CLI replacement or edits."""
+    def __init__(self):
+        self._identity = None
+        self._help = {}
+
+    @staticmethod
+    def identity(cli):
+        try:
+            path = Path(cli).resolve(strict=True)
+            info = path.stat()
+            return (str(path), info.st_dev, info.st_ino, info.st_size,
+                    info.st_mtime_ns, info.st_ctime_ns)
+        except (OSError, RuntimeError):
+            return None
+
+    def get(self, identity, command):
+        if identity != self._identity:
+            self._help.clear()
+            self._identity = identity
+        return self._help.get(command) if identity is not None else None
+
+    def put(self, identity, command, help_text):
+        self.get(identity, command)
+        if identity is not None:
+            self._help[command] = help_text
 
 
 def _text(value):
