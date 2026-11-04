@@ -497,6 +497,7 @@ class Window(QMainWindow):
         self.refresh_button = QPushButton('↻')
         self.refresh_button.setFixedWidth(40)
         self.refresh_button.setToolTip('Refresh open windows')
+        self.refresh_button.setAccessibleName('Refresh open windows')
         self.refresh_button.clicked.connect(self.refresh_windows)
         window_layout.addWidget(self.refresh_button)
         self.window_row.setVisible(False)
@@ -686,6 +687,8 @@ class Window(QMainWindow):
         zoom_row.addStretch()
         zoom_row.addWidget(self.zoom_button)
         self.zoom_amount = QComboBox()
+        self.zoom_amount.setAccessibleName('Pointer zoom amount')
+        self.zoom_amount.setToolTip('Magnification used by Zoom to pointer')
         for title, value in [('1.5×', 1.5), ('2×', 2.0), ('2.5×', 2.5)]:
             self.zoom_amount.addItem(title, value)
         self.zoom_amount.setCurrentIndex(1)
