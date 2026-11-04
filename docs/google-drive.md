@@ -177,7 +177,7 @@ excluded when you choose Do not upload. Existing remote copies and transfers
 already in progress are unchanged. A copied/exported file is a new recording
 with its own upload choice. Unreadable exclusion settings block uploads.
 
-Local deletion requires confirmation, regardless of whether the recording has
+Manual local deletion requires confirmation, regardless of whether the recording has
 been uploaded. Google sign-in, connectivity and a remote copy are not required.
 Cancel keeps the files. Busy recordings, symbolic links and files changed during
 confirmation remain protected. Deletion leaves remote copies unchanged.
@@ -199,8 +199,10 @@ intentionally quiet to keep OAuth details out of logs.
 Seven days after a verified archive upload, the library offers cleanup.
 **Review archived recordings…** opens the review again. Cancel must keep files.
 Only confirm deletion for a recording you intend to remove. No remote-copy
-check runs during deletion. The timer never deletes. Do not change timestamps to
-simulate this on real recordings; synthetic tests cover the seven-day boundary.
+check runs for manual deletion. Archive cleanup requires a current matching,
+untrashed Drive copy or completed Loom copy and checks it again after
+confirmation. Offline or uncertain checks block archive cleanup. The timer never
+deletes. Do not change timestamps to simulate this on real recordings; synthetic tests cover the seven-day boundary.
 
 ## Recovery, disabling and revocation
 

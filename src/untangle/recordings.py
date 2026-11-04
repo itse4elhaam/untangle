@@ -803,7 +803,8 @@ class Recordings(QWidget):
             return
         self.delete_paths(paths, 'Clean up archived recordings?',
             'Delete these local recordings archived at least 7 days ago? '
-            'This permanently deletes the local files. Remote copies are unchanged.\n\n' + self.listing(paths))
+            'Their remote copies will be checked before deletion.\n\n' + self.listing(paths),
+            require_remote=True)
 
     def delete_selected(self):
         paths = [path for path in self.checked_paths() if path.is_file()]
@@ -830,11 +831,14 @@ class Recordings(QWidget):
             'Recordings you named are kept. This cannot be undone. Any recordings on Loom are unchanged.')
 
     @observed("recordings.delete_paths")
-    def delete_paths(self, paths, title, question):
+    def delete_paths(self, paths, title, question, *, require_remote=False):
         self.update_actions()
         if not paths or any(self.deletion_blocked(path) for path in paths):
             return
         identities = {path: UploadStore.file_identity(path) for path in paths}
+        if require_remote and not self.verify_remote_copies(paths):
+            self.message.setText('Cleanup blocked. A remote copy could not be verified. Local files are kept.')
+            return
         answer = QMessageBox.question(self, title, question,
             QMessageBox.Yes | QMessageBox.Cancel, QMessageBox.Cancel)
         if answer != QMessageBox.Yes:
@@ -844,6 +848,9 @@ class Recordings(QWidget):
             self.message.setText('A recording is in use. Try again when saving or uploading finishes.'
                 if len(paths) > 1 else 'This recording is in use. Try again when saving or uploading finishes.')
             self.update_actions()
+            return
+        if require_remote and not self.verify_remote_copies(paths):
+            self.message.setText('Cleanup blocked. A remote copy could not be verified. Local files are kept.')
             return
         self.release()
         deleted, failures, metadata_errors = [], [], []
@@ -881,6 +888,29 @@ class Recordings(QWidget):
             self.message.setText(text)
         for path in deleted:
             self.recording_deleted.emit(str(path))
+
+    def verify_remote_copies(self, paths):
+        from .archive import has_remote_copy
+        from .drive_dialog import DriveTask
+        from PySide6.QtCore import QEventLoop
+        from PySide6.QtWidgets import QProgressDialog
+        progress = QProgressDialog('Verifying remote copies…', '', 0, 0, self)
+        progress.setCancelButton(None)
+        progress.setWindowModality(Qt.ApplicationModal)
+        progress.setMinimumDuration(0)
+        loop = QEventLoop()
+        result = []
+        task = DriveTask(lambda emit: all(has_remote_copy(path, self.upload_store)
+                                         for path in paths), self)
+        task.done.connect(result.append)
+        task.finished.connect(loop.quit)
+        progress.show()
+        task.start()
+        loop.exec()
+        task.wait()
+        progress.close()
+        task.deleteLater()
+        return result == [True]
 
     def reject(self):
         self.stop_thumbnails()

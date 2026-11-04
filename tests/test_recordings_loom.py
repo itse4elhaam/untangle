@@ -126,6 +126,25 @@ class LoomLibraryTests(unittest.TestCase):
         self.dialog.drive_exclude.click()
         self.assertFalse(DrivePolicy(self.root / 'drive').blocked(renamed))
 
+    def test_archive_cleanup_keeps_remote_checks_before_and_after_confirmation(self):
+        with patch('untangle.archive.cleanup_candidates', return_value=[self.path]), \
+                patch('untangle.archive.has_remote_copy', return_value=False), \
+                patch('untangle.recordings.QMessageBox.question') as confirm:
+            self.dialog.review_archived()
+            confirm.assert_not_called()
+            self.assertTrue(self.path.exists())
+            self.assertIn('Cleanup blocked', self.dialog.message.text())
+        with patch('untangle.archive.cleanup_candidates', return_value=[self.path]), \
+                patch('untangle.archive.has_remote_copy', side_effect=[True, False]), \
+                patch('untangle.recordings.QMessageBox.question', return_value=QMessageBox.Yes):
+            self.dialog.review_archived()
+            self.assertTrue(self.path.exists())
+        with patch('untangle.archive.cleanup_candidates', return_value=[self.path]), \
+                patch('untangle.archive.has_remote_copy', return_value=True), \
+                patch('untangle.recordings.QMessageBox.question', return_value=QMessageBox.Yes):
+            self.dialog.review_archived()
+            self.assertFalse(self.path.exists())
+
     def test_partial_batch_deletion_keeps_failed_file_and_metadata(self):
         other = self.directory / 'Second recording.mp4'
         other.write_bytes(b'second synthetic file')
