@@ -4,12 +4,12 @@ Do not deploy, install, activate timers, upload recordings, or launch the app wi
 
 ## Delivered for review
 
-- [x] Automatic Google Drive archiving, configurable destination, verified uploads, seven-day retention, in-app confirmation, and no deletion without a current Drive or Loom copy. PR #18; not deployed.
+- [x] Automatic Google Drive archiving, configurable destination, verified uploads, seven-day retention, in-app confirmation, and no deletion without a current Drive or Loom copy. PR #18 merged. Accountability reports installation separately authorized in another thread; verify that thread before asserting installed state. No deployment is authorized for the current batch.
 - [x] Rename and delete icons beside individual recordings, retaining existing safety checks. PR #19; not deployed.
 
 ## Active implementation
 
-- [ ] Default to the highest-quality available camera. Rank advertised colour resolution at 30 fps, then frame rate; allow manual selection. Synthetic parser/discovery tests are written; not yet committed.
+- [ ] Default to the highest-quality available camera. Rank advertised colour resolution at 30 fps, then frame rate; allow manual selection. Implementation committed in 76083e2; synthetic parser/discovery tests pass. Full verification and PR pending.
 - [ ] Collapse the lower recorder status/details area shown in the screenshot behind a disclosure control; collapsed by default. Preserve important errors and recording state visibility.
 - [ ] Move Quick audio check from the primary setup pane to Settings, preserving its existing checks and cleanup behavior.
 - [ ] Keep camera framing/zoom preferences separate for camera-only and screen-plus-camera setups, including reload and mode switching.
@@ -28,3 +28,14 @@ Do not deploy, install, activate timers, upload recordings, or launch the app wi
 - [ ] Every implementation has appropriate synthetic checks through scripts/test.sh, shell syntax checks where applicable, and a reviewable PR.
 - [ ] Link every created or pushed PR to its thread. Keep dependent work in an explicit stack.
 - [ ] Final reconciliation against this checklist and all user screenshots. No deployment.
+
+## Coordination
+
+- Root owns camera ranking/defaults only, plus integration and final reconciliation.
+- UI setup delegate owns collapsed recorder details, Quick audio check relocation, and redundant heading/helper removal.
+- Camera framing delegate owns separate camera/screen zoom preferences and Settings crop positioning.
+- Drive wizard delegate owns repeatable human setup guidance and entry points.
+- [Accountability thread](t3-thread://v1/mcp:db573d83-95fc-4f07-b994-2ffc3d8e5cec), medium.
+- [Resize thread](t3-thread://v1/mcp:5cec8377-c5af-4f48-bdf9-fa5ee7988e65), high.
+- [UX audit thread](t3-thread://v1/mcp:c254197a-aa4e-4bf7-a08e-1fb80a9c2612), low coordinator with explicitly requested high audit delegate.
+- Resize interface: `CameraBubble.resized(float fraction)`; square alpha shape; size slider 12–42%; app updates existing framing API and normalized window-capture position. Resize idle-only; moving remains available during recording. No crop/zoom preference edits in resize stream.
