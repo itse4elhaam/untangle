@@ -262,7 +262,7 @@ class Window(QMainWindow):
         self.recording_error = ''
         self.recording_error_baseline = 0
         self.zoom_motion = ZoomMotion()
-        self.window_catalog = WindowCatalog()
+        self.window_catalog = None if self.wayland_session() else WindowCatalog()
         self.presentation_amount = 0.
         self.presentation_target = 0.
         self.presentation_committed = 0.
@@ -299,7 +299,10 @@ class Window(QMainWindow):
         self.hotkeys.pause.connect(self.toggle_pause)
         self.hotkeys.zoom.connect(self.toggle_zoom)
         self.hotkeys.unavailable.connect(self.notice)
-        self.hotkeys.start()
+        if not self.wayland_session():
+            self.hotkeys.start()
+        else:
+            self.notice('Global shortcuts unavailable on Wayland. Use the window or tray controls.')
         QShortcut(QKeySequence('Escape'), self, activated=self.cancel_countdown)
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.tick)
@@ -492,9 +495,14 @@ class Window(QMainWindow):
         self.capture_label = label('Capture', 'section')
         controls.addWidget(self.capture_label)
         self.capture_kind = QComboBox()
-        self.capture_kind.addItem('Entire screen', 'screen')
-        self.capture_kind.addItem('A specific window', 'window')
+        self.capture_kind.addItem('Screen or window (system picker)' if self.wayland_session() else 'Entire screen', 'screen')
+        if not self.wayland_session():
+            self.capture_kind.addItem('A specific window', 'window')
         controls.addWidget(self.capture_kind)
+        self.portal_button = QPushButton('Choose / change source')
+        self.portal_button.clicked.connect(self.choose_portal_source)
+        self.portal_button.setVisible(self.wayland_session())
+        controls.addWidget(self.portal_button)
         self.screen = QComboBox()
         for index, screen in enumerate(QApplication.screens()):
             geo = screen.geometry()
@@ -1100,11 +1108,57 @@ class Window(QMainWindow):
             self.bubble.apply_shape(self.shape.currentData(), self.mask_path,
                 mirror_mask=self.capture_kind.currentData() == 'window' and self.mirror.isChecked())
 
+    @staticmethod
+    def wayland_session():
+        return (os.environ.get('XDG_SESSION_TYPE', '').lower() == 'wayland'
+                or bool(os.environ.get('WAYLAND_DISPLAY')))
+
+    def choose_portal_source(self):
+        if not self.engine or self.recording or self.busy or self.counting:
+            return
+        try:
+            self.engine.reset_portal()
+            self._portal_wait_started = None
+            self.configure()
+        except Exception as exc:
+            self.notice(f'Could not choose a source: {exc}')
+
+    def poll_portal(self):
+        if (not self.wayland_session() or not self.engine or self.mode != 'screen'
+                or not getattr(self, '_portal_configured', False)
+                or getattr(self, '_live_update_failed', False)
+                or self._closing or self.in_library()):
+            return
+        ready = self.engine.screen_ready() is True
+        if self.recording:
+            if not ready:
+                self.recording_error = 'Screen sharing ended. The recording was saved.'
+                self.stop()
+            return
+        if ready:
+            if getattr(self, '_portal_wait_started', None) is not None:
+                self.engine_notice('Screen sharing ready. Use Choose / change source to select another screen or window.')
+            self._portal_wait_started = None
+            if not self._configure_pending:
+                self.configuration_valid = True
+                self.record_button.setEnabled(not self.busy and not self.counting)
+            return
+        self.configuration_valid = False
+        self.record_button.setEnabled(False)
+        started = getattr(self, '_portal_wait_started', None)
+        if started is None:
+            self._portal_wait_started = time.monotonic()
+        elif time.monotonic() - started >= 120:
+            self.engine.reset_portal()
+            self._portal_configured = False
+            self._portal_wait_started = None
+        self.notice('Screen permission pending or cancelled. Use Choose / change source to retry.')
+
     def uses_floating_camera(self):
         # A desktop bubble is captured by XShm, so it follows screen cropping.
         # Screen view always uses landscape Fit. A remembered camera-only
         # canvas must not alter the desktop bubble's recording path.
-        return (self.mode == 'screen' and bool(self.camera.currentData())
+        return (not self.wayland_session() and self.mode == 'screen' and bool(self.camera.currentData())
                 and self.capture_kind.currentData() == 'screen')
 
     def setup_tray(self):
@@ -1189,8 +1243,8 @@ class Window(QMainWindow):
         if self._closing or self.in_library() or self.engine:
             return
         try:
-            if os.environ.get('XDG_SESSION_TYPE') == 'wayland':
-                raise RuntimeError('This version needs an X11 session. Sign in with an Xorg session to record.')
+            if self.wayland_session() and QApplication.platformName() != 'xcb':
+                raise RuntimeError('Wayland preview requires Xwayland. Launch with QT_QPA_PLATFORM=xcb.')
             from .engine import Engine
             w, h = self.output_dimensions()
             self.engine = Engine(int(self.preview.winId()), w, h, fps=30)
@@ -1252,7 +1306,7 @@ class Window(QMainWindow):
         self.preview_title.setText('Camera preview' if camera_mode else 'Screen preview')
         self.capture_label.setVisible(not camera_mode)
         self.capture_kind.setVisible(not camera_mode)
-        self.screen.setVisible(not camera_mode and self.capture_kind.currentData() == 'screen')
+        self.screen.setVisible(not self.wayland_session() and not camera_mode and self.capture_kind.currentData() == 'screen')
         self.window_row.setVisible(not camera_mode and self.capture_kind.currentData() == 'window')
         self.zoom_button.setVisible(not camera_mode)
         self.zoom_amount.setVisible(not camera_mode)
@@ -1261,6 +1315,14 @@ class Window(QMainWindow):
         self.capture_kind.setEnabled(self.mode == 'screen')
         self.capture_window.setEnabled(self.mode == 'screen')
         self.refresh_button.setEnabled(self.mode == 'screen')
+        if self.wayland_session():
+            self.zoom_button.setEnabled(False)
+            self.zoom_amount.setEnabled(False)
+            self.tray_zoom.setEnabled(False)
+            self.portal_button.setVisible(not camera_mode)
+            self.zoom_button.setToolTip('Pointer zoom is unavailable on Wayland.')
+            self.shortcuts.setText('Wayland: use recorder or tray controls to stop and pause. Camera is composited into the video.')
+            self.shortcut_reference.setText('Wayland uses the system screen/window picker. Global shortcuts, pointer zoom, floating camera controls and camera presentation switching are unavailable. Use recorder or tray controls. Escape cancels preparation.')
         self.update_setup_summary()
         if configure:
             self.schedule_configure()
@@ -1278,13 +1340,15 @@ class Window(QMainWindow):
 
     def capture_changed(self):
         window_mode = self.capture_kind.currentData() == 'window'
-        self.screen.setVisible(self.mode == 'screen' and not window_mode)
+        self.screen.setVisible(not self.wayland_session() and self.mode == 'screen' and not window_mode)
         self.window_row.setVisible(self.mode == 'screen' and window_mode)
         if window_mode:
             self.refresh_windows()
         self.schedule_configure()
 
     def refresh_windows(self):
+        if self.wayland_session():
+            return
         previous = self.capture_window.currentData()
         self.capture_window.blockSignals(True)
         self.capture_window.clear()
@@ -1343,6 +1407,7 @@ class Window(QMainWindow):
         self._configure_pending = False
         self._live_update_failed = False
         self.configuration_valid = False
+        self._portal_configured = False
         try:
             self.hide_bubble()
             camera = self.camera.currentData()
@@ -1385,7 +1450,11 @@ class Window(QMainWindow):
                 self.source_note.setText(f'{self.camera.currentText()} · {output} output · Camera zoom {self.camera_zoom.value()}%.')
             if window_id:
                 self.source_note.setText(f'{output} · Recording only the selected window. Keep it open and unminimized.')
+            if self.wayland_session() and self.mode == 'screen':
+                self.source_note.setText(f'{output} · Choose a display or window in the system picker. Camera is composited into the video.')
             self.save_preferences()
+            self._portal_configured = True
+            self.poll_portal()
         except Exception as exc:
             diagnostic_failure('application.operation.failed', exc)
             self.record_button.setEnabled(False)
@@ -1398,6 +1467,8 @@ class Window(QMainWindow):
 
     @observed("app.toggle_presentation")
     def toggle_presentation(self):
+        if self.wayland_session():
+            return
         if self.recording and getattr(self, '_recording_compact', False):
             self.notice('Screen presentation requires the original recording mode. Turn off Smaller camera recording files before starting a new recording.')
             return
@@ -1487,6 +1558,8 @@ class Window(QMainWindow):
             self.engine.set_camera_position((self.bubble.x() - bounds.left()) / dx, (self.bubble.y() - bounds.top()) / dy)
 
     def toggle_zoom(self, *_):
+        if self.wayland_session():
+            return
         if not self.recording or self.busy or self.mode != 'screen':
             self.zoom_button.setChecked(False)
             return
@@ -1759,12 +1832,12 @@ class Window(QMainWindow):
             self.paused_duration = 0
             self.paused = False
             self.recording = True
-            self.presentation_button.setEnabled(bool(self.camera.currentData()) and not self._recording_compact)
-            self.tray_presentation.setEnabled(bool(self.camera.currentData()) and not self._recording_compact)
+            self.presentation_button.setEnabled(not self.wayland_session() and bool(self.camera.currentData()) and not self._recording_compact)
+            self.tray_presentation.setEnabled(not self.wayland_session() and bool(self.camera.currentData()) and not self._recording_compact)
             self._audio_warning_since = None
             self.bubble.recording = True
-            self.zoom_button.setEnabled(self.mode == 'screen')
-            self.tray_zoom.setEnabled(self.mode == 'screen')
+            self.zoom_button.setEnabled(not self.wayland_session() and self.mode == 'screen')
+            self.tray_zoom.setEnabled(not self.wayland_session() and self.mode == 'screen')
             self.record_button.setText('■  Stop and save')
             self.pause_button.setVisible(True)
             self.pause_button.setText('Pause')
@@ -1778,10 +1851,10 @@ class Window(QMainWindow):
             self.tray_discard.setEnabled(True)
             self.tray_record.setText('Stop and save')
             self.tray.setIcon(self.record_icon())
-            self.engine_notice('Recording. Ctrl + Shift + F9 stops and saves.\n'
+            self.engine_notice(('Recording. Use the tray or window to stop and save.\n' if self.wayland_session() else 'Recording. Ctrl + Shift + F9 stops and saves.\n')
                 + (f'Microphone: {source}' if source else 'Microphone off'))
             if self.mode == 'screen':
-                self.tray.setToolTip('Untangle · Recording\nF9 stop · F10 pause · F8 zoom\nHold Ctrl + Shift with each key')
+                self.tray.setToolTip('Untangle · Recording. Use the tray menu to stop or pause.' if self.wayland_session() else 'Untangle · Recording\nF9 stop · F10 pause · F8 zoom\nHold Ctrl + Shift with each key')
         except Exception as exc:
             diagnostic_failure('application.operation.failed', exc)
             emit(self, 'record_start.failed', level='warning', exception_type=type(exc).__name__)
@@ -1827,8 +1900,8 @@ class Window(QMainWindow):
             self.discard_button.setEnabled(True)
             self.tray_discard.setEnabled(True)
             self._discarding = False
-            self.zoom_button.setEnabled(self.mode == 'screen')
-            self.tray_zoom.setEnabled(self.mode == 'screen')
+            self.zoom_button.setEnabled(not self.wayland_session() and self.mode == 'screen')
+            self.tray_zoom.setEnabled(not self.wayland_session() and self.mode == 'screen')
             if self.mode == 'screen' and (self.zoom_motion.enabled or self.zoom_motion.factor != 1.):
                 self.zoom_motion.last_time = time.monotonic()
                 self.zoom_timer.start()
@@ -2227,6 +2300,7 @@ class Window(QMainWindow):
     def tick(self):
         from .diagnostics import beat
         beat()
+        self.poll_portal()
         now = time.monotonic()
         if self.recording and now >= self._diagnostic_at:
             self._diagnostic_at = now + 10
@@ -2265,11 +2339,12 @@ class Window(QMainWindow):
             duration = f'{elapsed // 60:02d}:{elapsed % 60:02d}'
             state = 'Paused' if self.paused else 'Recording'
             warning = self.microphone_warning()
-            self.engine_notice(f'{state} · {duration}   |   Ctrl + Shift + F9 to stop and save\n'
+            stop_hint = 'Use the tray or window to stop and save' if self.wayland_session() else 'Ctrl + Shift + F9 to stop and save'
+            self.engine_notice(f'{state} · {duration}   |   {stop_hint}\n'
                 + (f'Microphone: {self.selected_source}' if self.selected_source else 'Microphone off')
                 + ('\n' + (self.recording_error or warning) if self.recording_error or warning else ''))
             self.record_button.setText('■  Stop and save')
-            self.tray.setToolTip(f'Untangle · {state} {duration}\nCtrl + Shift + F9 to stop')
+            self.tray.setToolTip(f'Untangle · {state} {duration}\n{stop_hint}')
             if elapsed % 10 == 0 and shutil.disk_usage(VIDEOS).free < 256 * 1024 ** 2:
                 self.notice('Storage almost full. Stopping to save your recording.')
                 self.stop()
@@ -2296,6 +2371,11 @@ class Window(QMainWindow):
             self.capture_window.setEnabled(self.mode == 'screen')
             self.refresh_button.setEnabled(self.mode == 'screen')
             self.update_camera_controls()
+        self.portal_button.setEnabled(not locked and self.mode == 'screen')
+        if self.wayland_session():
+            self.zoom_button.setEnabled(False)
+            self.zoom_amount.setEnabled(False)
+            self.tray_zoom.setEnabled(False)
         if self.recordings:
             self.recordings.update_actions()
 
@@ -2447,6 +2527,9 @@ class Window(QMainWindow):
         self.release_audio()
         if self.engine:
             self.engine.detach_preview()
+            if self.wayland_session():
+                self.engine.reset_portal()
+                self.configuration_valid = self._portal_configured = False
         self.preview.hide()
         self.pages.setCurrentWidget(self.recordings)
         self.tray_record.setEnabled(False)
@@ -3208,6 +3291,8 @@ class Window(QMainWindow):
         self.status.setVisible(not detail or self.details_toggle.isChecked())
 
     def hide_for_capture(self):
+        if self.wayland_session() and not QSystemTrayIcon.isSystemTrayAvailable():
+            return  # Keep stop/save reachable when no global shortcut or tray exists.
         # libobs owns a native GLX child under preview. Destroy that child
         # before Qt unmaps its parent, while retaining scene/output/audio.
         self._preview_generation = getattr(self, '_preview_generation', 0) + 1
@@ -3356,7 +3441,8 @@ class Window(QMainWindow):
         self.zoom_timer.stop()
         self.hide_bubble()
         self.bubble.close()
-        self.window_catalog.close()
+        if self.window_catalog is not None:
+            self.window_catalog.close()
         self.save_preferences()
         self.hotkeys.requestInterruption()
         self.hotkeys.wait(1500)

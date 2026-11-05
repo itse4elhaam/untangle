@@ -1,4 +1,4 @@
-"""Direct libobs 27 backend for RecIt on Linux/X11.
+"""Direct libobs backend for Untangle on Linux/X11 and Wayland via Xwayland.
 
 Create after QApplication and a visible native preview widget. Call public methods
 from one controlling thread, never from an OBS callback. Keep the widget alive
@@ -10,11 +10,12 @@ start() writes MKV; the caller owns any later remux. stop() waits up to ten seco
 for OBS, raising rather than freeing resources still owned by a stuck output.
 
 ABI checked against obsproject/obs-studio tag 27.2.3: libobs/obs.h,
-libobs/graphics/graphics.h and libobs/media-io/video-io.h. Only OBS 27 is accepted.
+libobs/graphics/graphics.h and libobs/media-io/video-io.h. OBS 30–33 use the same structures with the X11 EGL backend.
 """
 from __future__ import annotations
 
 import ctypes as C
+import ctypes.util
 import json
 import math
 import os
@@ -24,6 +25,7 @@ from pathlib import Path
 import tempfile
 import threading
 import time
+from .preflight import plugin_paths
 from .composition import camera_composition, bounded_offset
 from .audio_telemetry import LevelsCallback, MicrophoneTelemetry
 from .audio_debug import AudioTrace, emit, traced
@@ -182,9 +184,14 @@ def _bind(lib, name, restype, *args):
 
 def _load_obs():
     try:
-        lib = C.CDLL("libobs.so.0", mode=C.RTLD_GLOBAL)
+        lib = C.CDLL(ctypes.util.find_library("obs") or "libobs.so.0", mode=C.RTLD_GLOBAL)
     except OSError as exc:
-        raise EngineError(f"Cannot load libobs.so.0. Install OBS Studio: {exc}") from exc
+        raise EngineError(f"Cannot load libobs. Install supported OBS Studio: {exc}") from exc
+    _bind(lib, "obs_get_version", U)
+    _bind(lib, "obs_get_version_string", S)
+    major = lib.obs_get_version() >> 24
+    if major != 27 and not 30 <= major <= 33:
+        raise EngineError(f"Untangle requires OBS 27 or 30–33; found {lib.obs_get_version_string().decode()}.")
     signatures = {
         "obs_get_version": (U,), "obs_get_version_string": (S,),
         "obs_startup": (B, S, S, P), "obs_shutdown": (None,),
@@ -273,9 +280,6 @@ def _load_obs():
     }
     for name, sig in signatures.items():
         _bind(lib, name, *sig)
-    version = lib.obs_get_version()
-    if version >> 24 != 27:
-        raise EngineError(f"RecIt requires the OBS 27 ABI; found {lib.obs_get_version_string().decode()}.")
     return lib
 
 
@@ -301,6 +305,10 @@ class Engine:
             Engine._instance = self
         self.width, self.height, self.fps = width, height, fps
         self.platform = platform
+        self.portal_capture = (os.environ.get('XDG_SESSION_TYPE') == 'wayland'
+                               or bool(os.environ.get('WAYLAND_DISPLAY')))
+        self._portal_source = None  # Own one reference across scene/audio reconfiguration.
+        self._glib = None
         self._gl = None
         self.errors: list[str] = []
         self.warnings: list[str] = []
@@ -350,6 +358,14 @@ class Engine:
         self._stop_callback = _Signal(self._on_stop)
         try:
             self._obs = _load_obs()
+            modern = self._obs.obs_get_version() >> 24 >= 30
+            if self.portal_capture and not modern:
+                raise EngineError("Wayland capture requires OBS 30–33. OBS 27 remains supported on X11.")
+            if modern:
+                platform = self.platform = 'egl'
+            if self.portal_capture:
+                self._glib = C.CDLL(ctypes.util.find_library('glib-2.0') or 'libglib-2.0.so.0')
+                _bind(self._glib, 'g_main_context_iteration', I, P, I)
             self._xlib = C.CDLL("libX11.so.6")
             _bind(self._xlib, "XInitThreads", I)()
             _bind(self._xlib, "XOpenDisplay", P, S)
@@ -373,7 +389,7 @@ class Engine:
                 raise EngineError("libobs startup failed. See terminal output for details.")
             self._started_obs = True
             o.obs_add_data_path(b"/usr/share/obs/libobs")
-            vi = _VideoInfo(b"libobs-opengl.so.0", fps, 1, width, height,
+            vi = _VideoInfo((ctypes.util.find_library("obs-opengl") or "libobs-opengl.so.0").encode(), fps, 1, width, height,
                             width, height, 2, 0, True, 2, 1, 2)
             result = o.obs_reset_video(C.byref(vi))
             if result != 0:
@@ -400,12 +416,20 @@ class Engine:
 
     def _load_modules(self):
         # Avoid frontend/decklink/VLC plugins and their unrelated dependencies.
-        for name in ("linux-capture", "linux-v4l2", "linux-pulseaudio", "obs-filters",
-                     "image-source", "obs-ffmpeg", "obs-outputs", "obs-x264"):
+        names = ["linux-capture", "linux-v4l2", "linux-pulseaudio", "obs-filters",
+                 "image-source", "obs-ffmpeg", "obs-outputs", "obs-x264"]
+        if self.portal_capture:
+            names.append('linux-pipewire')
+        for name in names:
             module = P()
-            result = self._obs.obs_open_module(C.byref(module),
-                f"/usr/lib/x86_64-linux-gnu/obs-plugins/{name}.so".encode(),
-                f"/usr/share/obs/obs-plugins/{name}".encode())
+            path = next((root / f'{name}.so' for root in plugin_paths()
+                         if (root / f'{name}.so').is_file()), None)
+            if path is None:
+                self.warnings.append(f"OBS plugin {name} is missing. Run untangle-doctor.")
+                continue
+            data = Path('/usr/local/share/obs/obs-plugins') if str(path).startswith('/usr/local/') else Path('/usr/share/obs/obs-plugins')
+            result = self._obs.obs_open_module(C.byref(module), str(path).encode(),
+                                              str(data / name).encode())
             if result != 0 or not self._obs.obs_init_module(module):
                 self.warnings.append(f"OBS plugin {name} could not load (code {result}).")
         self._obs.obs_post_load_modules()
@@ -518,6 +542,43 @@ class Engine:
                 emit(self, 'filter.failed', level='warning', filter=kind, exception_type=type(exc).__name__)
                 self.warnings.append(f"Microphone processing: {name} is unavailable; continuing without it. {exc}")
 
+    def screen_ready(self):
+        """Poll portal negotiation without blocking Qt or releasing its source.
+
+        GLib's default context carries OBS portal replies. Pump it on the same
+        controlling thread even when Qt was built without its GLib dispatcher.
+        """
+        if not getattr(self, 'portal_capture', False):
+            return True
+        if not self._screen_source:
+            return bool(self._configured)
+        if self._glib:
+            for _ in range(16):
+                if not self._glib.g_main_context_iteration(None, False):
+                    break
+        w = self._obs.obs_source_get_width(self._screen_source)
+        h = self._obs.obs_source_get_height(self._screen_source)
+        if not w or not h:
+            return False
+        if self._screen_dimensions != (w, h):
+            self._screen_dimensions = (w, h)
+            self.restore_screen_zoom()
+        return True
+
+    def reset_portal(self):
+        """Discard a permission session only on explicit reselection or cancel."""
+        self._check_open()
+        if self._output:
+            raise EngineError('Stop recording before choosing another source.')
+        self._clear_scene()
+        self._release_portal()
+
+    def _release_portal(self):
+        if getattr(self, "_portal_source", None):
+            self._obs.obs_source_release(self._portal_source)
+            self._portal_source = None
+            self._obs.obs_wait_for_destroy_queue()
+
     def _dimensions(self, source, label, timeout=3.0):
         deadline = time.monotonic() + timeout
         while True:
@@ -557,6 +618,7 @@ class Engine:
         if self._output:
             raise EngineError('Stop the recording before turning off its camera.')
         self._clear_scene(preserve_audio=True)
+        self._release_portal()
 
     def configure(self, mode="screen", camera="/dev/video0", microphone="default",
                   desktop_audio=False, shape="circle", mask_path=None, size=.22,
@@ -618,6 +680,8 @@ class Engine:
                           and getattr(self, '_microphone_processing', None) == microphone_processing
                           and getattr(self, '_microphone_meter', None))
         self._clear_scene(preserve_audio=keep_audio)
+        if mode != "screen":
+            self._release_portal()
         self._framing = framing
         self.warnings = [warning for warning in getattr(self, "warnings", [])
                          if keep_audio or not warning.startswith("Microphone processing:")]
@@ -628,7 +692,12 @@ class Engine:
                 raise EngineError("OBS could not create the composition scene.")
             o.obs_set_output_source(0, o.obs_scene_get_source(self._scene))
             if mode == "screen":
-                if window_id is not None:
+                if getattr(self, 'portal_capture', False):
+                    if not self._portal_source:
+                        self._portal_source = self._source('pipewire-screen-capture-source',
+                            'Untangle screen or window', {'ShowCursor': True})
+                    source = self._portal_source
+                elif window_id is not None:
                     # OBS 27 xcompcap-main.cpp getWindowFromString accepts a
                     # decimal ID alone, avoiding its title/class fallback.
                     source = self._source("xcomposite_input", "RecIt window", {
@@ -637,15 +706,18 @@ class Engine:
                     self._window_id = window_id
                 else:
                     source = self._source("xshm_input", "RecIt screen", {"screen": screen, "show_cursor": True})
-                self._sources.append(source)
+                if not getattr(self, 'portal_capture', False):
+                    self._sources.append(source)
                 self._screen_source = source
                 item = o.obs_scene_add(self._scene, source)
                 if not item:
                     raise EngineError("OBS could not add the screen to the scene.")
-                sw, sh = self._dimensions(source, "Screen capture")
                 self._screen_item = item
-                self._screen_dimensions = (sw, sh)
-                self.restore_screen_zoom()
+                if getattr(self, 'portal_capture', False):
+                    self.screen_ready()
+                else:
+                    self._screen_dimensions = self._dimensions(source, "Screen capture")
+                    self.restore_screen_zoom()
             if camera:
                 # Presets retain the quality's short edge. A square/portrait
                 # output must not downgrade a landscape camera's capture mode.
@@ -659,7 +731,8 @@ class Engine:
                 self._presentation_screen = screen
                 self._camera_mirror = bool(mirror)
                 item = None
-                compose_camera = mode != "screen" or not floating_camera or window_id is not None
+                compose_camera = (getattr(self, "portal_capture", False) or mode != "screen"
+                                  or not floating_camera or window_id is not None)
                 if compose_camera:
                     item = o.obs_scene_add(self._scene, source)
                     if not item:
@@ -1301,6 +1374,8 @@ class Engine:
             raise EngineError("Presentation requires a camera and a finite progress value.")
         amount = max(0., min(1., amount))
         o = self._obs
+        if getattr(self, 'portal_capture', False):
+            raise EngineError('Camera presentation switching is unavailable during Wayland capture.')
         if not self._screen_item and amount < 1:
             source = self._source("xshm_input", "RecIt screen", {
                 "screen": self._presentation_screen, "show_cursor": True})
@@ -1391,7 +1466,7 @@ class Engine:
         Only scene-item transforms change. Smoothing belongs to the caller.
         """
         self._check_open()
-        if not self._screen_item:
+        if not self._screen_item or not self._screen_dimensions:
             return
         dimensions = self.window_dimensions()
         if dimensions and all(dimensions):
@@ -1471,6 +1546,8 @@ class Engine:
             raise EngineError("OBS video reset failed. Retry the canvas reset or recreate the engine before recording.")
         if not self._configured:
             raise EngineError("Configure a scene before recording.")
+        if not self.screen_ready():
+            raise EngineError("Choose a screen or window in the system picker before recording.")
         if getattr(self, '_microphone_meter', None):
             self.verify_audio_route()
             status = self.audio_status()
@@ -1629,6 +1706,7 @@ class Engine:
             self._obs.obs_display_destroy(self._display)
             self._display = None
         self._clear_scene()
+        self._release_portal()
         if self._started_obs:
             self._obs.obs_shutdown()
             self._started_obs = False

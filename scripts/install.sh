@@ -5,20 +5,31 @@ app_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 data_dir="$HOME/.local/share/glint"
 desktop_dir="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
 icon_dir="${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor"
-command -v uv >/dev/null || { echo 'Install uv before running this installer.' >&2; exit 1; }
-command -v obs >/dev/null || { echo 'Untangle needs OBS Studio 27 and its plugins.' >&2; exit 1; }
-command -v ffmpeg >/dev/null || { echo 'Install FFmpeg before running this installer.' >&2; exit 1; }
-mkdir -p "$data_dir" "$HOME/.local/bin" "$desktop_dir" "$icon_dir/scalable/apps"
-if [[ ! -x "$data_dir/venv/bin/python" ]]; then
-    uv venv "$data_dir/venv"
+# Check mode exits before creating directories or changing an existing runtime.
+check_only=false
+preflight_args=()
+for argument in "$@"; do
+    case "$argument" in
+        --check|--json) check_only=true; preflight_args+=("$argument") ;;
+        --wayland) preflight_args+=("$argument") ;;
+        *) echo "Usage: $0 [--check] [--json] [--wayland]" >&2; exit 2 ;;
+    esac
+done
+if [[ "$check_only" == true ]]; then
+    exec python3 "$app_dir/src/untangle/preflight.py" "${preflight_args[@]}"
 fi
-uv pip install --python "$data_dir/venv/bin/python" -r "$app_dir/requirements.txt"
-ln -sfn "$app_dir/bin/untangle" "$HOME/.local/bin/untangle"
-ln -sfn "$app_dir/bin/recit" "$HOME/.local/bin/recit"
+python3 "$app_dir/src/untangle/preflight.py" "${preflight_args[@]}"
+mkdir -p "$data_dir" "$HOME/.local/bin" "$desktop_dir" "$icon_dir/scalable/apps"
+stage="$(mktemp -d "$data_dir/venv-stage.XXXXXX")"
+trap 'rm -rf -- "$stage"' EXIT
+uv venv --python "$(command -v python3)" --relocatable "$stage"
+uv pip install --python "$stage/bin/python" -r "$app_dir/requirements.txt"
+"$stage/bin/python" "$app_dir/src/untangle/preflight.py" --runtime "${preflight_args[@]}"
+mkdir -p "$stage/untangle-icons/scalable/apps"
 # Copy rather than link so icon lookup does not depend on the checkout path.
-cp --remove-destination "$app_dir/assets/untangle-mark.svg" "$icon_dir/scalable/apps/tech.truedevs.Untangle.svg"
+cp --remove-destination "$app_dir/assets/untangle-mark.svg" "$stage/untangle-icons/scalable/apps/tech.truedevs.Untangle.svg"
 # QtSvg is already an app dependency. Rendering QImages needs no app or display.
-"$data_dir/venv/bin/python" - "$icon_dir" <<'PY'
+"$stage/bin/python" - "$stage/untangle-icons" <<'PY'
 from pathlib import Path
 import sys
 
@@ -43,6 +54,26 @@ for size in (16, 24, 32, 48, 64, 128, 256, 512):
         raise SystemExit(f'Cannot save menu icon: {temporary}')
     temporary.replace(target)
 PY
+
+# Keep the old runtime until dependencies and icon rendering have succeeded.
+backup="$data_dir/venv.previous"
+rm -rf -- "$backup"
+if [[ -e "$data_dir/venv" ]]; then
+    mv -- "$data_dir/venv" "$backup"
+fi
+if ! mv -- "$stage" "$data_dir/venv"; then
+    if [[ -e "$backup" ]]; then mv -- "$backup" "$data_dir/venv"; fi
+    exit 1
+fi
+ln -sfn "$app_dir/bin/untangle-doctor" "$HOME/.local/bin/untangle-doctor"
+ln -sfn "$app_dir/bin/untangle" "$HOME/.local/bin/untangle"
+ln -sfn "$app_dir/bin/recit" "$HOME/.local/bin/recit"
+# Copy rather than link so icon lookup does not depend on the checkout path.
+cp --remove-destination "$data_dir/venv/untangle-icons/scalable/apps/tech.truedevs.Untangle.svg" "$icon_dir/scalable/apps/tech.truedevs.Untangle.svg"
+for size in 16 24 32 48 64 128 256 512; do
+    mkdir -p "$icon_dir/${size}x${size}/apps"
+    cp --remove-destination "$data_dir/venv/untangle-icons/${size}x${size}/apps/tech.truedevs.Untangle.png" "$icon_dir/${size}x${size}/apps/tech.truedevs.Untangle.png"
+done
 cat > "$desktop_dir/tech.truedevs.Untangle.desktop" <<EOF
 [Desktop Entry]
 Type=Application
