@@ -21,7 +21,7 @@ exec bwrap --unshare-all --die-with-parent --new-session \
     --perms 0700 --dir /run/untangle-tests \
     env -u DISPLAY -u WAYLAND_DISPLAY -u RECIT_TEST_MIC_HARDWARE \
     -u RECIT_HARDWARE_PRIVATE_DISPLAY -u RECIT_NATIVE_PRIVATE_DISPLAY -u RECIT_TEST_XVFB \
-    QT_QPA_PLATFORM=offscreen UNTANGLE_SYNTHETIC_SANDBOX=1 \
+    QT_QPA_PLATFORM=offscreen XDG_SESSION_TYPE=x11 UNTANGLE_SYNTHETIC_SANDBOX=1 \
     XDG_RUNTIME_DIR=/run/untangle-tests PIPEWIRE_RUNTIME_DIR=/run/untangle-tests \
     PULSE_SERVER=unix:/run/untangle-tests/no-pulse \
     PIPEWIRE_REMOTE=untangle-no-pipewire \

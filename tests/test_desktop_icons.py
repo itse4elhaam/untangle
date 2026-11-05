@@ -27,6 +27,12 @@ class DesktopIconTests(unittest.TestCase):
                     path.mkdir(parents=True)
                 shutil.copyfile(ROOT / 'scripts/install.sh', checkout / 'scripts/install.sh')
                 (checkout / 'requirements.txt').touch()
+                preflight = checkout / 'src/untangle/preflight.py'
+                preflight.parent.mkdir(parents=True)
+                preflight.write_text('# Software checks are covered by test_preflight.py.\n')
+                python3 = tools / 'python3'
+                python3.write_text(f'#!/bin/bash\nexec {shlex.quote(sys.executable)} "$@"\n')
+                python3.chmod(0o755)
                 python = home / '.local/share/glint/venv/bin/python'
                 python.parent.mkdir(parents=True)
                 python.write_text(f'#!/bin/bash\nexec {shlex.quote(sys.executable)} "$@"\n')
@@ -35,7 +41,13 @@ class DesktopIconTests(unittest.TestCase):
                 # installer and its image renderer execute in this temporary home.
                 for name in ('uv', 'obs', 'ffmpeg'):
                     command = tools / name
-                    command.write_text('#!/bin/bash\nexit 0\n')
+                    if name == 'uv':
+                        command.write_text('#!/bin/bash\nset -euo pipefail\n'
+                            'if [[ "$1" == venv ]]; then\n'
+                            '  target="${@: -1}"\n  mkdir -p "$target/bin"\n'
+                            '  cp "$HOME/.local/share/glint/venv/bin/python" "$target/bin/python"\nfi\n')
+                    else:
+                        command.write_text('#!/bin/bash\nexit 0\n')
                     command.chmod(0o755)
                 for name in ('gtk-update-icon-cache', 'update-desktop-database'):
                     command = tools / name

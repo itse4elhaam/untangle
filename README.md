@@ -21,7 +21,12 @@ Recording starts in MKV so an interrupted session has a better chance of recover
 
 ## Where it stands
 
-Untangle currently targets x86-64 Linux, X11, and OBS 27. Wayland capture isn't supported. Output options are 4K or 1080p at 30 fps, with Intel VAAPI preferred when available.
+Untangle targets x86-64 Linux. The existing X11 / OBS 27 path remains available.
+Arch and Omarchy support adds OBS 30–33 with an EGL preview; Wayland recording
+uses the system screen/window picker through PipeWire and requires Xwayland.
+This path has synthetic regression coverage; live Omarchy validation is pending.
+See [Linux support and CLI installation](docs/linux-support.md) for requirements
+and the remaining validation gate. Output options are 4K or 1080p at 30 fps, with Intel VAAPI preferred when available.
 
 Bluetooth audio still needs work. A OnePlus test produced silence through native PulseAudio, PipeWire, and OBS capture. We haven't established why that happened or why the reported Meet/Loom path worked. Microphone checks and visible levels help detect failures. They don't prove audio quality. See the [diagnostic evidence](docs/testing.md).
 
@@ -29,7 +34,7 @@ Browser-tab and region capture are outside this baseline. The separate [capture-
 
 ## Set up development
 
-You'll need Python 3.10+, `uv`, the system OBS 27 libraries and plugins, FFmpeg, `v4l2-ctl`, `pactl`, and X11. Bluetooth preparation also uses `busctl` to check the live connection.
+You'll need Python 3.10+, `uv` 0.9+, supported system OBS libraries and plugins, FFmpeg, `v4l2-ctl`, `pactl`, and X11 or Xwayland. Bluetooth preparation also uses `busctl` to check the live connection.
 
 ```bash
 uv venv --python /usr/bin/python3 .venv
@@ -46,9 +51,34 @@ Qt is pinned to 6.11.1. Version 6.12.0 crashed the tested Python 3.10 runtime du
 
 ## Install when you're ready
 
+Check prerequisites without installing, launching, or opening devices:
+
+```bash
+./scripts/install.sh --check --json
+# Include Wayland requirements even from SSH or an agent session:
+./scripts/install.sh --check --json --wayland
+```
+
+Installation always runs the prerequisite check. If software is missing or has
+an unsupported version, it shows a repair plan and asks before installing it.
+Untangle installation continues only after a fresh check passes:
+
 ```bash
 ./scripts/install.sh
+# On Omarchy / Wayland:
+./scripts/install.sh --wayland
 ```
+
+For an agent without interactive input, `./scripts/install.sh --yes --wayland`
+approves the displayed prerequisite plan. Without `--yes`, missing prerequisites
+stop noninteractive installation. Automatic repairs support Arch, Debian/Ubuntu,
+Fedora/RHEL and openSUSE families; other platforms still run the mandatory check
+and stop with manual instructions if repair is needed.
+
+After installation, `untangle-doctor --json --wayland --session` checks the
+installed Qt versions, software, and graphical-session environment without
+contacting capture or audio services. Missing dependencies and unsupported
+versions produce a nonzero exit status and installation hints.
 
 Installation changes your local launchers and desktop entry. It points `untangle` and the compatibility `recit` command at this checkout and reuses the existing private runtime. Cloning the repo or running tests doesn't perform that cutover.
 
