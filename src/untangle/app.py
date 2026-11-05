@@ -2649,7 +2649,7 @@ class Window(QMainWindow):
         visibility = QComboBox()
         for title, value in [('Only me', 'owner'), ('My Loom workspace', 'workspace'), ('Anyone with the link', 'public')]:
             visibility.addItem(title, value)
-        visibility.setCurrentIndex(max(0, visibility.findData(self.prefs.value('visibility', 'owner'))))
+        visibility.setCurrentIndex(max(0, visibility.findData(self.prefs.value('visibility', 'public'))))
         layout.addWidget(visibility)
         auto = QCheckBox('Upload automatically after I stop recording')
         auto.setChecked(self.prefs.value('auto_upload', False, type=bool))
@@ -2915,7 +2915,7 @@ class Window(QMainWindow):
         self._upload_fallback_state = None
         self._upload_cli = cli
         self._upload_file = self.last_file.absolute()
-        self._upload_visibility = self.prefs.value('visibility', 'owner')
+        self._upload_visibility = self.prefs.value('visibility', 'public')
         if self._upload_visibility not in ('owner', 'workspace', 'public'):
             self._upload_visibility = 'owner'
         self._upload_auto_title = self.prefs.value('loom_auto_titles', False, type=bool)

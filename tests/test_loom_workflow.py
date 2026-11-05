@@ -364,6 +364,30 @@ class LoomWorkflowChecks(unittest.TestCase):
         self.assertIn('no measurable progress', self.window.upload_detail.text())
         self.assertTrue(self.window.upload_progress.isHidden())
 
+    def test_default_upload_is_public_with_modern_cli(self):
+        self.window.prefs.remove('visibility')
+        process = self.begin_upload()
+        index = process.arguments.index('--visibility')
+        self.assertEqual(process.arguments[index + 1], 'public')
+
+    def test_default_upload_applies_public_with_older_cli(self):
+        self.window.prefs.remove('visibility')
+        process = self.begin_upload(HELP)
+        process.finish(video_response(name=self.path.stem))
+        sharing = self.window._upload_process
+        self.assertEqual(sharing.arguments[2:4], ['visibility', 'set'])
+        index = sharing.arguments.index('--visibility')
+        self.assertEqual(sharing.arguments[index + 1], 'public')
+
+    def test_sharing_dialog_defaults_to_anyone_with_link(self):
+        self.window.prefs.remove('visibility')
+        def inspect(dialog):
+            choices = [combo for combo in dialog.findChildren(glint.QComboBox)
+                       if combo.findData('public') >= 0]
+            self.assertEqual(len(choices), 1)
+            self.assertEqual(choices[0].currentData(), 'public')
+        self.inspect_sharing(inspect)
+
     def test_optional_loom_title_preference_omits_supported_title_override(self):
         process = self.begin_upload()
         self.assertNotIn('--title', process.arguments)
