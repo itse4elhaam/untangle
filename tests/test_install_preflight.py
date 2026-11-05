@@ -36,3 +36,26 @@ class InstallPreflightTests(unittest.TestCase):
                                  else any((home / '.local/bin').iterdir()))
                 self.assertFalse(list(runtime.parent.glob('venv-stage.*')))
                 self.assertFalse((runtime.parent / 'venv.previous').exists())
+
+    def test_missing_python_check_and_consent_never_install_without_approval(self):
+        # Use only stub package tools, with no Python visible to the installer.
+        for args, transaction in ((['--check', '--json'], False), ([], False), (['--yes'], True)):
+            with self.subTest(args=args), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                tools = root / 'tools'
+                tools.mkdir()
+                for command in ('dirname', 'uname'):
+                    (tools / command).symlink_to(shutil.which(command))
+                log = root / 'package.log'
+                package = tools / 'apt-get'
+                package.write_text('#!/bin/bash\nprintf "%s\\n" "$*" >> "$PACKAGE_LOG"\nexit 9\n')
+                package.chmod(0o755)
+                sudo = tools / 'sudo'
+                sudo.write_text('#!/bin/bash\nif [[ "${1:-}" == -n ]]; then shift; fi\nexec "$@"\n')
+                sudo.chmod(0o755)
+                result = subprocess.run(['/bin/bash', str(ROOT / 'scripts/install.sh'), *args],
+                    env=dict(os.environ, HOME=str(root / 'home'), PATH=str(tools),
+                             PACKAGE_LOG=str(log)), input='', text=True, capture_output=True, timeout=10)
+                self.assertEqual(result.returncode, 1, result.stderr)
+                self.assertEqual(log.exists(), transaction)
+                self.assertFalse((root / 'home/.local/share/glint/venv').exists())

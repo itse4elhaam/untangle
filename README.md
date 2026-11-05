@@ -59,13 +59,21 @@ Check prerequisites without installing, launching, or opening devices:
 ./scripts/install.sh --check --json --wayland
 ```
 
-Install explicitly after reviewing the report:
+Installation always runs the prerequisite check. If software is missing or has
+an unsupported version, it shows a repair plan and asks before installing it.
+Untangle installation continues only after a fresh check passes:
 
 ```bash
 ./scripts/install.sh
 # On Omarchy / Wayland:
 ./scripts/install.sh --wayland
 ```
+
+For an agent without interactive input, `./scripts/install.sh --yes --wayland`
+approves the displayed prerequisite plan. Without `--yes`, missing prerequisites
+stop noninteractive installation. Automatic repairs support Arch, Debian/Ubuntu,
+Fedora/RHEL and openSUSE families; other platforms still run the mandatory check
+and stop with manual instructions if repair is needed.
 
 After installation, `untangle-doctor --json --wayland --session` checks the
 installed Qt versions, software, and graphical-session environment without

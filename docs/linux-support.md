@@ -11,13 +11,17 @@ version prerequisites, not camera, microphone, GPU or portal operation.
 
 ## Install from a checkout
 
-On Arch / Omarchy, install the system prerequisites explicitly:
+Every installation runs the prerequisite checks, on every platform. If a
+required program is missing or its version is incompatible, the installer shows
+the repair commands and asks whether to install or upgrade those prerequisites.
+Declining stops the installation. No Untangle runtime is staged until all native
+prerequisites pass. If Python itself is missing, a shell bootstrap offers to
+install it before running the detailed checks.
 
-```bash
-sudo pacman -S --needed python uv obs-studio ffmpeg libpulse v4l-utils \
-  xorg-xwayland pipewire pipewire-pulse xdg-desktop-portal \
-  xdg-desktop-portal-hyprland
-```
+Automatic repair uses the native package manager on Arch/Omarchy, Debian/Ubuntu
+and derivatives, Fedora/RHEL and derivatives, and openSUSE. An unknown platform
+still gets the checks, but unsupported systems and package managers require
+manual repair. Untangle itself remains an x86-64 Linux application.
 
 An agent can check the checkout before making installation changes, including
 over SSH. Run these commands from the repository root:
@@ -32,24 +36,63 @@ or incompatible prerequisite, and 2 means invalid arguments. `--json` implies
 check-only mode. Checks do not start Qt, OBS, audio, Bluetooth or portal sessions.
 They load libobs only to read its version and inspect plugin files.
 
-If `python3` itself is missing, the shell reports it before creating anything.
-Install Python first. On Ubuntu, use `obs-studio`, `ffmpeg`, `pulseaudio-utils`,
-and `v4l-utils`; install uv separately. OBS 28/29 and versions after 33 are
+Check-only mode never installs Python or invokes a package manager. If Python
+is missing, it returns a failing JSON report. OBS 28/29 and versions after 33 are
 rejected. Do not bypass the guard: the Python bindings call native C functions.
 OBS 27 is accepted only for X11 capture, not Wayland.
 
-When checks pass, install explicitly:
+To install with the interactive prerequisite prompt:
 
 ```bash
 ./scripts/install.sh --wayland
 ```
 
-For X11, omit `--wayland`. The installer creates a separate Python environment,
+For X11, omit `--wayland`. For an agent or unattended terminal, explicitly
+approve prerequisite installation:
+
+```bash
+./scripts/install.sh --yes --wayland
+```
+
+Without `--yes`, a noninteractive run stops if prerequisites need repair. With
+`--yes`, sudo uses noninteractive mode too: missing privileges fail instead of
+waiting for a password. The plan remains visible in the output. `--check` and
+`--json` remain read-only even when combined with `--yes`.
+
+For Wayland setup over SSH, set `XDG_CURRENT_DESKTOP` to the target desktop when
+a screen-sharing backend must be installed. For Omarchy:
+
+```bash
+XDG_CURRENT_DESKTOP=Hyprland ./scripts/install.sh --yes --wayland
+```
+
+The installer installs only packages needed by failed checks using configured
+repositories. It does not add repositories or force downgrades. If those
+repositories cannot provide supported versions, the mandatory fresh-process
+recheck fails and Untangle is not installed. A successful package-manager exit
+alone never counts as a passing version check.
+
+Arch repairs include `pacman -Syu`, which can upgrade the entire system. This is
+shown before consent because [partial upgrades are unsupported](https://wiki.archlinux.org/title/System_maintenance#Partial_upgrades_are_unsupported).
+Other families use apt-get, dnf or zypper. Package-manager errors, unavailable
+packages and missing administrator privileges stop installation.
+
+If uv is missing or too old, the plan installs it with pip in a private tool
+environment at `~/.local/share/glint/bootstrap-tools`, with a command link in
+`~/.local/share/glint/tools-bin`. This follows uv's [supported pip installation
+method](https://docs.astral.sh/uv/getting-started/installation/#pypi) and does not
+modify the system Python or an unrelated uv installation. The installer and
+doctor include this private command directory in their own PATH.
+
+After native checks pass, the installer creates a separate Python environment,
 installs the pinned dependencies there and checks their versions before replacing
 the previous environment. Dependency failure leaves the old runtime in place.
 The previous successful environment is retained at
 `~/.local/share/glint/venv.previous`. Installation never starts Untangle, signs
-in to a service, uploads files, or changes system packages or desktop settings.
+in to a service, uploads files, or changes desktop settings. System packages
+change only after the prerequisite prompt is accepted or `--yes` is provided.
+Approved package changes are not rolled back if a later check fails; the
+existing Untangle runtime remains in place.
 
 Keep this checkout in place. The CLI and desktop entry point to its launchers.
 Rerunning the installer refreshes dependencies, launchers and icons. Existing

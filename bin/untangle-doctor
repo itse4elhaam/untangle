@@ -1,6 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 app_dir="$(cd -- "$(dirname -- "$(readlink -f -- "$0")")/.." && pwd)"
+export PATH="$HOME/.local/share/glint/tools-bin:$PATH"
 python_path="$HOME/.local/share/glint/venv/bin/python"
 if [[ -x "$python_path" ]]; then
     exec "$python_path" "$app_dir/src/untangle/preflight.py" --runtime "$@"
