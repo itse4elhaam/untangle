@@ -58,6 +58,14 @@ indeterminate indicator. `parse_upload_progress` accepts labeled human
 uploading/processing lines and an actual percentage if present; a final
 `transfer.bytes` count never becomes invented progress.
 
+## Default sharing
+
+New uploads default to **Anyone with the link** (`public`). Saved sharing
+choices still apply, including Only me and My Loom workspace. For an older
+installation, select Anyone with the link in Untangle's sharing settings if
+a private choice was saved previously. This does not change existing Loom
+videos. Change their permissions in Loom separately.
+
 ## Remote deletion
 
 The inspected video-get query does not request deletion flags. Null results,

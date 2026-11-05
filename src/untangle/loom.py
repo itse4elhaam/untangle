@@ -68,7 +68,7 @@ def rename_title_args(value, title, help_text):
     return ['loom', 'video', 'rename', value, '--title', title.strip(), *JSON_ARGS]
 
 
-def upload_args(path, help_text, visibility='owner', title=None, prefer_loom_titles=True):
+def upload_args(path, help_text, visibility='public', title=None, prefer_loom_titles=True):
     """Build verified upload syntax. Loom titles never receive a --title override.
 
     Older CLIs need a separate visibility command after upload. Callers must
