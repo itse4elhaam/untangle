@@ -1,0 +1,15 @@
+[
+  {
+    "action": "click",
+    "target": "library_button"
+  },
+  {
+    "action": "select",
+    "target": "library.files",
+    "row": 0
+  },
+  {
+    "action": "click",
+    "target": "library.back"
+  }
+]

@@ -1,0 +1,51 @@
+{
+  "checks": [
+    {
+      "layer": "palette",
+      "tested_commit": "2964712e23052d2330830ad0fc2bc1b97d99d259",
+      "tests": 697,
+      "seconds": 83.229,
+      "skips": 3,
+      "passed": true
+    },
+    {
+      "layer": "workspace",
+      "tested_commit": "a02a48e9cf6b35655a3c028f411490c0b0afc063",
+      "tests": 702,
+      "seconds": 85.319,
+      "skips": 3,
+      "passed": true
+    },
+    {
+      "layer": "library",
+      "tested_commit": "628c8a9",
+      "tests": 703,
+      "seconds": 85.942,
+      "skips": 3,
+      "passed": true
+    }
+  ],
+  "shell_syntax": "passed",
+  "diff_whitespace": "passed",
+  "synthetic_qt_captures": 74,
+  "source_sha256": {
+    "app.py": "e184e8b969ebf058c0ce10af2b272d188e8d2fb027a3deedf5ce2f80657d4725",
+    "recordings.py": "ce92479d26def2ef3e465ac8e3bea6e8d70e2c650a545e2a1e3c3e3116bbcf55",
+    "theme.py": "aaef2e44d44ca870a73fc34d5e2aad4cb4044afd960a1882bc0be2588870a9ee"
+  },
+  "video": {
+    "file": "untangle-before-after.mp4",
+    "duration_seconds": 106,
+    "sha256": "77e645966c5ae9d2a1969deff4761dc280bd77c6f28f63b15c2da4af93997fb9"
+  },
+  "native_lane": "not run: Xvfb missing; offscreen evidence does not certify native stacking or live capture",
+  "hardware_opt_ins": "unset",
+  "service_tier": "default",
+  "provider": "codex-elhaam",
+  "review": {
+    "code": "no actionable introduced issues",
+    "visual": "Both preferred new recording controls and review flow. Old explicit sidebar wording preferred; final label corrected.",
+    "scope": "Agent judgments, not measured human usability"
+  },
+  "notes": "Final evidence documentation may be committed after tested commit. Application hashes are authoritative for captures and code identity."
+}

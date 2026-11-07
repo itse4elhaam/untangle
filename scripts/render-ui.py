@@ -244,7 +244,8 @@ def prepare(case, scene):
         if canvas != 'landscape':
             assert w.framing.currentData() == 'fill', 'Social camera preset must default to Fill'
         if scene.startswith('framing-'):
-            case.choose(w.framing, scene.removeprefix('framing-'))
+            w.framing.setCurrentIndex(w.framing.findData(scene.removeprefix('framing-')))
+            disclosure.append('Legacy hidden Fit/Fill preference set programmatically; this is composition evidence, not a claim of a visible framing control.')
         if scene in ('camera-zoom-plus', 'camera-zoom-minus'):
             for _ in range(5):
                 case.click(w.camera_zoom_plus)
@@ -279,10 +280,9 @@ def prepare(case, scene):
     elif scene == 'advanced':
         case.click(w.screen_button)
         QTest.qWait(220)
-        w.controls_panel.ensureWidgetVisible(w.setup_sections[0])
-        QTest.qWait(20)
-        case.click(w.setup_sections[0])
-        disclosure.append('More options opened by QTest; production disclosure automatically scrolls its body into view.')
+        case.open_settings()
+        case.reveal_setting(w.quality)
+        disclosure.append('Settings opened by QTest, with recording quality scrolled into view.')
     elif scene == 'expanded':
         case.click(w.focus_button)
     elif scene == 'audio-silence':
@@ -292,6 +292,8 @@ def prepare(case, scene):
         feed(sample, muted=True)
         w.engine.begin_audio_check.return_value = sample
         w.audio_devices.restore.return_value = True
+        case.open_settings()
+        case.reveal_setting(w.audio_check_button)
         case.click(w.audio_check_button)
         dialog = w.audio_check_dialog
         case.click(dialog.record)
@@ -419,7 +421,7 @@ def main():
                     w = case.window
                     w.timer.stop()
                     w.resize(*size)
-                    case.choose(w.theme_choice, theme)
+                    w.set_theme(theme)
                     wait(lambda: not w.audio_worker or not w.audio_worker.isRunning(), 'Fixture audio worker still running')
                     w.idle_audio.stop()
                     details = prepare(case, scene)
@@ -431,8 +433,9 @@ def main():
                         w.microphone_meter.show_status(None)
                         details.append('Idle microphone telemetry pinned to unmeasured; no signal confidence is inferred from mocked devices.')
                     assert (w.width(), w.height()) == size, f'Unexpected render size {w.size()}'
-                    name = f'{scene}-{theme}-{size[0]}x{size[1]}.png'
-                    image = w.grab()
+                    target = w.settings_dialog if scene == 'advanced' else w
+                    image = target.grab()
+                    name = f'{scene}-{theme}-{image.width()}x{image.height()}.png'
                     assert image.devicePixelRatio() == 1
                     assert image.save(str(output / name)), f'Could not save {name}'
                     font = QFontInfo(w.font())

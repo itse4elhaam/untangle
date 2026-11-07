@@ -79,21 +79,20 @@ class SettingsUITests(unittest.TestCase):
         self.assertEqual(restored.quality.currentData(), (1920, 1080))
         self.assertFalse(restored.sidebar_button.isChecked())
         self.assertFalse(restored.controls_panel.isVisible())
-        self.assertFalse(restored.navigation_footer.isVisible())
+        self.assertTrue(restored.navigation_footer.isVisible())
 
-    def test_header_start_stays_available_when_sidebar_is_hidden(self):
+    def test_footer_start_and_navigation_stay_available_when_controls_are_hidden(self):
         w = self.window
         self.assertTrue(w.sidebar_button.isCheckable())
         self.assertTrue(w.sidebar_button.isChecked())
         action = self.case.bounds(w.record_button)
-        self.assertLess(action.bottom(), self.case.bounds(w.preview).top())
-        self.assertGreater(action.left(), self.case.bounds(w.settings_button).right())
+        self.assertGreater(action.top(), self.case.bounds(w.preview).bottom())
         self.assertLessEqual(w.recorder_page.width() - action.right(), 30)
         before = (w.camera.currentData(), w.microphone.currentData(), w.canvas.currentData())
         w.engine.reset_mock()
         self.case.click(w.sidebar_button)
         self.assertFalse(w.controls_panel.isVisible())
-        self.assertFalse(w.navigation_footer.isVisible())
+        self.assertTrue(w.navigation_footer.isVisible())
         self.assertEqual(w.prefs.value('sidebar_visible', type=bool), False)
         for control in (w.record_button, w.settings_button, w.sidebar_button,
                         w.canvas, w.details_toggle):
@@ -114,10 +113,10 @@ class SettingsUITests(unittest.TestCase):
         self.case.click(w.sidebar_button)
         self.case.click(w.focus_button)
         self.assertFalse(w.controls_panel.isVisible())
-        self.assertFalse(w.navigation_footer.isVisible())
+        self.assertTrue(w.navigation_footer.isVisible())
         self.case.click(w.focus_button)
         self.assertFalse(w.controls_panel.isVisible())
-        self.assertFalse(w.navigation_footer.isVisible())
+        self.assertTrue(w.navigation_footer.isVisible())
         self.case.visible_control(w.canvas)
         self.case.click(w.sidebar_button)
         self.case.visible_control(w.camera)

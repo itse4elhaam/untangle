@@ -122,6 +122,26 @@ class LibraryNavigationTests(unittest.TestCase):
         self.library.theme_choice.setCurrentIndex(1 - self.library.theme_choice.currentIndex())
         self.assertEqual(themes, [self.library.theme_choice.currentData()])
 
+    def test_library_tools_keep_maintenance_and_drive_actions_reachable(self):
+        clip = self.directory / 'Synthetic project.mp4'
+        clip.touch()
+        self.process.state.return_value = QProcess.NotRunning
+        self.library.refresh(clip)
+        self.assertTrue(self.library.library_tools.isVisible())
+        self.assertTrue(self.library.drive_options.isVisible())
+        menu = self.library.library_tools.menu()
+        menu.aboutToShow.emit()
+        labels = [action.text() for action in menu.actions()]
+        self.assertIn('Refresh', labels)
+        self.assertTrue(any('archived' in text for text in labels))
+        self.assertTrue(any('Delete unnamed' in text for text in labels))
+        drive = self.library.drive_options.menu()
+        drive.aboutToShow.emit()
+        self.assertEqual([action.isEnabled() for action in drive.actions()],
+                         [self.library.drive.isEnabled(), self.library.drive_exclude.isEnabled()])
+        self.assertTrue(self.player.source().isEmpty())
+        self.player.play.assert_not_called()
+
 
 if __name__ == '__main__':
     unittest.main()

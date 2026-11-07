@@ -1,0 +1,101 @@
+{
+  "version": "after",
+  "source_sha256": {
+    "app.py": "e184e8b969ebf058c0ce10af2b272d188e8d2fb027a3deedf5ce2f80657d4725",
+    "recordings.py": "ce92479d26def2ef3e465ac8e3bea6e8d70e2c650a545e2a1e3c3e3116bbcf55",
+    "theme.py": "aaef2e44d44ca870a73fc34d5e2aad4cb4044afd960a1882bc0be2588870a9ee"
+  },
+  "steps": [
+    {
+      "id": "01-setup",
+      "image": "01-setup.png",
+      "seconds": 5,
+      "caption": "Set up the camera, microphone and canvas. Find the recording action.",
+      "library": false,
+      "recording": false,
+      "paused": false
+    },
+    {
+      "id": "02-controls-hidden",
+      "image": "02-controls-hidden.png",
+      "seconds": 5,
+      "caption": "Hide setup controls. Recording actions and navigation should stay reachable.",
+      "library": false,
+      "recording": false,
+      "paused": false
+    },
+    {
+      "id": "03-review",
+      "image": "03-review.png",
+      "seconds": 6,
+      "caption": "Select a take. Read its title and review it before choosing a destination.",
+      "library": true,
+      "recording": false,
+      "paused": false
+    },
+    {
+      "id": "04-search",
+      "image": "04-search.png",
+      "seconds": 5,
+      "caption": "Find a take by name. Selecting a file never starts playback.",
+      "library": true,
+      "recording": false,
+      "paused": false
+    },
+    {
+      "id": "05-recording",
+      "image": "05-recording.png",
+      "seconds": 6,
+      "caption": "During a take: find the timer, pause and Stop and save.",
+      "library": false,
+      "recording": true,
+      "paused": false
+    },
+    {
+      "id": "06-paused",
+      "image": "06-paused.png",
+      "seconds": 5,
+      "caption": "Pause the take. The timer must freeze and the action must say Resume.",
+      "library": false,
+      "recording": true,
+      "paused": true
+    },
+    {
+      "id": "07-browse-during-take",
+      "image": "07-browse-during-take.png",
+      "seconds": 6,
+      "caption": "Try Recordings during a take. Capture must continue and Stop must stay reachable.",
+      "library": true,
+      "recording": true,
+      "paused": false
+    },
+    {
+      "id": "08-saving",
+      "image": "08-saving.png",
+      "seconds": 5,
+      "caption": "Stop and save returns attention to the take. This save operation is mocked.",
+      "library": false,
+      "recording": true,
+      "paused": false
+    },
+    {
+      "id": "09-saved",
+      "image": "09-saved.png",
+      "seconds": 5,
+      "caption": "A saved take has an explicit review action. The local original stays available.",
+      "library": false,
+      "recording": false,
+      "paused": false
+    },
+    {
+      "id": "10-light",
+      "image": "10-light.png",
+      "seconds": 5,
+      "caption": "The same review workflow in light mode. Sharing remains a separate action.",
+      "library": true,
+      "recording": false,
+      "paused": false
+    }
+  ],
+  "disclosure": "Captioned step captures of production Qt widgets. Synthetic camera/screen, files, engine, audio, playback, account and process boundaries. No native encoding, host capture, playback or upload. Elapsed time and save result are injected fixture events."
+}

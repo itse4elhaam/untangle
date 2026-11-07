@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Untangle UX improvement plan</title>
+<style>
+:root{color-scheme:dark;--background:#15191f;--foreground:#e5e9ef;--muted:#b0bbc9;--card:#202731;--border:#48576a;--primary:#a8ceff;--success:#a3dec2;--warning:#f3ce8d;--radius:12px;--font-sans:system-ui,sans-serif;--font-mono:ui-monospace,monospace}
+html[data-theme="light"]{color-scheme:light;--background:#fafbfd;--foreground:#202b3b;--muted:#506078;--card:#eef2f7;--border:#b7c3d1;--primary:#174f91;--success:#17623e;--warning:#805000}
+*{box-sizing:border-box}html,body{margin:0}body{color:var(--foreground);font:17px/1.65 var(--font-sans)}main{max-width:760px;margin:auto;padding:16px 0 40px}h1,h2,h3{line-height:1.2;letter-spacing:-.025em}h1{font-size:2.1rem;margin:.4em 0}h2{font-size:1.45rem;margin:1.8em 0 .7em}h3{font-size:1.1rem}p{margin:.7em 0}a{color:var(--primary);text-decoration:underline;text-underline-offset:3px}small,.meta{color:var(--muted);font-size:.85rem}.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin:14px 0}.lead{font-size:1.15rem}.tag{color:var(--success);font-size:.85rem}.warn{border-left:4px solid var(--warning)}table{width:100%;border-collapse:collapse;font-size:.94rem}th,td{text-align:left;vertical-align:top;padding:12px 8px;border-bottom:1px solid var(--border);overflow-wrap:anywhere}th{color:var(--muted);font-weight:600}code{font:.85em var(--font-mono);overflow-wrap:anywhere}li{margin:.5em 0}ul,ol{padding-left:1.4em}details{border-bottom:1px solid var(--border);padding:12px 0}summary{cursor:pointer;font-weight:600}button{font:inherit;color:var(--foreground);border:1px solid var(--border);background:var(--card);border-radius:8px;padding:5px 12px;cursor:pointer}.flow{display:grid;grid-template-columns:1fr 1fr;gap:10px;list-style:none;padding:0;counter-reset:step}.flow li{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin:0;counter-increment:step}.flow li:before{content:counter(step) " → ";color:var(--primary);font-weight:700}.flow span{display:block;color:var(--muted);font-size:.9rem;margin-top:5px}.sources{font-size:.9rem}section{scroll-margin-top:20px}@media(max-width:540px){body{font-size:16px}.flow{grid-template-columns:1fr}th,td{padding:9px 4px;font-size:.86rem}h1{font-size:1.8rem}}@media print{body{color:#111;background:#fff;font-size:11pt}.card,.flow li{background:#fff;border-color:#aaa;break-inside:avoid}button{display:none}a{color:#123b68}details{break-inside:avoid}}
+</style></head><body><main><article>
+<div class="meta">Research and proposal · 6 November 2026 · Untangle revision fe0eff1</div>
+<h1>Make Untangle easier to use, with agents doing the QA</h1>
+<p class="lead">Use <strong>Loom, Screen Studio, and Cap</strong> as the comparison set. Build a bounded loop that changes the real Qt app, runs tasks, inspects screenshots, and keeps only verified improvements.</p>
+<p>You should receive a tested pull request and a short decision report. You should not have to click through each change yourself. This document proposes the system. The loop is not installed or running.</p>
+<button id="theme" type="button">Use light theme</button>
+
+<section><h2>The three comparison apps</h2>
+<p>These are the best fit for Untangle's job: make a recording, review it, and share it with little effort. This is a recommendation based on official documentation. We did not measure competitor task times or test their installed apps.</p>
+<div class="card"><div class="tag">1 · The sharing standard</div><h3>Loom</h3><p>Compare setup choices, recording status, the finished take, and the path to a useful link. Its current Mac guide shows target and input choices, microphone feedback, a finished preview, and local Preview and Copy Link actions. <a href="https://support.atlassian.com/loom/docs/get-started-with-loom-for-macos/">Official walkthrough</a>.</p><p><strong>Untangle target:</strong> the user can tell what was saved, review that exact file, and distinguish a local path from a share link and its audience.</p><p class="meta">Loom's desktop app is Mac/Windows, not native Linux. Use it as a workflow reference. Features vary by platform and plan. <a href="https://support.atlassian.com/loom/docs/the-loom-recording-platforms/">Platform limits</a>.</p></div>
+<div class="card"><div class="tag">2 · The presentation standard</div><h3>Screen Studio</h3><p>Compare readable framing, cursor emphasis, zoom controls, and easy finishing. Its official guide describes automatic click-based zooms and editable zoom regions. <a href="https://screen.studio/">Product</a> · <a href="https://preview.screen.studio/guide/adding-editing-zooms">Zoom guide</a>.</p><p><strong>Untangle target:</strong> a clear preview and predictable framing, with fewer adjustments needed to produce a useful video. Later, assess automatic zoom and simple presentation presets.</p><p class="meta">Mac only. Use screen.studio as the source. The similarly named screenstudio.dev is a different site. Untangle's current composed video cannot provide every post-record edit without capture changes.</p></div>
+<div class="card"><div class="tag">3 · The closest product reference</div><h3>Cap</h3><p>Compare local recording, editing, export, and optional sharing. Cap separates Instant uploads from local Studio projects. This is a useful reference for making the save destination clear. <a href="https://cap.so/docs/quickstart">Official workflow</a>.</p><p><strong>Untangle target:</strong> local recording works on its own. Sharing is a clear, separate choice. Export and upload failures preserve the original.</p><p class="meta">Cap advertises Linux support. Its installation guide lists an x86_64 Debian package, while some pages differ on platform/package coverage. Verify the exact build before any Linux comparison. <a href="https://cap.so/docs/installation">Installation</a>. Open source does not mean every commercial or cloud use is free. <a href="https://cap.so/docs/commercial-license">License</a>.</p></div>
+<p>OBS remains an engineering reference for source and audio control. It is too complex to be the main ease-of-use target. Tella and Supercut are useful editor references, but overlap with this set. Three stable references are enough to start.</p>
+<p>Compare the same task and state, not whole products with one score. Collect dated official screenshots or demo frames for setup, recording, completion, review, and sharing. Record platform, version if known, source, and plan limits. If a matching state is unavailable, mark it missing. Do not invent it.</p>
+</section>
+
+<section><h2>What to take from Theo</h2>
+<p>The likely video is <a href="https://www.youtube.com/watch?v=xq0eB8vxeqk">Agents Sucked At UI (Until Today)</a>, indexed as 3 November 2026. I read a <a href="https://www.usetranscribe.io/yt/xq0eB8vxeqk/agents-ui-improvement">third-party transcript</a>. Direct YouTube captions were unavailable, so this is not a claim of first-hand viewing.</p>
+<p>The transcript describes screenshot reviews by several models, repeated changes, competitor references, and using one judge first to reduce cost. It also reports that scores changed with context and target scores. Keep the external references and iteration. Do not make “get 10/10” the completion rule.</p>
+<div class="card warn"><p>A model can prefer a screenshot while the app becomes harder to use. Test task completion separately. Treat model ratings as advice, and retain the best verified version when an experiment fails.</p></div>
+</section>
+
+<section><h2>What Untangle already has</h2>
+<p>The app already has real Qt mouse and keyboard tests, both themes, two window sizes, synthetic media, recovery tests, and screenshot tools. Start there. Do not build a second imitation of the UI.</p>
+<table><thead><tr><th>Existing part</th><th>Use in the loop</th></tr></thead><tbody>
+<tr><td><code>scripts/test.sh</code></td><td>Required safe test entry. Bubblewrap blocks access to host devices, desktop services, and networking.</td></tr>
+<tr><td><code>tests/test_ui_clickthrough.py</code></td><td>Production widgets receive real Qt input. Extend these actions for measured tasks.</td></tr>
+<tr><td><code>scripts/render-*.py</code></td><td>Capture real widgets with synthetic capture/playback boundaries. Consolidate stale assumptions before use.</td></tr>
+<tr><td><code>tests/test_overlay_input.py</code></td><td>Private X11 pointer and synthetic capture checks when Xvfb and required OBS plugins exist.</td></tr>
+<tr><td><code>docs/ui-standards.md</code></td><td>Existing layout, focus, audio-state, and recording rules remain acceptance conditions.</td></tr>
+</tbody></table>
+<p class="meta">Read-only environment check: bwrap exists. This checkout has no .venv, system Python has no PySide6, and Xvfb is absent. No .github workflow directory was found. Provisioning and CI wiring are required; the loop is not ready to execute here.</p>
+<p>The 4 November audit is historical evidence. Later work already added saved-take review, sharing status, and source-preserving trim exports. Measure today's app before filing those as missing features again.</p>
+</section>
+
+<section><h2>The complete improvement loop</h2>
+<ol class="flow" aria-label="Improvement loop">
+<li>Freeze the baseline<span>Save revision, tasks, reference images, environment, and current results.</span></li>
+<li>Choose one problem<span>State the user's task, the observed difficulty, and the expected improvement.</span></li>
+<li>Make one candidate<span>Change one coherent area. Keep the last accepted version available.</span></li>
+<li>Run safe QA<span>Exercise production widgets, failure cases, screenshots, and the full required suite.</span></li>
+<li>Judge A against B<span>Fresh reviewers compare anonymous versions, task evidence, and fixed references.</span></li>
+<li>Keep or reject<span>Keep only a qualifying improvement. Record the result and repeat within budget.</span></li>
+<li>Deliver a pull request<span>Attach before/after evidence, test results, remaining limits, and rollback steps.</span></li>
+<li>Release after approval<span>Push/version first. Merge and install only under explicit release authority.</span></li>
+</ol>
+<p>One controller owns the run. One builder changes code. A separate tester runs the scenarios. Fresh reviewers inspect evidence without seeing the builder's claims or target rating. Only one builder writes a candidate at a time.</p>
+<p>On failure, reject the candidate and continue from the accepted revision. If main changes, update the branch and repeat affected verification before delivery. A crash, incomplete artifact set, or judge failure is an incomplete round, not a pass.</p>
+</section>
+
+<section><h2>How a candidate earns acceptance</h2>
+<p>These are proposed operating rules. Calibrate them in the pilot. A score cannot cancel a failure.</p>
+<ol>
+<li><strong>Pass the hard checks.</strong> Required tests and shell syntax pass. No new clipping, overlap, hidden main actions, lost focus, unsafe call, changed sharing default, or cleanup failure. A missing required test blocks acceptance.</li>
+<li><strong>Show a task benefit.</strong> Record success, interactions, wrong turns, and time spent waiting. A visual-only change must improve legibility or hierarchy without making any task worse. Synthetic timing is a regression measure, not a human speed claim.</li>
+<li><strong>Win a fresh comparison.</strong> Two reviewers prefer the candidate for the stated task and cite visible evidence. Randomize A/B order. Do not tell judges which is new or what score to reach. Disagreement means hold, revise, or reject.</li>
+<li><strong>Pass reserved cases.</strong> Evaluate additional names, failures, and sizes that the builder did not use to tune the change. Keep test definitions outside the builder's allowed changes. A newly exposed case becomes a regression check in the next run.</li>
+</ol>
+<p>Ask judges to rate hierarchy, readable text, control clarity, state feedback, consistency, and task effort separately on a 1–5 scale with examples for each level. Show the scores for diagnosis. Select candidates by the rules above, not an average alone.</p>
+<p>Repeated model votes are not independent user research. Even separate Codex models share biases. A successful run establishes automated evidence of improvement, not proof that every user will prefer it.</p>
+</section>
+
+<section><h2>The task pack</h2>
+<p>Use a versioned catalog. Each task defines initial settings, synthetic inputs, allowed actions, completion evidence, and failure conditions. Existing tests are the first cases.</p>
+<table><thead><tr><th>Task</th><th>Completion evidence</th></tr></thead><tbody>
+<tr><td>Prepare a recording</td><td>Target, camera, mic and computer sound are clear; Record is reachable; Escape cancels preparation.</td></tr>
+<tr><td>Recover from a mic error</td><td>Waiting, silence and missing packets remain distinct. Input can change after cleanup. No silent fallback.</td></tr>
+<tr><td>Pause, resume, stop</td><td>State and main action remain visible. The correct synthetic file reaches saved state.</td></tr>
+<tr><td>Review and find a take</td><td>Review opens the exact saved file, including after rename. Selection stays silent until Play.</td></tr>
+<tr><td>Trim and export</td><td>Original survives; export is versioned; cancel and disk-full leave a recoverable state.</td></tr>
+<tr><td>Share or archive</td><td>Mocked partial failure preserves local files. Link, audience, upload status and retry outcome stay distinct.</td></tr>
+<tr><td>Quit during work</td><td>Recording, playback, export and background workers finish or cancel with their resources released.</td></tr>
+</tbody></table>
+<p>Baseline matrix: light/dark × Screen/Camera × 960×760/1120×840. Add empty/populated libraries, long names, loading, recoverable errors, keyboard-only operation and 1×/1.5× scale where supported. Cover the full matrix before a PR is ready, even if each inner round uses only affected cases.</p>
+<p>Separate scripted regression from discovery. A fresh exploratory agent gets a task and visible controls, without the scripted solution. Its wrong turns reveal possible friction. Verify those findings before changing code.</p>
+<div class="card"><h3>Give the agent a safe way to operate Qt</h3><p>Add a small test-only bridge around the existing fixture. It returns a full-window image and a list of visible controls with stable IDs, labels, bounds and enabled state. It accepts bounded click, type, key, scroll and wait actions. Qt sends input on its main thread and returns the next observation and action trace.</p><p>The model controller stays outside bubblewrap. The fixture stays inside it, with synthetic devices, temporary settings, no network and no host desktop. Use inherited pipes for messages and an explicit artifact output mount. Do not enable desktop accessibility services. Reject unknown actions and targets outside the fixture window. Limit an exploratory task to 30 actions and 120 seconds.</p><p>Before optimization starts, demonstrate one unscripted task through this bridge. A browser automation tool cannot operate a Qt app by itself. This bridge is proposed work, not an existing capability.</p></div>
+</section>
+
+<section><h2>Build it in four deliverables</h2>
+<details open><summary>1. A reproducible test environment and current baseline</summary><p>Provide a dedicated Linux test image with pinned Qt dependencies, bwrap, FFmpeg and private-X11 prerequisites. Validate namespace isolation first. Repair stale renderers and run screenshots inside a fail-closed wrapper, with a writable artifact directory only. Do not run the renderers directly on the host.</p><p>Deliver source hashes, fixture/mock disclosures, full-window images, task results and skipped-test reasons. Define required checks for each lane. Parse test outcomes and artifacts, not just exit status. Hardware opt-ins remain expected skips. Missing Xvfb or OBS prerequisites block the native-X11 lane, even when unittest exits successfully. Offscreen results cannot satisfy that lane.</p><p>Prove the setup can detect a deliberate clipping fault and a broken task action before allowing optimization. As a pilot prerequisite, propose and approve the narrow UI-standards policy update described below. Commit it through the PR workflow before treating agent visual review as the replacement release gate.</p></details>
+<details open><summary>2. A comparison pack and machine-readable task results</summary><p>Create a small task catalog and a dated reference pack for the three apps. Keep reusable results in JSON and generate a readable HTML report. Reuse existing Qt fixtures and implement the constrained observation/action bridge above. No new UI framework or browser remake is needed.</p><p>Each run records baseline/candidate commit, task version, image hashes, Qt/fonts/scale, boundary mocks, action trace, assertions, durations, judge model/prompt, and decision. Keep rejected rounds too.</p></details>
+<details open><summary>3. A bounded pilot that produces one reviewable PR</summary><p>Start with one task: review the exact saved take, then return to setup. Measure its current behavior before choosing a change. The new pilot task is small; the rest of the task pack is a later expansion. Existing export, upload, audio and shutdown regression checks still run as part of the full suite.</p><p>Allow UI changes only. Recording engines, audio, credentials, retention and capture formats are excluded from automatic polish. Mixed UI/business-logic files need a diff-level check, not just a filename allowlist.</p><p>Keep acceptance tests and comparator references read-only to the builder. A necessary test change receives separate review before a new baseline. Run <code>./scripts/test.sh</code> and <code>bash -n scripts/*.sh bin/*</code>; retain their logs and exact revision.</p><p>Deliver one PR with full screenshots, annotated changes, task comparisons, tests, unresolved limits and a rollback to the baseline revision. Installation remains separate.</p></details>
+<details open><summary>4. Repeat safely, then add features by measured need</summary><p>After the pilot works, trigger the controller on an explicit run or an approved schedule. Use a single-run lock and resumable state. CI reruns deterministic checks; an agent worker performs design judgments. CI must fail closed if namespace isolation is unavailable.</p><p>Rank feature proposals by observed task failure, expected benefit, implementation cost and release risk. Start with existing workflow friction. Region selection, automatic zoom, captions, and editable separate tracks each need their own spec and tests. Separate tracks are a capture/storage change, not a small editor control.</p></details>
+</section>
+
+<section><h2>Models, cost, and stop rules</h2>
+<p>Use <strong>Codex (elhaam)</strong> first, as requested. The research used three Luna agents at low reasoning and the default service tier. No usage-limit failure occurred.</p>
+<ul>
+<li>Luna at low reasoning handles reference updates, scenario summaries, and initial issue sorting.</li>
+<li>Sol at low reasoning builds small UI candidates and performs the first visual review. Use a fresh instance for review.</li>
+<li>A second Sol reviewer checks finalists and behavior risks. Escalate difficult design or ownership decisions to medium reasoning within Codex (elhaam).</li>
+<li>When Elhaam usage runs out, save state and stop new calls. Report the limit. Switching accounts or providers is a separate decision.</li>
+</ul>
+<p>After the environment and task bridge work, cap each optimization run at six candidate rounds, two hours of wall time, and no more than two finalist reviewers per candidate. Setup and implementation are separate work, not included in this run budget. Stop earlier after two rounds with no accepted gain, repeated judge disagreement, an environment failure, or a usage limit. Retain the best accepted candidate.</p>
+<p>Log usage and elapsed time per round. This plan does not estimate a dollar cost from subscription usage. Set a token or spend cap if reliable usage data is available. Do not burn remaining quota just because it exists.</p>
+</section>
+
+<section><h2>What “end to end” can mean here</h2>
+<div class="card"><p><strong>Routine UX QA can be agent-owned.</strong> Agents can build, click, inspect actual Qt screenshots, test failures, review code, and prepare PR evidence. You make product and release decisions, without repeating the test script yourself.</p></div>
+<p>Real microphone intelligibility, Bluetooth restoration, live Wayland behavior, sustained encoding and real service permissions need a separate acceptance lane. Build a dedicated test machine with synthetic media and isolated test accounts, then authorize the exact device/service checks. An agent can operate that machine. Your everyday desktop should not be the test lab. Until then, report these areas as unverified.</p>
+<p><strong>One policy decision is required before removing human visual QA.</strong> <code>docs/ui-standards.md</code> currently calls for human visual review. Deliverable 1 must include an approved policy change for copy, spacing, styling and UI navigation within the stated task. Replace manual visual QA in that scope with two fresh agent reviews, complete Qt screenshots, task traces and all required checks. Capture/audio behavior, authentication, uploads, deletion, retention and format changes stay outside that policy. It must not quietly label model review as human review.</p>
+<p>Under the current repository rules, autonomous work ends at a reviewable PR. Merge, installation and runtime updates remain separate authorized actions. Before deployment, the change must be versioned and pushed. No screen readers, speech settings, real device checks, account sign-in or uploads are part of this research or the proposed ordinary loop.</p>
+<p><strong>Recommended next step:</strong> accept the three-app set, then implement deliverables 1–3 as the pilot. Require one complete successful run before adding a recurring schedule. No need to choose a large feature backlog first.</p>
+</section>
+
+<section class="sources"><h2>Evidence and limits</h2>
+<p>Research date: 6 November 2026. Source inspection and documentation research only. No application launch, capture, playback, authentication, installation, upload or product change. No tests were run for this report.</p>
+<ul>
+<li><a href="research/ux-comparison-apps.md">Competitor research</a>. Its OBS recommendation differs from this report. I selected Loom because the task is ease of use, and Untangle already integrates with Loom.</li>
+<li><a href="research/theo-ui-hill-climbing.md">Video research</a>. The transcript below became available during parent synthesis after the agent's metadata-only pass.</li>
+<li><a href="https://www.usetranscribe.io/yt/xq0eB8vxeqk/agents-ui-improvement">Transcript mirror</a>. Secondary reproduction, not independently verified against the video's audio. No exact timestamps or quotes are relied on here.</li>
+<li><a href="research/untangle-ux-loop-feasibility.md">Untangle feasibility</a>. The private Xvfb test is inside the safe runner; do not follow its suggestion of passing a host RECIT_TEST_XVFB flag.</li>
+<li><a href="ui-standards.md">UI standards</a> · <a href="testing.md">Testing evidence</a> · <a href="ux-audit-2026-11-04.md">Historical audit</a> · <a href="editing-projects.md">Editing design</a>.</li>
+<li><a href="https://doc.qt.io/qt-6/qtest-overview.html">Qt Test documentation</a> supports native widget input testing. Browser screenshot tooling does not replace Qt testing.</li>
+</ul>
+</section>
+</article></main><script>document.getElementById('theme').onclick=function(){const light=document.documentElement.dataset.theme!=='light';document.documentElement.dataset.theme=light?'light':'dark';this.textContent=light?'Use dark theme':'Use light theme'}</script></body></html>
