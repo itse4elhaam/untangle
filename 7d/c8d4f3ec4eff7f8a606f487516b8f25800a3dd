@@ -1,0 +1,43 @@
+README.md
+  s_c1cf704570e5d5::t_e182fed048f8b6 24-29,37,54-63,66-67,70-74
+bin/untangle-doctor
+  s_c1cf704570e5d5::t_815b2d63ea50e1 1-8
+docs/linux-support.md
+  s_c1cf704570e5d5::t_a1589d1c4f1754 1-100
+scripts/install.sh
+  s_c1cf704570e5d5::t_3b02acdf102d43 8-19,21-28,30,32,57-76
+scripts/test.sh
+  s_c1cf704570e5d5::t_c8b61e0db8f9d0 24
+src/untangle/app.py
+  s_c1cf704570e5d5::t_02a1da0c7d5a15 265,302-305,498-500,502-505,1111-1156,1161,1246-1247,1309,1318-1325,1343,1350-1351,1410,1453-1454,1456-1457,1470-1471,1561-1562,1835-1836,1839-1840,1854,1857,1903-1904,2303,2342-2343,2347,2374-2378,2530-2532,3294-3295,3444-3445
+src/untangle/engine.py
+  s_c1cf704570e5d5::t_df1e282e0813e0 1,13,18,28,187,189-194,308-311,361-368,392,419-423,425-432,545-581,621,683-684,695-700,709-710,716-720,734-735,1377-1378,1469,1549-1550,1709
+src/untangle/preflight.py
+  s_c1cf704570e5d5::t_11ec329ad77b6a 1-137
+tests/test_desktop_icons.py
+  s_c1cf704570e5d5::t_8e84692a2696e7 30-35,44-50
+tests/test_install_preflight.py
+  s_c1cf704570e5d5::t_24b6530fa39946 1-38
+tests/test_modern_obs.py
+  s_c1cf704570e5d5::t_6204ad01ff7f79 1-102
+tests/test_preflight.py
+  s_c1cf704570e5d5::t_f92d26052a79fb 1-70
+tests/test_wayland_ui.py
+  s_c1cf704570e5d5::t_87a2751518e41a 1-73
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7dc8d4f3ec4eff7f8a606f487516b8f25800a3dd",
+  "prompts": {},
+  "sessions": {
+    "s_c1cf704570e5d5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1aaf6-f8c8-7f21-bf45-b4aad65730ec",
+        "model": "unknown"
+      },
+      "human_author": "Elhaam Basheer Chaudhry <e4elhaam@gmail.com>"
+    }
+  }
+}
