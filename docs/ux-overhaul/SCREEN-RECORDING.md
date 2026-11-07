@@ -1,6 +1,6 @@
 # During a screen recording
 
-[Watch the 86-second before/after walkthrough](screen-recording-before-after.mp4). [Competitor comparison and next loop](../research/screen-recording-experience.md).
+[Watch the synchronized side-by-side desktop recording](screen-recording-side-by-side.mp4) or [open its single comparison frame](screen-recording-side-by-side.png). The earlier [86-second step walkthrough](screen-recording-before-after.mp4) remains available. [Competitor comparison and next loop](../research/screen-recording-experience.md).
 
 The previous overhaul is squash-merged in PR #38 as `5fb8e3d874fca203aeac0caa410f854d32b1dfc5` and installed locally from its pushed immutable archive. This recording-controls pass is a separate reviewable change.
 
@@ -48,3 +48,20 @@ python3 scripts/build-ux-video.py --before docs/ux-overhaul/screen-before --afte
 ```
 
 Xvfb must be available on PATH to run the isolated native input lane; otherwise that lane explicitly skips. No hardware flags are needed or enabled. The before renderer accepts `--source-root` pointing to an archive of the stated baseline; baseline hashes are retained for audit.
+
+## Recorded side by side
+
+The new video records two actual Qt sessions on separate private Xvfb desktops, then aligns them horizontally: baseline `5fb8e3d` on the left, PR #39 on the right. It includes live timer updates, Qt mouse clicks on the new Pause/Resume controls, typing in a synthetic shared editor, microphone warning presentation, whole-screen control visibility, saving and a saved-take review action. Each session asserts that pause/resume/start/save states were reached. The combined PNG is extracted from the combined video at 00:11, during the microphone-warning task.
+
+OBS/device/audio/file/process boundaries remain inert fixtures. Baseline shortcut actions and media/save events are injected; no actual user recording is produced or played. FFmpeg records only the explicitly created private Xvfb desktop, inside the existing device/network/session isolation. Application-triggered external processes remain blocked. No host desktop or devices are available to the sessions. This is an interactive UI recording, not a claim about encoded OBS output or saved audio.
+
+To reproduce, make Xvfb available on PATH, and archive the baseline revision to a read-only source directory:
+
+```bash
+./scripts/render-safe.sh "$PWD/docs/ux-overhaul/recorded-before" recording-video --version before --source-root /path/to/baseline-5fb8e3d
+./scripts/render-safe.sh "$PWD/docs/ux-overhaul/recorded-after" recording-video --version after
+ffmpeg -i docs/ux-overhaul/recorded-before/raw.mp4 -i docs/ux-overhaul/recorded-after/raw.mp4 -filter_complex '[0:v]setpts=PTS-STARTPTS[left];[1:v]setpts=PTS-STARTPTS[right];[left][right]hstack=inputs=2:shortest=1[v]' -map '[v]' -an -c:v libx264 -crf 19 -pix_fmt yuv420p -movflags +faststart docs/ux-overhaul/screen-recording-side-by-side.mp4
+ffmpeg -ss 11 -i docs/ux-overhaul/screen-recording-side-by-side.mp4 -frames:v 1 docs/ux-overhaul/screen-recording-side-by-side.png
+```
+
+The private display is mandatory; the renderer fails rather than using a host display. Raw takes and logs remain ignored local artifacts.

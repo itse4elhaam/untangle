@@ -1,0 +1,153 @@
+{
+  "baseline_revision": "5fb8e3d874fca203aeac0caa410f854d32b1dfc5",
+  "candidate_app_revision": "536cff699150c7004c60a8e6fc1988f9b90e0759",
+  "before": {
+    "version": "before",
+    "platform": "private Xvfb / xcb",
+    "events": [
+      {
+        "action": "pause",
+        "at": 3.036,
+        "recording": true,
+        "paused": true,
+        "busy": false
+      },
+      {
+        "action": "resume",
+        "at": 6.009,
+        "recording": true,
+        "paused": false,
+        "busy": false
+      },
+      {
+        "action": "warning",
+        "at": 9.006,
+        "recording": true,
+        "paused": false,
+        "busy": false
+      },
+      {
+        "action": "whole_screen",
+        "at": 13.004,
+        "recording": true,
+        "paused": false,
+        "busy": false
+      },
+      {
+        "action": "whole_pause",
+        "at": 16.003,
+        "recording": true,
+        "paused": true,
+        "busy": false
+      },
+      {
+        "action": "whole_resume",
+        "at": 19.004,
+        "recording": true,
+        "paused": false,
+        "busy": false
+      },
+      {
+        "action": "saving",
+        "at": 22.005,
+        "recording": true,
+        "paused": false,
+        "busy": true
+      },
+      {
+        "action": "saved",
+        "at": 25.005,
+        "recording": false,
+        "paused": false,
+        "busy": false
+      }
+    ],
+    "app_sha256": "3137effb3a7f87f9c32ba4e7be90648d9e5deed2fb2f6923a8b65710a91a4c8d",
+    "renderer_sha256": "7c3597f3aef34422cf3dbdf867bd3f25c504714801f5023683c82442df0d6d48",
+    "disclosure": "Real Qt desktop recording; synthetic capture, microphone, file and save events. No host devices, playback, uploads or account operations."
+  },
+  "after": {
+    "version": "after",
+    "platform": "private Xvfb / xcb",
+    "events": [
+      {
+        "action": "pause",
+        "at": 3.016,
+        "recording": true,
+        "paused": true,
+        "busy": false
+      },
+      {
+        "action": "resume",
+        "at": 6.125,
+        "recording": true,
+        "paused": false,
+        "busy": false
+      },
+      {
+        "action": "warning",
+        "at": 9.007,
+        "recording": true,
+        "paused": false,
+        "busy": false
+      },
+      {
+        "action": "whole_screen",
+        "at": 13.007,
+        "recording": true,
+        "paused": false,
+        "busy": false
+      },
+      {
+        "action": "whole_pause",
+        "at": 16.005,
+        "recording": true,
+        "paused": true,
+        "busy": false
+      },
+      {
+        "action": "whole_resume",
+        "at": 19.005,
+        "recording": true,
+        "paused": false,
+        "busy": false
+      },
+      {
+        "action": "saving",
+        "at": 22.008,
+        "recording": true,
+        "paused": false,
+        "busy": true
+      },
+      {
+        "action": "saved",
+        "at": 25.007,
+        "recording": false,
+        "paused": false,
+        "busy": false
+      }
+    ],
+    "app_sha256": "d91c569fc90eb0866cb5aae79eb1536e748195bf70503fa964a3682976d389d0",
+    "renderer_sha256": "7c3597f3aef34422cf3dbdf867bd3f25c504714801f5023683c82442df0d6d48",
+    "disclosure": "Real Qt desktop recording; synthetic capture, microphone, file and save events. No host devices, playback, uploads or account operations."
+  },
+  "media": {
+    "programs": [],
+    "streams": [
+      {
+        "codec_type": "video",
+        "width": 2560,
+        "height": 900
+      }
+    ],
+    "format": {
+      "duration": "28.067000",
+      "size": "448738"
+    }
+  },
+  "frame_at_seconds": 11,
+  "sha256": {
+    "screen-recording-side-by-side.mp4": "2b30a61b63ada9b19ac8f5c834f7efd8e7c9cfc78a6421237e173a81c5f053e1",
+    "screen-recording-side-by-side.png": "855e534a8fd9cb6a5ee4fbace4e40cdcde4cb67b53f39ced62ddbad08e922c6f"
+  }
+}

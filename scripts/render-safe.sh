@@ -12,7 +12,8 @@ case "$renderer" in
     walkthrough) script="render-walkthrough.py" ;;
     session) script="ux_session.py" ;;
     recording) script="render-recording-experience.py" ;;
-    *) echo 'Choose ui, settings, walkthrough, session or recording.' >&2; exit 2 ;;
+    recording-video) script="record-screen-comparison.py" ;;
+    *) echo 'Choose ui, settings, walkthrough, session, recording or recording-video.' >&2; exit 2 ;;
 esac
 python_path="$repo_dir/.venv/bin/python"
 if [[ ! -x "$python_path" ]]; then python_path="$(command -v python3)"; fi

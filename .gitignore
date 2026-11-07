@@ -6,3 +6,7 @@ docs/ux-overhaul/round-*/
 docs/ux-overhaul/matrix*/
 docs/ux-overhaul/comparison/
 docs/ux-overhaul/*.timeline.txt
+
+# Raw private-desktop demo takes; publish the combined comparison only.
+docs/ux-overhaul/recorded-before/
+docs/ux-overhaul/recorded-after/
