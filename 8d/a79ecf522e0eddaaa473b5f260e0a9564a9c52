@@ -1,0 +1,31 @@
+docs/loom-integration.md
+  s_ae25019c42f49d::t_c31f5666511d34 61-68
+docs/usage.md
+  s_ae25019c42f49d::t_632357d6a383ad 12-15
+src/untangle/app.py
+  s_ae25019c42f49d::t_025cf2cd7245a3 4,294-295,356,367-370,451-453,477,508,517,526,540,563,593,604,620,650,657,739,885,887,1641-1642,1687,1761,1851,1878,1893,1913,2013,2063,2073,2126-2127,2157-2160,2382-2386,2764,2769,2804,3068-3087,3095,3285-3288
+src/untangle/drive_dialog.py
+  s_ae25019c42f49d::t_ce4e023201f41e 2,5,66
+src/untangle/widgets.py
+  s_ae25019c42f49d::t_b7e25d185cad8f 1-12
+tests/test_companion.py
+  s_ae25019c42f49d::t_f57e456cf961c5 48,57
+tests/test_ui_clickthrough.py
+  s_ae25019c42f49d::t_4da4f78b28f247 326
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8da79ecf522e0eddaaa473b5f260e0a9564a9c52",
+  "prompts": {},
+  "sessions": {
+    "s_ae25019c42f49d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1b050-8b9d-7951-9c41-c9ee8b7caa92",
+        "model": "unknown"
+      },
+      "human_author": "Elhaam Basheer Chaudhry <e4elhaam@gmail.com>"
+    }
+  }
+}
