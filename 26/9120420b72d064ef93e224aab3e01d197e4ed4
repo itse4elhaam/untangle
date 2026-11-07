@@ -1,0 +1,51 @@
+README.md
+  s_c1cf704570e5d5::t_ea425a0610ede9 20
+docs/loom-integration.md
+  s_d8a44e289656bc::t_e69967208ed51b 31-34,38,41-46,75-76
+docs/usage.md
+  s_d8a44e289656bc::t_ca895f466a8110 12,106,112
+src/untangle/app.py
+  s_c1cf704570e5d5::t_260a4a71e84997 28-29,217-222,287,369,2440,2448,2688-2692,2701,2705-2709,2729-2733,2757-2759,2770-2778,2781,2786,2829-2838,2853-2903,2919,2929-2931,2933
+src/untangle/engine.py
+  s_c1cf704570e5d5::t_f109673f2c1403 1400,1407-1408,1410-1412,1486-1495
+src/untangle/loom.py
+  s_d8a44e289656bc::t_f55de7d60bf092 90,95-122
+src/untangle/recordings.py
+  s_d8a44e289656bc::t_229a17a9cb5011 438
+tests/test_app.py
+  s_d8a44e289656bc::t_03dda656e10e30 33-34,441-443
+tests/test_auto_titles_workflow.py
+  s_d8a44e289656bc::t_1289dac1f07883 24-38
+tests/test_encoding.py
+  s_d8a44e289656bc::t_4f03b7b32695fd 1-87
+tests/test_loom.py
+  s_d8a44e289656bc::t_a43ae4328d3394 115-117
+tests/test_loom_workflow.py
+  s_d8a44e289656bc::t_12c4155cf7fff0 364,378-495,500-507,509-510,695
+tests/test_settings_ui.py
+  s_d8a44e289656bc::t_aa4e882f9a7766 51,75
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "269120420b72d064ef93e224aab3e01d197e4ed4",
+  "prompts": {},
+  "sessions": {
+    "s_c1cf704570e5d5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1aaf6-f8c8-7f21-bf45-b4aad65730ec",
+        "model": "unknown"
+      },
+      "human_author": "Elhaam Basheer Chaudhry <e4elhaam@gmail.com>"
+    },
+    "s_d8a44e289656bc": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1aaee-7b47-7161-b140-62c104c2542c",
+        "model": "unknown"
+      },
+      "human_author": "Elhaam Basheer Chaudhry <e4elhaam@gmail.com>"
+    }
+  }
+}
