@@ -1,0 +1,35 @@
+ACCOUNTABILITY.md
+  s_d8a44e289656bc::t_b1ef3377f18bc9 66-75
+TODO.md
+  s_d8a44e289656bc::t_b401e5744f38b3 18,49-55
+scripts/setup-drive-wizard.sh
+  s_d8a44e289656bc::t_a64d6c36ee0ed2 1
+src/untangle/app.py
+  s_c1cf704570e5d5::t_91373c26278a78 372
+src/untangle/drive_dialog.py
+  s_d8a44e289656bc::t_3f5c02e2909a7a 46
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "26bc61cae6f068b0b8c9acd01b1e98e0ad5969df",
+  "prompts": {},
+  "sessions": {
+    "s_c1cf704570e5d5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1aaf6-f8c8-7f21-bf45-b4aad65730ec",
+        "model": "unknown"
+      },
+      "human_author": "Elhaam Basheer Chaudhry <e4elhaam@gmail.com>"
+    },
+    "s_d8a44e289656bc": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1aaee-7b47-7161-b140-62c104c2542c",
+        "model": "unknown"
+      },
+      "human_author": "Elhaam Basheer Chaudhry <e4elhaam@gmail.com>"
+    }
+  }
+}
