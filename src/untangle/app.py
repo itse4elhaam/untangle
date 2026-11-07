@@ -3596,7 +3596,7 @@ class Window(QMainWindow):
             self.audio_devices.release_capture(owner)
             self._capture_owner = None
         try:
-            self.audio_devices.restore()
+            self.audio_devices.restore(exiting=True)
         except AudioDeviceError:
             pass  # Never force restoration while another client owns streams.
         event.accept()
