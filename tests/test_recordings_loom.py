@@ -195,6 +195,14 @@ class LoomLibraryTests(unittest.TestCase):
                         rect = button.style().subElementRect(QStyle.SE_PushButtonContents, option, button)
                         self.assertGreaterEqual(rect.width(), button.fontMetrics().horizontalAdvance(button.text()), button.text())
                         self.assertTrue(button.parentWidget().rect().contains(button.geometry()), button.text())
+                        if self.dialog.sharing_scroll.isAncestorOf(button):
+                            self.dialog.sharing_scroll.ensureWidgetVisible(button)
+                            qt.processEvents()
+                            viewport = self.dialog.sharing_scroll.viewport()
+                            self.assertTrue(viewport.rect().contains(
+                                button.mapTo(viewport, button.rect().topLeft())), button.text())
+                            self.assertTrue(viewport.rect().contains(
+                                button.mapTo(viewport, button.rect().bottomRight())), button.text())
                     self.assertTrue(self.dialog.player.source().isEmpty())
                     image = self.dialog.grab()
                     self.assertFalse(image.isNull())

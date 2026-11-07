@@ -1,0 +1,118 @@
+{
+  "image": "step-03.png",
+  "controls": [
+    {
+      "id": "record_button",
+      "text": "\u25cf  Start recording",
+      "enabled": true,
+      "bounds": [
+        746,
+        706,
+        190,
+        42
+      ]
+    },
+    {
+      "id": "library_button",
+      "text": "Recordings",
+      "enabled": true,
+      "bounds": [
+        24,
+        709,
+        117,
+        36
+      ]
+    },
+    {
+      "id": "sidebar_button",
+      "text": "Controls",
+      "enabled": true,
+      "bounds": [
+        786,
+        26,
+        69,
+        34
+      ]
+    },
+    {
+      "id": "camera_button",
+      "text": "\u25c9  Camera",
+      "enabled": true,
+      "bounds": [
+        164,
+        160,
+        122,
+        42
+      ]
+    },
+    {
+      "id": "screen_button",
+      "text": "Screen",
+      "enabled": true,
+      "bounds": [
+        36,
+        160,
+        122,
+        42
+      ]
+    },
+    {
+      "id": "settings_button",
+      "text": "Settings",
+      "enabled": true,
+      "bounds": [
+        869,
+        26,
+        67,
+        34
+      ]
+    },
+    {
+      "id": "camera",
+      "text": "Test camera",
+      "enabled": true,
+      "bounds": [
+        36,
+        236,
+        194,
+        36
+      ]
+    },
+    {
+      "id": "microphone",
+      "text": "Automatic microphone",
+      "enabled": true,
+      "bounds": [
+        36,
+        414,
+        250,
+        36
+      ]
+    },
+    {
+      "id": "canvas",
+      "text": "Landscape \u00b7 16:9",
+      "enabled": true,
+      "bounds": [
+        372,
+        122,
+        564,
+        36
+      ]
+    },
+    {
+      "id": "details_toggle",
+      "text": "\u25b8 Recording details",
+      "enabled": true,
+      "bounds": [
+        320,
+        645,
+        149,
+        36
+      ]
+    }
+  ],
+  "recording": false,
+  "library": false,
+  "disclosure": "Production Qt widgets; synthetic devices, preview, files, playback and processes."
+}

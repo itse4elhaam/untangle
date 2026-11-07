@@ -19,13 +19,13 @@ The shipped interface is Clearline, in light and dark modes. Review actual produ
 
 1. Run `./scripts/test.sh`. This includes actual Qt click-through checks, layout checks, ownership/recovery tests and an installer test in an isolated temporary home.
 2. Run `bash -n scripts/*.sh bin/*`.
-3. Regenerate the synthetic Qt captures with `.venv/bin/python scripts/render-ui.py --output docs/ui-baselines`. Inspect recorder, expanded camera, advanced settings, audio failure/recovery, and populated/empty library at both sizes and themes. Inspect long names and failure states at the minimum size.
+3. Regenerate synthetic Qt captures through `./scripts/render-safe.sh docs/ux-overhaul/matrix ui`. The wrapper isolates devices, networking and desktop services and fails closed. Inspect recorder, expanded camera, Settings, audio failure/recovery, and populated/empty library at both sizes and themes. Inspect long names and failure states at the minimum size.
 4. Compare the complete client windows to the pinned captures in `ui-baselines/`. Explain intended changes in the PR. Do not accept a screenshot cropped around a defect or a test weakened to hide it.
 
 The canvas matrix covers landscape, Reels / Shorts, square, 4:5, zoom/reset and Fit/Fill at both sizes and themes, including plus/minus zoom and returning to landscape Screen output after a portrait camera selection. Only capture pixels are synthetic; source crop/placement uses the production composition helper. Native OBS filter execution and encoded pixels still need separately authorized capture verification.
 
 [Browse the pinned Qt windows](ui-baselines/index.html). The manifest records source hashes, PNG hashes, exact dimensions and the mocked boundaries for each image.
 
-The PNGs are review references, not exact pixel-hash assertions. Font rasterization and Qt patch releases can differ. The tests pin interaction, geometry and text fit; a human visual review checks hierarchy and appearance.
+The PNGs are review references, not exact pixel-hash assertions. Font rasterization and Qt patch releases can differ. The tests pin interaction, geometry and text fit. For the user-approved UI/UX overhaul, two fresh agent reviews of complete Qt windows check hierarchy and appearance; preserve their disagreements and evidence. This replaces routine manual visual QA for styling, copy, layout and the explicitly requested review/sharing navigation. It does not authorize capture, audio, account, upload, deletion, retention or recording-format changes, certify hardware, or authorize merging the overhaul. The user reviews its stacked PRs and comparison video before merge.
 
 All captures use isolated settings, mocked device/engine boundaries, a painted SYNTHETIC source and synthetic local media. They do not open capture devices, change Bluetooth profiles, play audible audio or change desktop accessibility settings. Never use the production app launch as an incidental verification step.
