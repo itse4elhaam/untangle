@@ -1,4 +1,5 @@
 """Local recordings browser using Qt's native media player."""
+from .widgets import ScrollComboBox
 from .diagnostics import observed, failure as diagnostic_failure
 from collections import OrderedDict
 from datetime import datetime
@@ -15,7 +16,7 @@ from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtMultimediaWidgets import QVideoWidget
 from PySide6.QtWidgets import (
     QAbstractItemView, QWidget, QFrame, QSplitter, QStackedWidget, QLineEdit, QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
-    QPushButton, QComboBox, QSizePolicy, QSlider, QVBoxLayout, QApplication, QMessageBox, QStyle, QStyleOptionSlider,
+    QPushButton, QSizePolicy, QSlider, QVBoxLayout, QApplication, QMessageBox, QStyle, QStyleOptionSlider,
     QStyledItemDelegate, QStyleOptionViewItem, QToolButton,
 )
 
@@ -123,7 +124,7 @@ class Recordings(QWidget):
         privacy = QLabel('Files on this computer')
         privacy.setObjectName('eyebrow')
         header.addWidget(privacy)
-        self.theme_choice = QComboBox()
+        self.theme_choice = ScrollComboBox()
         self.theme_choice.setAccessibleName('Appearance')
         self.theme_choice.addItem('Light', 'light')
         self.theme_choice.addItem('Dark', 'dark')

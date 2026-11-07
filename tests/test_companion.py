@@ -45,7 +45,7 @@ class RecorderThemeChecks(unittest.TestCase):
         self.assertFalse(w.focus_button.isChecked())
         self.assertIn('Entire screen', w.capture_caption.text())
 
-    def test_settings_stays_locked_but_pointer_zoom_works_while_recording(self):
+    def test_settings_can_be_inspected_with_capture_locked_while_recording(self):
         w = self.window
         w.set_mode('screen', configure=False)
         w.show()
@@ -54,7 +54,7 @@ class RecorderThemeChecks(unittest.TestCase):
         w.details_toggle.click()
         w.zoom_button.setEnabled(True)
         w.open_settings()
-        self.assertFalse(w.settings_dialog.isVisible())
+        self.assertTrue(w.settings_dialog.isVisible())
         test_app.qt.processEvents()
         self.assertTrue(w.zoom_button.isVisible())
         self.assertFalse(w.quality.isEnabled())

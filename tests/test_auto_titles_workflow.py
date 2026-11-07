@@ -39,7 +39,7 @@ class AutoTitleWorkflowTests(unittest.TestCase):
     def begin(self):
         path = self.root / 'saved.mp4'
         path.write_bytes(b'synthetic recording')
-        self.window.prefs.setValue('auto_upload', True)
+        self.window._take_auto_upload = True  # Consent captured before recording.
         self.window.auto_titles.setChecked(True)
         with patch.object(app, 'local_title_capability', return_value=(True, '')):
             self.window.finish_save(path, '')
