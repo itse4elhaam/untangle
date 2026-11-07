@@ -1,0 +1,25 @@
+src/untangle/app.py
+  s_e02a39d68965c6::t_6e6600c637c069 3513
+src/untangle/audio_devices.py
+  s_e02a39d68965c6::t_34122ceb76dd5c 4,259,267-272,277,281,283,286-287,301
+tests/test_audio_devices.py
+  s_e02a39d68965c6::t_ca6d4fbf184415 142-174
+tests/test_idle_audio.py
+  s_e02a39d68965c6::t_435f3950010b47 191
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "fa9de097eaff00c3ba29784361d83a64c27a431d",
+  "prompts": {},
+  "sessions": {
+    "s_e02a39d68965c6": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1b79b-7584-7180-8244-a1a7875f6e1d",
+        "model": "unknown"
+      },
+      "human_author": "Elhaam Basheer Chaudhry <e4elhaam@gmail.com>"
+    }
+  }
+}
