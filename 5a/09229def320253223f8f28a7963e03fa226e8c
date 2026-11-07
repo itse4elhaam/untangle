@@ -1,0 +1,41 @@
+docs/google-drive.md
+  s_d8a44e289656bc::t_20690d6a4f6424 180-183,201-202,247
+src/untangle/app.py
+  s_c1cf704570e5d5::t_0fbd0ea5b21c97 1924,1931-1932,1952,1959-1960
+src/untangle/drive_dialog.py
+  s_d8a44e289656bc::t_37c787a5734115 173,197
+src/untangle/recordings.py
+  s_d8a44e289656bc::t_e6022ad8f11bf6 19,789,806,838
+tests/test_discard_cleanup.py
+  s_d8a44e289656bc::t_5bad8d3ce1f3cc 106-107,109-110,170,198,200,205-217
+tests/test_drive_dialog.py
+  s_d8a44e289656bc::t_f9ff63a6b90b78 31
+tests/test_recordings_loom.py
+  s_d8a44e289656bc::t_64f35f75f2c390 89-90,93,98,100
+tests/test_recordings_titles.py
+  s_d8a44e289656bc::t_756be0ea2fecf4 129,140,142-145,147
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5a09229def320253223f8f28a7963e03fa226e8c",
+  "prompts": {},
+  "sessions": {
+    "s_c1cf704570e5d5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1aaf6-f8c8-7f21-bf45-b4aad65730ec",
+        "model": "unknown"
+      },
+      "human_author": "Elhaam Basheer Chaudhry <e4elhaam@gmail.com>"
+    },
+    "s_d8a44e289656bc": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1aaee-7b47-7161-b140-62c104c2542c",
+        "model": "unknown"
+      },
+      "human_author": "Elhaam Basheer Chaudhry <e4elhaam@gmail.com>"
+    }
+  }
+}
