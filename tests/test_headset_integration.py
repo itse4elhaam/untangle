@@ -73,7 +73,7 @@ class HeadsetIntegrationTests(unittest.TestCase):
         self.window.audio_devices.lease = ('card', 'old', 'new')
         order = []
         self.window.engine.release_audio.side_effect = lambda: order.append('release')
-        self.window.audio_devices.restore.side_effect = lambda: order.append('restore') or True
+        self.window.audio_devices.restore.side_effect = lambda **kwargs: order.append('restore') or True
         self.start_and_wait()
         self.window.retry_audio_restore()
         if self.window.audio_worker:
@@ -135,7 +135,7 @@ class HeadsetIntegrationTests(unittest.TestCase):
     def test_close_restores_after_engine_close(self):
         order = []
         self.window.engine.close.side_effect = lambda: order.append('close')
-        self.window.audio_devices.restore.side_effect = lambda: order.append('restore') or True
+        self.window.audio_devices.restore.side_effect = lambda **kwargs: order.append('restore') or True
         self.window.close()
         self.assertEqual(order, ['close', 'restore'])
 

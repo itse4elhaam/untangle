@@ -145,7 +145,7 @@ class InlineAudioCheckTests(unittest.TestCase):
         dialog = self.dialog
         order = []
         self.engine.end_audio_check.side_effect = lambda: order.append('release')
-        self.devices.restore.side_effect = lambda: order.append('restore') or True
+        self.devices.restore.side_effect = lambda **kwargs: order.append('restore') or True
         dialog.player.play.side_effect = lambda: order.append('play')
         dialog.record.click()
         self.wait()
@@ -189,7 +189,7 @@ class InlineAudioCheckTests(unittest.TestCase):
         self.wait()
         gate = threading.Event()
         self.gates.append(gate)
-        self.devices.restore.side_effect = lambda: gate.wait(3)
+        self.devices.restore.side_effect = lambda **kwargs: gate.wait(3)
         rejected = MagicMock()
         dialog.rejected.connect(rejected)
         dialog.done_button.click()
