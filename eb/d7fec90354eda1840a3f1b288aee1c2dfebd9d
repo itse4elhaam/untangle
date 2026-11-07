@@ -1,0 +1,25 @@
+assets/recording-delete.svg
+  s_d8a44e289656bc::t_0d3c062e89c9a4 1
+assets/recording-rename.svg
+  s_d8a44e289656bc::t_de27485619ff34 1
+src/untangle/recordings.py
+  s_d8a44e289656bc::t_8d015131eaaddf 19,23-34,137,353,439-446,639-677
+tests/test_recordings_titles.py
+  s_d8a44e289656bc::t_36f2de2d83d222 110-155
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ebd7fec90354eda1840a3f1b288aee1c2dfebd9d",
+  "prompts": {},
+  "sessions": {
+    "s_d8a44e289656bc": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1aaee-7b47-7161-b140-62c104c2542c",
+        "model": "unknown"
+      },
+      "human_author": "Elhaam Basheer Chaudhry <e4elhaam@gmail.com>"
+    }
+  }
+}
