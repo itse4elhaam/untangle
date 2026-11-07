@@ -1,0 +1,33 @@
+TODO.md
+  s_d8a44e289656bc::t_109cf0e58cfd9b 76-82
+docs/pr26-ui/README.md
+  s_d8a44e289656bc::t_cc6b30f505386c 1-22
+docs/pr26-ui/manifest.json
+  s_d8a44e289656bc::t_564c70c2572369 1-31
+docs/ux-audit-2026-11-04.md
+  s_d8a44e289656bc::t_8429292131febe 85-88
+docs/ux-review-images/README.md
+  s_d8a44e289656bc::t_62465a4600695b 1-7
+docs/ux-review-images/manifest.json
+  s_d8a44e289656bc::t_9fbbe39a83697a 1-19
+docs/ux-review.html
+  s_d8a44e289656bc::t_ac778707218fca 1
+scripts/render-settings-ui.py
+  s_d8a44e289656bc::t_8d27c217b278a3 18-20,33,52-53,58-75,84-90,92-104,107-109
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a017e283da2473fdc64df54ef6fa56c0e3cee320",
+  "prompts": {},
+  "sessions": {
+    "s_d8a44e289656bc": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1aaee-7b47-7161-b140-62c104c2542c",
+        "model": "unknown"
+      },
+      "human_author": "Elhaam Basheer Chaudhry <e4elhaam@gmail.com>"
+    }
+  }
+}
