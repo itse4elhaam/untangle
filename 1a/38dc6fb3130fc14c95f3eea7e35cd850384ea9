@@ -1,0 +1,27 @@
+.gitignore
+  s_ae25019c42f49d::t_a223d3d185c4b5 9-12
+docs/ux-overhaul/SCREEN-RECORDING.md
+  s_ae25019c42f49d::t_6a34951cd3190a 3,51-67
+docs/ux-overhaul/screen-recording-side-by-side.manifest.json
+  s_ae25019c42f49d::t_2d743352fed451 1-153
+scripts/record-screen-comparison.py
+  s_ae25019c42f49d::t_e003a04aff5cac 1-290
+scripts/render-safe.sh
+  s_ae25019c42f49d::t_9b6aac6a94fdc2 15-16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1a38dc6fb3130fc14c95f3eea7e35cd850384ea9",
+  "prompts": {},
+  "sessions": {
+    "s_ae25019c42f49d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1b050-8b9d-7951-9c41-c9ee8b7caa92",
+        "model": "unknown"
+      },
+      "human_author": "Elhaam Basheer Chaudhry <e4elhaam@gmail.com>"
+    }
+  }
+}
