@@ -39,7 +39,10 @@ class RecorderLayoutChecks(unittest.TestCase):
             w.recording = False
             stop.assert_not_called()
             reconcile.assert_not_called()
-            self.assertEqual(w.engine.mock_calls, [])
+            # Relayout can resize the display, but must never touch capture/audio.
+            calls = [call for call in w.engine.mock_calls
+                     if call[0] not in ('__bool__', 'resize_preview')]
+            self.assertEqual(calls, [])
         self.assertEqual((w.idle_audio.source, w.idle_audio.owner), (source, owner))
 
     def test_collapsed_details_keep_warnings_recording_and_save_feedback_visible(self):

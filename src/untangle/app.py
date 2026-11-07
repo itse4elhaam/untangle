@@ -13,7 +13,7 @@ import sys
 import threading
 import time
 
-from PySide6.QtCore import Qt, QTimer, Signal, QThread, QProcess, QUrl, QSettings, QEvent
+from PySide6.QtCore import Qt, QTimer, Signal, QThread, QProcess, QUrl, QSettings, QEvent, QPropertyAnimation, QEasingCurve
 from PySide6.QtGui import QColor, QDesktopServices, QIcon, QPainter, QPen, QPixmap, QShortcut, QKeySequence, QCursor
 from .diagnostics import event as diagnostic_event, failure as diagnostic_failure, observed, snapshot, install as install_diagnostics
 from .floating import CameraBubble, ZoomMotion, release_window_input
@@ -37,7 +37,7 @@ from .microphone_meter import MicrophoneMeter
 from .idle_audio import IdleAudio
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
-    QPushButton, QComboBox, QSlider, QCheckBox, QFileDialog, QFrame,
+    QPushButton, QComboBox, QSlider, QCheckBox, QFileDialog, QFrame, QGraphicsOpacityEffect,
     QSystemTrayIcon, QMenu, QMessageBox, QSizePolicy, QDialog, QLineEdit, QStackedWidget, QScrollArea, QProgressBar,
 )
 
@@ -336,13 +336,18 @@ class Window(QMainWindow):
                 self.style().polish(self)
 
         container = QWidget()
+        shell = QWidget()
+        shell_layout = QVBoxLayout(shell)
+        shell_layout.setContentsMargins(0, 0, 0, 0)
+        shell_layout.setSpacing(0)
         self.pages = QStackedWidget()
         self.recorder_page = container
         self.pages.addWidget(container)
-        self.setCentralWidget(self.pages)
+        shell_layout.addWidget(self.pages, 1)
+        self.setCentralWidget(shell)
         layout = QVBoxLayout(container)
-        layout.setContentsMargins(24, 20, 24, 16)
-        layout.setSpacing(14)
+        layout.setContentsMargins(24, 14, 24, 8)
+        layout.setSpacing(10)
         header = QHBoxLayout()
         logo = QLabel()
         logo.setPixmap(QIcon(str(ICON)).pixmap(36, 36))
@@ -350,7 +355,6 @@ class Window(QMainWindow):
         title_box = QVBoxLayout()
         title_box.setSpacing(0)
         title_box.addWidget(label('Untangle', 'title'))
-        title_box.addWidget(label('Screen and camera recording', 'muted'))
         header.addLayout(title_box)
         header.addStretch()
         self.theme_choice = ScrollComboBox()
@@ -416,6 +420,7 @@ class Window(QMainWindow):
         self.sidebar_button = QPushButton('Sidebar')
         self.sidebar_button.setObjectName('quiet')
         self.sidebar_button.setCheckable(True)
+        self.sidebar_button.setFixedWidth(132)
         self.sidebar_button.setChecked(True)
         self.sidebar_button.setToolTip('Show or hide recording controls')
         self.sidebar_button.toggled.connect(self.set_sidebar_visible)
@@ -429,24 +434,20 @@ class Window(QMainWindow):
         self.discard_button.setToolTip('Stop and delete this recording without saving it')
         self.discard_button.hide()
         self.discard_button.clicked.connect(self.discard_recording)
-        header.addWidget(self.discard_button)
         self.restart_button = QPushButton('Restart')
         self.restart_button.setObjectName('quiet')
         self.restart_button.setToolTip('Discard this take and immediately start a new recording')
         self.restart_button.hide()
         self.restart_button.clicked.connect(self.restart_recording)
-        header.addWidget(self.restart_button)
         self.pause_button = QPushButton('Pause')
         self.pause_button.hide()
         self.pause_button.clicked.connect(self.toggle_pause)
-        header.addWidget(self.pause_button)
         self.record_button = RecordButton('●  Start recording')
         self.record_button.setObjectName('record')
         self.record_button.setEnabled(False)
         self.record_button.setFixedWidth(190)
         self.record_button.clicked.connect(self.toggle_record)
         self.record_button.setMinimumHeight(36)
-        header.addWidget(self.record_button)
         layout.addLayout(header)
         self.upload_this_take = QCheckBox('Upload this take to Loom')
         self.upload_this_take.setChecked(self.prefs.value('auto_upload', False, type=bool))
@@ -469,6 +470,12 @@ class Window(QMainWindow):
         self.controls_panel.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.controls_panel.setFixedWidth(276)
         self.controls_panel.setWidget(side)
+        self.controls_opacity = QGraphicsOpacityEffect(self.controls_panel)
+        self.controls_opacity.setOpacity(1.)
+        self.controls_panel.setGraphicsEffect(self.controls_opacity)
+        self.controls_fade = QPropertyAnimation(self.controls_opacity, b'opacity', self)
+        self.controls_fade.setDuration(120)
+        self.controls_fade.setEasingCurve(QEasingCurve.OutCubic)
         side.setLayout(controls)
         controls.setContentsMargins(0, 0, 10, 0)
         summary = controls
@@ -634,11 +641,15 @@ class Window(QMainWindow):
         preview_top = QHBoxLayout()
         self.preview_title = label('Camera preview', 'section')
         preview_top.addWidget(self.preview_title)
+        preview_top.addStretch()
+        self.camera_layout_button = QPushButton('Camera layout')
+        self.camera_layout_button.setToolTip('Adjust the camera widget shape, size and corner in Settings')
+        self.camera_layout_button.clicked.connect(self.open_camera_layout)
+        preview_top.addWidget(self.camera_layout_button)
         self.focus_button = QPushButton('Expand camera')
         self.focus_button.setCheckable(True)
         self.focus_button.toggled.connect(self.focus_camera)
         preview_top.addWidget(self.focus_button)
-        preview_top.addStretch()
         self.encoder_label = label('Starting recording engine…', 'muted')
         self.encoder_label.setWordWrap(True)
         right.addLayout(preview_top)
@@ -718,6 +729,7 @@ class Window(QMainWindow):
         self.recorder_details = QWidget()
         details = QVBoxLayout(self.recorder_details)
         details.setContentsMargins(0, 0, 0, 0)
+        details.setSpacing(4)
         details.addWidget(self.microphone_meter)
         right.addWidget(self.recorder_details)
         self.recorder_details.hide()
@@ -750,7 +762,7 @@ class Window(QMainWindow):
         right.addWidget(self.monitor_warning)
         self.status = label('Preparing your recording setup…')
         self.status.setWordWrap(True)
-        self.status.setMinimumHeight(38)
+        self.status.setMinimumHeight(24)
         right.addWidget(self.status)
         self._status_detail = True
         self.status.hide()
@@ -807,7 +819,8 @@ class Window(QMainWindow):
         upload_layout.addLayout(upload_actions)
         self.upload_panel.hide()
         right.addWidget(self.upload_panel)
-        shortcuts = self.shortcuts = label('Ctrl+Shift+F9  record / stop  ·  Ctrl+Shift+F10  pause  ·  Ctrl+Shift+F8  zoom', 'muted')
+        shortcuts = self.shortcuts = label('Ctrl+Shift: F9 record / stop · F10 pause · F8 zoom', 'muted')
+        shortcuts.setToolTip('Ctrl+Shift+F9 record / stop · Ctrl+Shift+F10 pause / resume · Ctrl+Shift+F8 pointer zoom')
         shortcuts.setWordWrap(True)
         details.addWidget(shortcuts)
         summary.addStretch()
@@ -822,9 +835,9 @@ class Window(QMainWindow):
         self.preview_column = right
         content.addLayout(right, 0, 1, 2, 1)
         self.navigation_footer = QWidget()
-        self.navigation_footer.setFixedWidth(276)
+        self.navigation_footer.setFixedWidth(240)
         navigation = QHBoxLayout(self.navigation_footer)
-        navigation.setContentsMargins(0, 0, 10, 0)
+        navigation.setContentsMargins(0, 0, 0, 0)
         navigation.setSpacing(6)
         self.library_button = QPushButton('Recordings')
         self.library_button.clicked.connect(lambda: self.open_recordings())
@@ -833,7 +846,21 @@ class Window(QMainWindow):
         for button in (self.library_button, self.sharing_button):
             button.setObjectName('footerNavigation')
             navigation.addWidget(button, 1)
-        content.addWidget(self.navigation_footer, 1, 0, Qt.AlignLeft | Qt.AlignBottom)
+        self.action_bar = QFrame()
+        self.action_bar.setObjectName('actionBar')
+        actions = QHBoxLayout(self.action_bar)
+        actions.setContentsMargins(24, 10, 24, 10)
+        actions.setSpacing(8)
+        actions.addWidget(self.navigation_footer)
+        self.recording_timer = label('Ready to record', 'recordingTimer')
+        self.recording_timer.setAccessibleName('Recording time and state')
+        self.recording_timer.setToolTip('Time for this take. This is part of the app interface, not the camera image. Entire-screen capture can include any visible app window.')
+        actions.addWidget(self.recording_timer, 1)
+        self.discard_button.setObjectName('quiet')
+        self.restart_button.setObjectName('quiet')
+        for button in (self.discard_button, self.restart_button, self.pause_button, self.record_button):
+            actions.addWidget(button)
+        shell_layout.addWidget(self.action_bar)
         layout.addLayout(content, 1)
         self.settings_layout.addWidget(label('Camera image position', 'section'))
         self.crop_setup_label = label('')
@@ -861,7 +888,7 @@ class Window(QMainWindow):
         self.camera_offset_reset.setAutoDefault(False)
         self.camera_offset_reset.clicked.connect(lambda: self.camera_offset_dragged(0., 0.))
         self.settings_layout.addWidget(self.camera_offset_reset)
-        self.config_controls = [self.crop_position, self.camera_offset_x, self.camera_offset_y, self.camera_offset_reset, self.crop_drag_enabled, self.screen_button, self.camera_button, self.capture_kind, self.capture_window, self.refresh_button, self.screen, self.camera, self.camera_toggle, self.microphone, self.clean_microphone, self.desktop_audio, self.shape, self.size, self.position, self.mask_button, self.mirror, self.quality, self.compact_recordings, self.canvas, self.framing, self.camera_zoom, self.camera_zoom_reset, self.camera_zoom_minus, self.camera_zoom_plus, self.camera_settings_button]
+        self.config_controls = [self.camera_layout_button, self.crop_position, self.camera_offset_x, self.camera_offset_y, self.camera_offset_reset, self.crop_drag_enabled, self.screen_button, self.camera_button, self.capture_kind, self.capture_window, self.refresh_button, self.screen, self.camera, self.camera_toggle, self.microphone, self.clean_microphone, self.desktop_audio, self.shape, self.size, self.position, self.mask_button, self.mirror, self.quality, self.compact_recordings, self.canvas, self.framing, self.camera_zoom, self.camera_zoom_reset, self.camera_zoom_minus, self.camera_zoom_plus, self.camera_settings_button]
         for combo in (self.screen, self.capture_window, self.microphone):
             combo.currentIndexChanged.connect(self.schedule_configure)
         self.camera.currentIndexChanged.connect(self.camera_changed)
@@ -895,9 +922,23 @@ class Window(QMainWindow):
         if not hasattr(self, 'controls_panel'):
             return
         self.controls_panel.setVisible(visible and not self.focus_button.isChecked())
-        self.navigation_footer.setVisible(visible)
-        self.sidebar_button.setText('Hide sidebar' if visible else 'Show sidebar')
+        self.sidebar_button.setText('Hide controls' if visible else 'Show controls')
+        self.sidebar_button.setToolTip('Hide recording controls' if visible else 'Show recording controls')
+        self.controls_fade.stop()
+        if visible and self.isVisible() and not self.focus_button.isChecked():
+            self.controls_fade.setStartValue(.5)
+            self.controls_fade.setEndValue(1.)
+            self.controls_fade.start()
+        else:
+            self.controls_opacity.setOpacity(1.)
         self.prefs.setValue('sidebar_visible', visible)
+
+    def open_camera_layout(self):
+        self.open_settings()
+        if self.settings_dialog.isVisible():
+            scroll = self.settings_dialog.findChild(QScrollArea)
+            scroll.ensureWidgetVisible(self.widget_panel, 0, 12)
+            self.shape.setFocus(Qt.OtherFocusReason)
 
     def set_theme(self, name):
         name = name if name in ('light', 'dark') else 'light'
@@ -926,6 +967,7 @@ class Window(QMainWindow):
         self.preview_title.setToolTip(self.capture_caption.toolTip())
         self.camera_zoom_value.setText(f'{self.camera_zoom.value()}%')
         self.update_camera_controls()
+        self.camera_layout_button.setVisible(self.mode == 'screen' and bool(self.camera.currentData()))
         for combo in (self.camera, self.microphone, self.screen, self.capture_window):
             combo.setToolTip(combo.currentText())
 
@@ -1139,7 +1181,7 @@ class Window(QMainWindow):
         if (not self.wayland_session() or not self.engine or self.mode != 'screen'
                 or not getattr(self, '_portal_configured', False)
                 or getattr(self, '_live_update_failed', False)
-                or self._closing or self.in_library()):
+                or self._closing or (self.in_library() and not self.recording)):
             return
         ready = self.engine.screen_ready() is True
         if self.recording:
@@ -1341,7 +1383,6 @@ class Window(QMainWindow):
 
     def focus_camera(self, expanded):
         self.controls_panel.setVisible(not expanded and self.sidebar_button.isChecked())
-        self.navigation_footer.setVisible(self.sidebar_button.isChecked())
         self.canvas_panel.setVisible(self.mode == 'camera' and not expanded)
         self.recorder_content.removeItem(self.preview_column)
         if expanded:
@@ -1631,7 +1672,7 @@ class Window(QMainWindow):
 
     @observed("app.toggle_record")
     def toggle_record(self):
-        if self.in_library():
+        if self.in_library() and not self.recording:
             return
         if self.recording:
             self.stop()
@@ -1849,6 +1890,9 @@ class Window(QMainWindow):
             self.paused = False
             self.recording = True
             self.settings_button.setEnabled(True)
+            self.library_button.setEnabled(True)
+            self.sharing_button.setEnabled(True)
+            self.upload_library.setEnabled(True)
             self.presentation_button.setEnabled(not self.wayland_session() and bool(self.camera.currentData()) and not self._recording_compact)
             self.tray_presentation.setEnabled(not self.wayland_session() and bool(self.camera.currentData()) and not self._recording_compact)
             self._audio_warning_since = None
@@ -1889,6 +1933,8 @@ class Window(QMainWindow):
         self.tray_presentation.setEnabled(False)
         if not self.recording or self.busy:
             return
+        if self.in_library():
+            self.back_to_recorder()
         self.busy = True
         self.settings_button.setEnabled(False)
         self.zoom_timer.stop()
@@ -2184,6 +2230,7 @@ class Window(QMainWindow):
                 self.paused_duration += time.monotonic() - self.pause_started
             self.pause_button.setText('Resume' if self.paused else 'Pause')
             self.tray_pause.setText('Resume' if self.paused else 'Pause')
+            self.update_recording_indicator()
         except Exception as exc:
             diagnostic_failure('application.operation.failed', exc)
             self.notice(f'Could not change pause state: {exc}')
@@ -2370,7 +2417,8 @@ class Window(QMainWindow):
             stop_hint = 'Use the tray or window to stop and save' if self.wayland_session() else 'Ctrl + Shift + F9 to stop and save'
             self.engine_notice(f'{state} · {duration}   |   {stop_hint}\n'
                 + (f'Microphone: {self.selected_source}' if self.selected_source else 'Microphone off')
-                + ('\n' + (self.recording_error or warning) if self.recording_error or warning else ''))
+                + ('\n' + (self.recording_error or warning) if self.recording_error or warning else ''),
+                detail=not bool(self.recording_error or warning))
             self.record_button.setText('■  Stop and save')
             self.tray.setToolTip(f'Untangle · {state} {duration}\n{stop_hint}')
             if elapsed % 10 == 0 and shutil.disk_usage(VIDEOS).free < 256 * 1024 ** 2:
@@ -2387,9 +2435,10 @@ class Window(QMainWindow):
         self.focus_button.setEnabled(not locked)
         self.live_microphone.setEnabled(not locked)
         self.audio_check_button.setEnabled(not locked)
-        self.sharing_button.setEnabled(not locked)
-        self.library_button.setEnabled(not locked)
-        self.upload_library.setEnabled(not locked)
+        can_browse = not locked or (self.recording and not self.busy and not self.counting)
+        self.sharing_button.setEnabled(can_browse)
+        self.library_button.setEnabled(can_browse)
+        self.upload_library.setEnabled(can_browse)
         if locked and self.recordings:
             self.recordings.release()
             self.pages.setCurrentWidget(self.recorder_page)
@@ -2508,6 +2557,10 @@ class Window(QMainWindow):
         self.refresh_upload_link()
         self.preview.show()
         self.tray_record.setEnabled(True)
+        if hasattr(self, 'record_button'):
+            self.record_button.setEnabled(self.configuration_valid and not getattr(self, 'busy', False))
+        if hasattr(self, 'update_recording_indicator'):
+            self.update_recording_indicator()
         if self.engine and (not self.configuration_valid or self._configure_pending):
             self.configure_timer.start(0)
         # Qt must finish showing/resizing the native parent before GLX creates
@@ -2527,7 +2580,7 @@ class Window(QMainWindow):
             self.engine.attach_preview(int(self.preview.winId()),
                 round(self.preview.width() * ratio), round(self.preview.height() * ratio))
             self._capture_preview_detached = False
-            if self.mode == 'screen' and self.camera.currentData() and self.configuration_valid:
+            if not self.recording and self.mode == 'screen' and self.camera.currentData() and self.configuration_valid:
                 if self.uses_floating_camera() or self.capture_kind.currentData() == 'window':
                     self.show_bubble()
         except Exception as exc:
@@ -2536,7 +2589,7 @@ class Window(QMainWindow):
 
     @observed("app.open_recordings")
     def open_recordings(self, path=None):
-        if self.recording or self.counting or self.busy:
+        if self.counting or self.busy or self._closing:
             return
         if self.recordings is None:
             self.recordings = Recordings(VIDEOS, self,
@@ -2555,16 +2608,19 @@ class Window(QMainWindow):
         self.configure_timer.stop()
         self.start_timer.stop()
         self._preview_generation = getattr(self, '_preview_generation', 0) + 1
-        self.hide_bubble()
-        self.release_audio()
+        if not self.recording:
+            self.hide_bubble()
+            self.release_audio()
         if self.engine:
             self.engine.detach_preview()
-            if self.wayland_session():
+            if self.wayland_session() and not self.recording:
                 self.engine.reset_portal()
                 self.configuration_valid = self._portal_configured = False
         self.preview.hide()
         self.pages.setCurrentWidget(self.recordings)
-        self.tray_record.setEnabled(False)
+        self.tray_record.setEnabled(self.recording)
+        self.record_button.setEnabled(self.recording)
+        self.update_recording_indicator()
         self.recordings.search.clear()
         self.recordings.refresh(path)
 
@@ -2659,8 +2715,9 @@ class Window(QMainWindow):
         return process
 
     def sharing_settings(self):
-        if self.busy or self.recording or self.counting:
+        if self.busy or self.counting or self._closing:
             return
+        read_only = self.recording
         dialog = QDialog(self)
         self._sharing_dialog = dialog
         dialog.setWindowTitle('Untangle · Storage and sharing')
@@ -2676,6 +2733,10 @@ class Window(QMainWindow):
         layout.setContentsMargins(24, 24, 24, 24)
         layout.setSpacing(12)
         layout.addWidget(label('Local storage, archive and sharing', 'section'))
+        if read_only:
+            note = label('Recording continues. Sharing and account changes are locked until this take is saved.', 'muted')
+            note.setWordWrap(True)
+            layout.addWidget(note)
         overview = label(f'Local originals save to {VIDEOS}. Google Drive is an optional archive; '
             'manual uploads do not start retention. Loom creates a viewing link with its own audience. '
             'Drive and Loom use independent credentials. Disconnecting TWG does not disconnect Drive.')
@@ -2687,6 +2748,7 @@ class Window(QMainWindow):
             from .drive_dialog import DriveDialog
             DriveDialog([], self).exec()
         drive.clicked.connect(open_drive)
+        drive.setEnabled(not read_only)
         layout.addWidget(drive)
         layout.addWidget(label('LOOM', 'eyebrow'))
         text = label('Recordings save locally first. Connect through browser OAuth using Atlassian’s official Teamwork Graph CLI.')
@@ -2709,11 +2771,11 @@ class Window(QMainWindow):
             status = state.get('status')
             connected = status == 'connected'
             connect.setVisible(not connected)
-            connect.setEnabled(bool(cli) and self._account_operation is None and not self._upload_active)
+            connect.setEnabled(not read_only and bool(cli) and self._account_operation is None and not self._upload_active)
             connect.setText('Connect Loom account ↗' if status == 'disconnected' else 'Reconnect Loom account ↗')
             disconnect.setVisible(connected)
-            disconnect.setEnabled(connected and self._account_operation is None and not self._upload_active)
-            check.setEnabled(bool(cli) and self._account_operation is None)
+            disconnect.setEnabled(not read_only and connected and self._account_operation is None and not self._upload_active)
+            check.setEnabled(not read_only and bool(cli) and self._account_operation is None)
             if connected:
                 name = state.get('name') or state.get('email') or state.get('account_id') or 'Signed-in account'
                 email = state.get('email')
@@ -2765,13 +2827,15 @@ class Window(QMainWindow):
         for title, value in [('Only me', 'owner'), ('My Loom workspace', 'workspace'), ('Anyone with the link', 'public')]:
             visibility.addItem(title, value)
         visibility.setCurrentIndex(max(0, visibility.findData(self.prefs.value('visibility', 'public'))))
+        visibility.setEnabled(not read_only)
         layout.addWidget(visibility)
         auto = QCheckBox('Select upload to Loom by default for new takes')
         auto.setChecked(self.prefs.value('auto_upload', False, type=bool))
-        auto.setEnabled(bool(cli))
+        auto.setEnabled(not read_only and bool(cli))
         layout.addWidget(auto)
         titles = QCheckBox('Let Loom generate titles when available')
         titles.setChecked(self.prefs.value('loom_auto_titles', False, type=bool))
+        titles.setEnabled(not read_only)
         layout.addWidget(titles)
         title_status = label('Enabled here: Untangle sends no title override. Loom controls AI titles and requires a transcript of at least 30 seconds. Automatic titles for imported videos are not confirmed; the CLI cannot read or enable this Loom setting.', 'muted')
         title_status.setWordWrap(True)
@@ -2797,9 +2861,9 @@ class Window(QMainWindow):
         done = QPushButton('Done')
         done.clicked.connect(dialog.accept)
         layout.addWidget(done)
-        if cli:
+        if cli and not read_only:
             QTimer.singleShot(0, probe)
-        if dialog.exec():
+        if dialog.exec() and not read_only:
             self.prefs.setValue('auto_upload', auto.isChecked())
             self.upload_this_take.setChecked(auto.isChecked())
             self.prefs.setValue('visibility', visibility.currentData())
@@ -3344,6 +3408,28 @@ class Window(QMainWindow):
         self._status_detail = detail
         self.status.setText(text)
         self.status.setVisible(not detail or self.details_toggle.isChecked())
+        self.update_recording_indicator()
+
+    def update_recording_indicator(self):
+        if not hasattr(self, 'recording_timer'):
+            return
+        if self.recording and self.busy:
+            text = 'Saving…'
+        elif self.recording:
+            now = self.pause_started if self.paused else time.monotonic()
+            elapsed = max(0, int(now - self.started - self.paused_duration))
+            state = 'Paused' if self.paused else 'Recording'
+            text = f'{state} · {elapsed // 60:02d}:{elapsed % 60:02d}'
+        else:
+            text = ('Starting…' if self.counting else 'Working…' if self.busy else
+                    'Review mode' if self.in_library() else
+                    'Ready to record' if self.configuration_valid else 'Check setup')
+        self.recording_timer.setText(text)
+        for name, value in (('active', self.recording), ('paused', self.paused)):
+            if self.recording_timer.property(name) != value:
+                self.recording_timer.setProperty(name, value)
+                self.recording_timer.style().unpolish(self.recording_timer)
+                self.recording_timer.style().polish(self.recording_timer)
 
     def hide_for_capture(self):
         if self.wayland_session() and not QSystemTrayIcon.isSystemTrayAvailable():

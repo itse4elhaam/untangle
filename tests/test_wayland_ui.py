@@ -61,6 +61,14 @@ class WaylandUiChecks(unittest.TestCase):
         Window.poll_portal(w)
         w.record_button.setEnabled.assert_not_called()
 
+    def test_lost_stream_stops_an_active_take_while_browsing_library(self):
+        w = self.window()
+        w.recording = True
+        w.in_library = lambda: True
+        w.engine.screen_ready.return_value = False
+        Window.poll_portal(w)
+        w.stop.assert_called_once()
+
     def test_unsupported_pointer_zoom_does_nothing(self):
         w = self.window()
         Window.toggle_zoom(w)
