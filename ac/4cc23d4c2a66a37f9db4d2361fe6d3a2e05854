@@ -1,0 +1,29 @@
+src/untangle/recordings.py
+  s_d8a44e289656bc::t_6f2d1161e4cff5 13,327,329,333-334,746,748-752
+tests/test_discard_cleanup.py
+  s_d8a44e289656bc::t_bfcfcfec66da52 89
+tests/test_recordings.py
+  s_d8a44e289656bc::t_5cbf6b70c75289 252
+tests/test_recordings_loom.py
+  s_d8a44e289656bc::t_ea719cd0d1fece 161
+tests/test_recordings_titles.py
+  s_d8a44e289656bc::t_c6c4f2f73b37e3 145,151-164
+tests/test_ui_clickthrough.py
+  s_d8a44e289656bc::t_f3561e2b618441 513
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ac4cc23d4c2a66a37f9db4d2361fe6d3a2e05854",
+  "prompts": {},
+  "sessions": {
+    "s_d8a44e289656bc": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1aaee-7b47-7161-b140-62c104c2542c",
+        "model": "unknown"
+      },
+      "human_author": "Elhaam Basheer Chaudhry <e4elhaam@gmail.com>"
+    }
+  }
+}
