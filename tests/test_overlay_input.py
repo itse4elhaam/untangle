@@ -141,6 +141,9 @@ def overlay_worker():
                     window_id=target_window.id, shape='circle', microphone=None, desktop_audio=False)
             recorder.configure_timer.stop()
 
+        recorder.mode = 'screen'
+        recorder.configuration_valid = True
+        recorder._shortcut_available['F9'] = True  # Synthetic registered Stop route.
         target_window.set_input_focus(X.RevertToParent, X.CurrentTime)
         settle()
         recorder.hide_for_capture()
@@ -215,7 +218,7 @@ def overlay_worker():
         select_text()
         recorder.show_bubble()
         settle()
-        assert (bubble.pos() - dragged).manhattanLength() <= 2, 'camera position changed on reattachment'
+        assert (bubble.pos() - dragged).manhattanLength() <= 2, f'camera position changed on reattachment: {dragged} -> {bubble.pos()}, size={bubble.width()}, slider={recorder.size.value()}, normalized={bubble._drag_position}'
         assert native.shape_get_rectangles(shape.SK.Input).rectangles
         assert not bubble._input_passthrough
         select_text()
@@ -225,6 +228,38 @@ def overlay_worker():
                     break
                 settle()
             assert not bubble._frame.isNull(), 'OBS did not deliver synthetic camera pixels'
+        # The separate recording dock must leave the selected application
+        # editable and keep keyboard focus there, at both tested scale factors.
+        import time
+        recorder.timer.stop()
+        recorder.configure_timer.stop()
+        recorder.capture_kind.blockSignals(True)
+        recorder.capture_kind.setCurrentIndex(recorder.capture_kind.findData('window'))
+        recorder.capture_kind.blockSignals(False)
+        recorder.recording = True
+        recorder.started = time.monotonic() - 83
+        recorder._take_target = 'Window · Synthetic editor'
+        recorder.selected_source = None
+        with patch.object(recorder.engine, 'pause') as pause:
+            recorder.show_recording_controls()
+            settle()
+            dock = recorder.recording_controls
+            assert dock.isVisible() and not recorder.paused
+            select_text()
+            pause_point = dock.pause_button.mapToGlobal(dock.pause_button.rect().center())
+            pointer(pause_point)
+            button(X.ButtonPress)
+            button(X.ButtonRelease)
+            assert recorder.paused, 'native pause click did not reach recording dock'
+            pause.assert_called_once_with(True)
+            assert connection.get_input_focus().focus.id == target_window.id
+            select_text()
+            recorder.hide_recording_controls()
+            settle()
+            assert not dock.isVisible()
+            select_text()
+        recorder.recording = False
+        recorder.paused = False
         print('original window selection and camera drag passed')
     finally:
         target.close()
