@@ -1,0 +1,31 @@
+tests/test_headset_integration.py
+  s_ae25019c42f49d::t_24db55ca96feab 76,138
+tests/test_inline_audio_check.py
+  s_ae25019c42f49d::t_00a6b3fc201e88 148,192
+tests/test_ui_clickthrough.py
+  s_e02a39d68965c6::t_bfeadba0077ecc 639
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b87702dde892c0f9b5ce7f9aa5d5320150caeff6",
+  "prompts": {},
+  "sessions": {
+    "s_ae25019c42f49d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1b050-8b9d-7951-9c41-c9ee8b7caa92",
+        "model": "unknown"
+      },
+      "human_author": "Elhaam Basheer Chaudhry <e4elhaam@gmail.com>"
+    },
+    "s_e02a39d68965c6": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1b79b-7584-7180-8244-a1a7875f6e1d",
+        "model": "unknown"
+      },
+      "human_author": "Elhaam Basheer Chaudhry <e4elhaam@gmail.com>"
+    }
+  }
+}
