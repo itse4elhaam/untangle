@@ -1,0 +1,27 @@
+docs/google-drive.md
+  s_d8a44e289656bc::t_819c3942ad12db 1-18
+src/untangle/drive.py
+  s_d8a44e289656bc::t_561ebb57f246b9 1-87
+src/untangle/drive_dialog.py
+  s_d8a44e289656bc::t_9f3e975e2c37ad 1-143
+src/untangle/recordings.py
+  s_d8a44e289656bc::t_e7b39212502fe5 255-258,574-582
+tests/test_drive.py
+  s_d8a44e289656bc::t_9c0ec1eea4563b 1-51
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "22d302e262bba1bd1d3842c05ad1e338c0d2bacd",
+  "prompts": {},
+  "sessions": {
+    "s_d8a44e289656bc": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1aaee-7b47-7161-b140-62c104c2542c",
+        "model": "unknown"
+      },
+      "human_author": "Elhaam Basheer Chaudhry <e4elhaam@gmail.com>"
+    }
+  }
+}
