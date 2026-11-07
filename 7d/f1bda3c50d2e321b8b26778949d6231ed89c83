@@ -1,0 +1,23 @@
+docs/google-drive.md
+  s_d8a44e289656bc::t_9565f46f143c11 180,202-205
+src/untangle/recordings.py
+  s_d8a44e289656bc::t_0876d51f2439b2 806-807,834,839-841,852-854,892-914
+tests/test_recordings_loom.py
+  s_d8a44e289656bc::t_756fa2e07dd9f7 129-147
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7df1bda3c50d2e321b8b26778949d6231ed89c83",
+  "prompts": {},
+  "sessions": {
+    "s_d8a44e289656bc": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1aaee-7b47-7161-b140-62c104c2542c",
+        "model": "unknown"
+      },
+      "human_author": "Elhaam Basheer Chaudhry <e4elhaam@gmail.com>"
+    }
+  }
+}
