@@ -636,7 +636,7 @@ class ClearlineClickthrough(unittest.TestCase):
                       'Synthetic audio check did not start')
         entered, released = Event(), Event()
         self.addCleanup(released.set)
-        def restore():
+        def restore(*, exiting=False):
             entered.set()
             if not released.wait(3):
                 raise RuntimeError('Test cleanup gate timed out')
