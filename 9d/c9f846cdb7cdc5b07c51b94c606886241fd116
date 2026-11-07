@@ -1,0 +1,75 @@
+docs/ui-standards.md
+  s_ae25019c42f49d::t_b501c99302922f 22,29
+docs/ux-overhaul/before-review/walkthrough.json
+  s_ae25019c42f49d::t_3db88f806a4a91 1-101
+docs/ux-overhaul/README.md
+  s_ae25019c42f49d::t_18ea94af214558 1-58
+docs/ux-overhaul/exploration/actions-1.json
+  s_aa38c34197df83::t_ff64e75c0e32df 1
+scripts/ux_session.py
+  s_ae25019c42f49d::t_8c6ed56de992fc 1-150
+scripts/build-ux-video.py
+  s_ae25019c42f49d::t_7524f2b76ef009 1-50
+.gitignore
+  s_ae25019c42f49d::t_a568f97fd454e2 3-8
+tests/test_recordings_loom.py
+  s_ae25019c42f49d::t_920d2e5e684b74 198-205
+docs/ux-overhaul/after/walkthrough.json
+  s_ae25019c42f49d::t_9eb9576a8a43d4 1-101
+docs/ux-hill-climbing-plan.html
+  s_ae25019c42f49d::t_9b640bc8b653e3 1-123
+scripts/render-safe.sh
+  s_ae25019c42f49d::t_23f818a4bfc965 1-38
+docs/research/theo-ui-hill-climbing.md
+  s_ae25019c42f49d::t_df9cec54f8f21b 1-35
+src/untangle/recordings.py
+  s_ae25019c42f49d::t_ea14390a714e5b 20,37,40,49-54,59,122-123,125,128-130,133,237-245,249,265-266,312-329,336-351,358,361-364,378-384
+docs/ux-overhaul/exploration/actions-2.json
+  s_aa38c34197df83::t_ee49fca6241beb 1
+docs/ux-overhaul/exploration/observation.json
+  s_aa38c34197df83::t_e7198984d3095c 1-118
+docs/ux-overhaul/exploration/actions.json
+  s_aa38c34197df83::t_c6cc2727b4de9b 1-15
+scripts/render-walkthrough.py
+  s_ae25019c42f49d::t_ac36437958121c 1-134
+docs/ux-overhaul/exploration/result.json
+  s_aa38c34197df83::t_e459ef3a4c6246 1
+docs/ux-overhaul/untangle-before-after.chapters.txt
+  s_ae25019c42f49d::t_8173d7d6c80df3 1-51
+docs/research/untangle-ux-loop-feasibility.md
+  s_ae25019c42f49d::t_66059f93a7a838 1-56
+tests/test_recordings_navigation.py
+  s_ae25019c42f49d::t_2d9cb1bf192f7d 125-144
+docs/research/ux-comparison-apps.md
+  s_ae25019c42f49d::t_c9eb3b8e273fe7 1-43
+docs/ux-overhaul/matrix-manifest.json
+  s_ae25019c42f49d::t_1bdeff622237fd 1-3418
+scripts/render-ui.py
+  s_ae25019c42f49d::t_3b39e7a0540c53 247-248,283-285,295-296,424,436-438
+docs/ux-overhaul/validation.json
+  s_ae25019c42f49d::t_a9236d2ab454ea 1-51
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9dc9f846cdb7cdc5b07c51b94c606886241fd116",
+  "prompts": {},
+  "sessions": {
+    "s_aa38c34197df83": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1b795-1840-7fa1-872e-24d69046a23d",
+        "model": "unknown"
+      },
+      "human_author": "Elhaam Basheer Chaudhry <e4elhaam@gmail.com>"
+    },
+    "s_ae25019c42f49d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1b050-8b9d-7951-9c41-c9ee8b7caa92",
+        "model": "unknown"
+      },
+      "human_author": "Elhaam Basheer Chaudhry <e4elhaam@gmail.com>"
+    }
+  }
+}
