@@ -1,0 +1,23 @@
+assets/clearline-check-dark.svg
+  s_ae25019c42f49d::t_7addd0467c9abd 1
+assets/clearline-radio-dark.svg
+  s_ae25019c42f49d::t_c745d3fb892f6a 1
+src/untangle/theme.py
+  s_ae25019c42f49d::t_276d2b28463b01 9-12,17-20,59,61-67,84,91,106
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2964712e23052d2330830ad0fc2bc1b97d99d259",
+  "prompts": {},
+  "sessions": {
+    "s_ae25019c42f49d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1b050-8b9d-7951-9c41-c9ee8b7caa92",
+        "model": "unknown"
+      },
+      "human_author": "Elhaam Basheer Chaudhry <e4elhaam@gmail.com>"
+    }
+  }
+}
