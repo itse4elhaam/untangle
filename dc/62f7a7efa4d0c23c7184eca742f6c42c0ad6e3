@@ -1,0 +1,35 @@
+src/untangle/app.py
+  s_c1cf704570e5d5::t_a464c94e04f4bd 279,1772,1782,2086,2232-2234,2256-2259,2279,2370,2373,2403,2408,2469,2514-2515,2564,2614-2615,2620,2628-2630,2667-2668,2696-2697,2700,2704,2706,2711,2728-2731,2742,2757-2758,2762,2798-2799,2857-2863,2966-2969
+src/untangle/recordings.py
+  s_d8a44e289656bc::t_efc6fe1f841b60 52,57,412-413
+tests/test_app.py
+  s_d8a44e289656bc::t_98962f9cc93f54 183-186,267,269,272-273,290-292,415-417
+tests/test_discard_cleanup.py
+  s_d8a44e289656bc::t_5724c3ee62dcba 204
+tests/test_loom_workflow.py
+  s_d8a44e289656bc::t_25f4afe1fb065f 130,133-134,149,183,186-306,329,348,373,376,381,383,408,438,454,476,502,523
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "dc62f7a7efa4d0c23c7184eca742f6c42c0ad6e3",
+  "prompts": {},
+  "sessions": {
+    "s_c1cf704570e5d5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1aaf6-f8c8-7f21-bf45-b4aad65730ec",
+        "model": "unknown"
+      },
+      "human_author": "Elhaam Basheer Chaudhry <e4elhaam@gmail.com>"
+    },
+    "s_d8a44e289656bc": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1aaee-7b47-7161-b140-62c104c2542c",
+        "model": "unknown"
+      },
+      "human_author": "Elhaam Basheer Chaudhry <e4elhaam@gmail.com>"
+    }
+  }
+}
