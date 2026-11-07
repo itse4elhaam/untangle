@@ -1,0 +1,21 @@
+ACCOUNTABILITY.md
+  s_d8a44e289656bc::t_1a95e3b031241b 76-87
+TODO.md
+  s_d8a44e289656bc::t_a76cccb5c6d7bb 13-14,16,23-24,62-67
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7550d2d7b24bedf38341b1153b57c23355eda8a3",
+  "prompts": {},
+  "sessions": {
+    "s_d8a44e289656bc": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1aaee-7b47-7161-b140-62c104c2542c",
+        "model": "unknown"
+      },
+      "human_author": "Elhaam Basheer Chaudhry <e4elhaam@gmail.com>"
+    }
+  }
+}
