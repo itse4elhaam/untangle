@@ -1,0 +1,33 @@
+TODO.md
+  s_d8a44e289656bc::t_3e42d4362d2a97 15,17,56-61
+src/untangle/app.py
+  s_c1cf704570e5d5::t_d00d7e8af7b956 803,981-983
+src/untangle/camera_framing.py
+  s_d8a44e289656bc::t_002db305db31d2 56-60,62-64
+tests/test_camera_framing_preferences.py
+  s_d8a44e289656bc::t_966b7a93b638eb 125-153
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "dbdfb7fddc1008ab9fb5121997e554c866fcf922",
+  "prompts": {},
+  "sessions": {
+    "s_c1cf704570e5d5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1aaf6-f8c8-7f21-bf45-b4aad65730ec",
+        "model": "unknown"
+      },
+      "human_author": "Elhaam Basheer Chaudhry <e4elhaam@gmail.com>"
+    },
+    "s_d8a44e289656bc": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1aaee-7b47-7161-b140-62c104c2542c",
+        "model": "unknown"
+      },
+      "human_author": "Elhaam Basheer Chaudhry <e4elhaam@gmail.com>"
+    }
+  }
+}
