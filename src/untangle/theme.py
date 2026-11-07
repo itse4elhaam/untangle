@@ -67,6 +67,10 @@ QLabel#recordingTimer[active="true"] { color: %(recording)s; font-size: 16px; fo
 QLabel#recordingTimer[paused="true"] { color: %(warning)s; }
 QLabel#section { color: %(muted)s; font-size: 13px; font-weight: 600; }
 QFrame#panel, QWidget#panel { background: %(panel)s; border: none; border-radius: 8px; }
+QFrame#recordingDock { background: %(panel)s; border: 1px solid %(border)s; border-radius: 12px; }
+QLabel#dockElapsed { color: %(recording)s; font-size: 24px; font-weight: 600; }
+QLabel#dockTarget, QLabel#dockMicrophone { color: %(muted)s; font-size: 12px; }
+QPushButton#dockStop { background: %(action)s; color: %(on_action)s; border-color: %(action)s; }
 QFrame#previewWorkspace { background: %(hover)s; border: none; border-radius: 8px; }
 QPushButton#cameraZoomStep { min-height: 20px; padding: 1px 4px; }
 QPushButton#cameraZoomReset { min-height: 18px; padding: 2px 6px; }

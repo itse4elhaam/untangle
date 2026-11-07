@@ -101,6 +101,7 @@ class AppChecks(unittest.TestCase):
 
     def test_capture_detaches_native_preview_before_hiding_main_window(self):
         w = self.window
+        w._shortcut_available['F9'] = True  # Confirmed alternate Stop route.
         w.mode = 'screen'
         w.countdown = 1
         w.counting = True
@@ -142,6 +143,7 @@ class AppChecks(unittest.TestCase):
 
     def test_microphone_ready_and_presentation_hide_detach_before_unmap(self):
         w = self.window
+        w._shortcut_available['F9'] = True  # Confirmed alternate Stop route.
         w.mode = 'screen'
         w.recording = True
         w.busy = False

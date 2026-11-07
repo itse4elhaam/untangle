@@ -11,7 +11,8 @@ case "$renderer" in
     settings) script="render-settings-ui.py" ;;
     walkthrough) script="render-walkthrough.py" ;;
     session) script="ux_session.py" ;;
-    *) echo 'Choose ui, settings, walkthrough or session.' >&2; exit 2 ;;
+    recording) script="render-recording-experience.py" ;;
+    *) echo 'Choose ui, settings, walkthrough, session or recording.' >&2; exit 2 ;;
 esac
 python_path="$repo_dir/.venv/bin/python"
 if [[ ! -x "$python_path" ]]; then python_path="$(command -v python3)"; fi

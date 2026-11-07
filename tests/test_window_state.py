@@ -27,6 +27,7 @@ class WindowStateTests(unittest.TestCase):
                             ('QSettings', lambda *args: QSettings(str(root / 'prefs.ini'), QSettings.IniFormat))]:
             self.stack.enter_context(patch.object(app, name, value))
         self.window = app.Window()
+        self.window._shortcut_available['F9'] = True  # Isolate window restoration from shortcut detection.
         self.addCleanup(self.cleanup_window)
         self.window.engine = MagicMock()
         self.window.engine.errors = []

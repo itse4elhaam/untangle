@@ -19,6 +19,7 @@ from .diagnostics import event as diagnostic_event, failure as diagnostic_failur
 from .floating import CameraBubble, ZoomMotion, release_window_input
 from .windows import WindowCatalog
 from .recordings import Recordings
+from .recording_controls import RecordingControls
 from .camera_image import CameraAdjustments, CameraControlError, restore_saved
 from .naming import next_recording_path, recording_files
 from .naming import recording_title, rename_recording
@@ -86,9 +87,11 @@ class Hotkeys(QThread):
     pause = Signal()
     zoom = Signal()
     unavailable = Signal(str)
+    availability = Signal(str, bool)
 
     def run(self):
         import select
+        conn = None
         try:
             from Xlib import X, XK, display, error
             conn = display.Display()
@@ -97,12 +100,16 @@ class Hotkeys(QThread):
             for key, action in [('F8', self.zoom), ('F9', self.toggle), ('F10', self.pause)]:
                 code = conn.keysym_to_keycode(XK.string_to_keysym(key))
                 mapping[code] = action
+                available = bool(code)
                 for locks in (0, X.LockMask, X.Mod2Mask, X.LockMask | X.Mod2Mask):
                     catcher = error.CatchError(error.BadAccess)
                     root.grab_key(code, X.ControlMask | X.ShiftMask | locks, False, X.GrabModeAsync, X.GrabModeAsync, onerror=catcher)
                     conn.sync()
                     if catcher.get_error():
-                        self.unavailable.emit('Global shortcuts are in use. Use the tray icon to stop recording.')
+                        available = False
+                self.availability.emit(key, available)
+                if not available:
+                    self.unavailable.emit(f'Ctrl+Shift+{key} is in use. Use the visible recording controls or tray.')
             while not self.isInterruptionRequested():
                 if conn.pending_events() or select.select([conn.fileno()], [], [], .25)[0]:
                     event = conn.next_event()
@@ -110,10 +117,14 @@ class Hotkeys(QThread):
                         mapping[event.detail].emit()
             root.ungrab_key(X.AnyKey, X.AnyModifier)
             conn.sync()
-            conn.close()
         except Exception as exc:
             diagnostic_failure('application.operation.failed', exc)
-            self.unavailable.emit(f'Global shortcuts unavailable. Use the tray icon. {exc}')
+            for key in ('F8', 'F9', 'F10'):
+                self.availability.emit(key, False)
+            self.unavailable.emit('Global shortcuts unavailable. Use the visible recording controls or tray.')
+        finally:
+            if conn is not None:
+                conn.close()
 
 
 class Preview(QWidget):
@@ -236,6 +247,10 @@ class Window(QMainWindow):
         self._closing = False
         self._capture_window_state = None
         self._capture_preview_detached = False
+        self._shortcut_available = {}
+        self._changing_pause = False
+        self._take_target = ''
+        self._bubble_size_fraction = None
         self._diagnostic_at = 0.
         self._diagnostic_engine_errors = 0
         self._audio_retry_at = 0
@@ -278,6 +293,13 @@ class Window(QMainWindow):
         self.bubble.open_requested.connect(self.reveal)
         self.bubble.moved.connect(self.move_camera_overlay)
         self.bubble.resized.connect(self.resize_camera_overlay)
+        self.recording_controls = RecordingControls()
+        self.recording_controls.pause_requested.connect(self.toggle_pause)
+        self.recording_controls.stop_requested.connect(self.stop)
+        self.recording_controls.restart_requested.connect(self.restart_recording)
+        self.recording_controls.discard_requested.connect(self.discard_recording)
+        self.recording_controls.open_requested.connect(self.reveal)
+        self.recording_controls.hide_requested.connect(self.hide_recording_controls)
         VIDEOS.mkdir(parents=True, exist_ok=True)
         STATE.mkdir(parents=True, exist_ok=True)
         self.upload_store = UploadStore(STATE / 'uploads.json')
@@ -302,6 +324,7 @@ class Window(QMainWindow):
         self.hotkeys.pause.connect(self.toggle_pause)
         self.hotkeys.zoom.connect(self.toggle_zoom)
         self.hotkeys.unavailable.connect(self.notice)
+        self.hotkeys.availability.connect(self.shortcut_availability)
         if not self.wayland_session():
             self.hotkeys.start()
         else:
@@ -1142,13 +1165,17 @@ class Window(QMainWindow):
                 or self.recording or self.busy or self.counting):
             return
         screen = QApplication.screens()[self.screen.currentIndex()]
-        self.bubble.arrange(screen, self.size.value() / 100, self.position.currentData(),
+        self.bubble.arrange(screen, self.bubble_size_fraction(), self.position.currentData(),
             self.shape.currentData(), self.mask_path,
             mirror_mask=self.capture_kind.currentData() == 'window' and self.mirror.isChecked())
         ratio = self.bubble.devicePixelRatioF()
         self.engine.resize_camera_preview(round(self.bubble.width() * ratio), round(self.bubble.height() * ratio))
 
+    def bubble_size_fraction(self):
+        return self._bubble_size_fraction if self._bubble_size_fraction is not None else self.size.value() / 100
+
     def camera_size_changed(self):
+        self._bubble_size_fraction = None
         self.apply_camera_framing(size=self.size.value() / 100)
         self.arrange_camera_bubble()
 
@@ -1219,7 +1246,14 @@ class Window(QMainWindow):
         self.tray = QSystemTrayIcon(QIcon(str(ICON)), self)
         self.tray.setToolTip('Untangle · Ready to record')
         menu = QMenu()
+        self.tray_capture_status = menu.addAction('Ready to record')
+        self.tray_capture_status.setEnabled(False)
+        self.tray_audio_status = menu.addAction('')
+        self.tray_audio_status.setEnabled(False)
+        menu.addSeparator()
         menu.addAction('Open Untangle', self.reveal)
+        self.tray_controls = menu.addAction('Recording controls', self.show_recording_controls)
+        self.tray_controls.setEnabled(False)
         self.tray_record = menu.addAction('Start recording', self.toggle_record)
         self.tray_presentation = menu.addAction('Switch camera presentation', self.toggle_presentation)
         self.tray_presentation.setEnabled(False)
@@ -1574,7 +1608,7 @@ class Window(QMainWindow):
     @observed('camera.show')
     def show_bubble(self):
         screen = QApplication.screens()[self.screen.currentIndex()]
-        self.bubble.arrange(screen, self.size.value() / 100, self.position.currentData(), self.shape.currentData(), self.mask_path,
+        self.bubble.arrange(screen, self.bubble_size_fraction(), self.position.currentData(), self.shape.currentData(), self.mask_path,
             mirror_mask=self.capture_kind.currentData() == 'window' and self.mirror.isChecked())
         self.bubble.recording = self.recording
         self.bubble.show()
@@ -1596,6 +1630,7 @@ class Window(QMainWindow):
         if (self.mode != 'screen' or not self.engine or not self.configuration_valid
                 or self.recording or self.busy or self.counting):
             return
+        self._bubble_size_fraction = fraction
         # Do not arrange the bubble here: that would move its anchored edge.
         self.size.blockSignals(True)
         self.size.setValue(round(fraction * 100))
@@ -1889,6 +1924,8 @@ class Window(QMainWindow):
             self.paused_duration = 0
             self.paused = False
             self.recording = True
+            self._take_target = self.capture_target_label()
+            self.tray_controls.setEnabled(self.mode == 'screen')
             self.settings_button.setEnabled(True)
             self.library_button.setEnabled(True)
             self.sharing_button.setEnabled(True)
@@ -1912,10 +1949,10 @@ class Window(QMainWindow):
             self.tray_discard.setEnabled(True)
             self.tray_record.setText('Stop and save')
             self.tray.setIcon(self.record_icon())
-            self.engine_notice(('Recording. Use the tray or window to stop and save.\n' if self.wayland_session() else 'Recording. Ctrl + Shift + F9 stops and saves.\n')
+            self.engine_notice(('Recording. ' + self.recording_stop_hint() + '.\n')
                 + (f'Microphone: {source}' if source else 'Microphone off'))
-            if self.mode == 'screen':
-                self.tray.setToolTip('Untangle · Recording. Use the tray menu to stop or pause.' if self.wayland_session() else 'Untangle · Recording\nF9 stop · F10 pause · F8 zoom\nHold Ctrl + Shift with each key')
+            if self.window_controls_safe() and not self.isVisible():
+                self.show_recording_controls()
         except Exception as exc:
             diagnostic_failure('application.operation.failed', exc)
             emit(self, 'record_start.failed', level='warning', exception_type=type(exc).__name__)
@@ -1978,6 +2015,8 @@ class Window(QMainWindow):
         if engine_errors:
             self.recording_error = (self.recording_error + ' ' if self.recording_error else '') + 'Recording ended with an error. Review the saved video before sharing. ' + '; '.join(engine_errors)
         self.recording = False
+        self.recording_controls.finish()
+        self.tray_controls.setEnabled(False)
         self.release_audio()
         self.paused = False
         self.bubble.recording = False
@@ -2218,9 +2257,22 @@ class Window(QMainWindow):
 
     @observed("app.toggle_pause")
     def toggle_pause(self):
-        if not self.recording or self.busy:
+        if not self.recording or self.busy or self._changing_pause:
             return
+        self._changing_pause = True
         try:
+            if self.paused and not self.window_controls_safe():
+                if not self.isVisible() and not self.other_stop_route():
+                    self.notice('Resume needs a reachable Stop control. Open Untangle from More, '
+                                'or restore the tray or stop shortcut, then resume.')
+                    self.recording_controls.state_label.setText('Paused · needs Stop control')
+                    return
+                self.recording_controls.hide()
+                # Complete the unmap before resuming capture. sync processes Qt
+                # events, so recheck lifecycle state before touching the engine.
+                QApplication.sync()
+                if not self.recording or self.busy or self._closing:
+                    return
             self.engine.pause(not self.paused)
             self.paused = not self.paused
             self.bubble.paused = self.paused
@@ -2231,10 +2283,16 @@ class Window(QMainWindow):
             self.pause_button.setText('Resume' if self.paused else 'Pause')
             self.tray_pause.setText('Resume' if self.paused else 'Pause')
             self.update_recording_indicator()
+            if self.paused and self.mode == 'screen' and not self.isVisible():
+                self.show_recording_controls()
         except Exception as exc:
             diagnostic_failure('application.operation.failed', exc)
             self.notice(f'Could not change pause state: {exc}')
             self.restore_capture_window()
+            if self.paused:
+                self.show_recording_controls()
+        finally:
+            self._changing_pause = False
 
     def open_audio_check(self):
         if (not self.engine or self.recording or self.counting or self.busy or
@@ -2414,13 +2472,13 @@ class Window(QMainWindow):
             duration = f'{elapsed // 60:02d}:{elapsed % 60:02d}'
             state = 'Paused' if self.paused else 'Recording'
             warning = self.microphone_warning()
-            stop_hint = 'Use the tray or window to stop and save' if self.wayland_session() else 'Ctrl + Shift + F9 to stop and save'
+            stop_hint = self.recording_stop_hint()
             self.engine_notice(f'{state} · {duration}   |   {stop_hint}\n'
                 + (f'Microphone: {self.selected_source}' if self.selected_source else 'Microphone off')
                 + ('\n' + (self.recording_error or warning) if self.recording_error or warning else ''),
                 detail=not bool(self.recording_error or warning))
             self.record_button.setText('■  Stop and save')
-            self.tray.setToolTip(f'Untangle · {state} {duration}\n{stop_hint}')
+            self.update_capture_controls()
             if elapsed % 10 == 0 and shutil.disk_usage(VIDEOS).free < 256 * 1024 ** 2:
                 self.notice('Storage almost full. Stopping to save your recording.')
                 self.stop()
@@ -3425,15 +3483,96 @@ class Window(QMainWindow):
                     'Review mode' if self.in_library() else
                     'Ready to record' if self.configuration_valid else 'Check setup')
         self.recording_timer.setText(text)
+        self.update_capture_controls()
         for name, value in (('active', self.recording), ('paused', self.paused)):
             if self.recording_timer.property(name) != value:
                 self.recording_timer.setProperty(name, value)
                 self.recording_timer.style().unpolish(self.recording_timer)
                 self.recording_timer.style().polish(self.recording_timer)
 
+    def capture_target_label(self):
+        if self.mode != 'screen':
+            return 'Camera only'
+        if self.wayland_session():
+            return 'System-selected source'
+        if self.capture_kind.currentData() == 'window':
+            return 'Window · ' + self.capture_window.currentText()
+        return 'Display · ' + self.screen.currentText()
+
+    def window_controls_safe(self):
+        # Separate native windows are outside the selected X11 drawable. Full
+        # desktop and portal captures offer no equivalent exclusion guarantee.
+        return (self.mode == 'screen' and not self.wayland_session()
+                and self.capture_kind.currentData() == 'window')
+
+    def other_stop_route(self):
+        return (QSystemTrayIcon.isSystemTrayAvailable()
+                or self._shortcut_available.get('F9', False)
+                or (self.bubble.isVisible() and not self.bubble._input_passthrough))
+
+    def recording_stop_hint(self):
+        if self._shortcut_available.get('F9', False):
+            return 'Ctrl + Shift + F9 to stop and save'
+        return 'Use the recording controls, tray or Untangle window to stop and save'
+
+    def shortcut_availability(self, key, available):
+        self._shortcut_available[key] = available
+        if (not available and key == 'F9' and (self.recording or self.counting or self.preparing_audio)
+                and not self.isVisible() and not self.other_stop_route()
+                and not self.recording_controls.isVisible()):
+            self.restore_capture_window()
+            if not self.isVisible():
+                self.show()
+        self.update_capture_controls()
+
+    def update_capture_controls(self):
+        if not hasattr(self, 'recording_controls') or not self.recording:
+            return
+        now = self.pause_started if self.paused else time.monotonic()
+        elapsed = max(0, int(now - self.started - self.paused_duration))
+        duration = f'{elapsed // 60:02d}:{elapsed % 60:02d}'
+        state = 'saving' if self.busy else 'paused' if self.paused else 'recording'
+        audio = self.engine.audio_status() if self.engine and self.selected_source and not self.busy and not self.paused else {}
+        audio_state = audio.get('state') if isinstance(audio, dict) else None
+        microphone = ('Microphone off' if not self.selected_source else
+                      'Microphone stopped' if self.busy else
+                      'Microphone paused' if self.paused else
+                      {'signal': 'Microphone input arriving', 'silent': 'Microphone input silent',
+                       'no_packets': 'No microphone samples', 'off': 'Microphone unavailable'}.get(
+                          audio_state, 'Checking microphone input'))
+        warning = self.recording_error
+        self.recording_controls.update_state(state=state, elapsed=duration,
+            target=self._take_target, microphone=microphone, warning=warning,
+            hide_allowed=self.isVisible() or self.other_stop_route())
+        self.tray_capture_status.setText(f'{state.capitalize()} · {duration} · {self._take_target}')
+        self.tray_audio_status.setText(microphone + (' · Review audio before sharing' if warning else ''))
+        self.tray.setToolTip(f'Untangle · {state.capitalize()} {duration}\n{self._take_target}\n'
+            + microphone + ('\n' + warning if warning else '') + '\n' + self.recording_stop_hint())
+
+    def show_recording_controls(self):
+        if not self.recording or self.busy or self.mode != 'screen':
+            return
+        if not self.window_controls_safe() and not self.paused:
+            self.toggle_pause()
+            if not self.paused:
+                return
+        self.update_capture_controls()
+        self.recording_controls.show_on_screen(self.screen_for_controls())
+
+    def screen_for_controls(self):
+        screens = QApplication.screens()
+        index = self.screen.currentIndex()
+        return screens[index] if 0 <= index < len(screens) else QWidget.screen(self)
+
+    def hide_recording_controls(self):
+        if self.isVisible() or self.other_stop_route():
+            self.recording_controls.hide()
+
     def hide_for_capture(self):
-        if self.wayland_session() and not QSystemTrayIcon.isSystemTrayAvailable():
-            return  # Keep stop/save reachable when no global shortcut or tray exists.
+        if not self.other_stop_route():
+            self.notice('Untangle stays visible because no other Stop control is available. '
+                        'It may appear in a full-screen recording.')
+            return
         # libobs owns a native GLX child under preview. Destroy that child
         # before Qt unmaps its parent, while retaining scene/output/audio.
         self._preview_generation = getattr(self, '_preview_generation', 0) + 1
@@ -3488,6 +3627,9 @@ class Window(QMainWindow):
         self.show()
         self.raise_()
         self.activateWindow()
+        if self.recording and self.mode == 'screen' and not self.paused and not self.window_controls_safe():
+            self.notice('Untangle is visible during screen capture and may appear in your recording. '
+                        'Pause before opening controls if you want a clean take.')
 
     @staticmethod
     def record_icon():
@@ -3582,6 +3724,8 @@ class Window(QMainWindow):
         self.zoom_timer.stop()
         self.hide_bubble()
         self.bubble.close()
+        self.recording_controls.finish()
+        self.recording_controls.close()
         if self.window_catalog is not None:
             self.window_catalog.close()
         self.save_preferences()

@@ -1,0 +1,73 @@
+{
+  "version": "before",
+  "steps": [
+    {
+      "id": "01-window-take",
+      "image": "01-window-take.png",
+      "seconds": 6,
+      "caption": "Selected-window take: keep the editor visible; find time, pause and Stop.",
+      "recording": true,
+      "paused": false,
+      "busy": false
+    },
+    {
+      "id": "02-paused",
+      "image": "02-paused.png",
+      "seconds": 6,
+      "caption": "Pause: the clock freezes; Resume remains explicit.",
+      "recording": true,
+      "paused": true,
+      "busy": false
+    },
+    {
+      "id": "03-input-warning",
+      "image": "03-input-warning.png",
+      "seconds": 7,
+      "caption": "Missing microphone samples should reach controls while Untangle is hidden.",
+      "recording": true,
+      "paused": false,
+      "busy": false
+    },
+    {
+      "id": "04-full-screen",
+      "image": "04-full-screen.png",
+      "seconds": 6,
+      "caption": "Whole-screen take: new floating controls stay hidden during active capture.",
+      "recording": true,
+      "paused": false,
+      "busy": false
+    },
+    {
+      "id": "05-full-screen-paused",
+      "image": "05-full-screen-paused.png",
+      "seconds": 6,
+      "caption": "Whole-screen controls: pause first, then show time, Resume and Stop.",
+      "recording": true,
+      "paused": true,
+      "busy": false
+    },
+    {
+      "id": "06-resumed-clean",
+      "image": "06-resumed-clean.png",
+      "seconds": 6,
+      "caption": "Resume hides the new control window before capture continues.",
+      "recording": true,
+      "paused": false,
+      "busy": false
+    },
+    {
+      "id": "07-saving",
+      "image": "07-saving.png",
+      "seconds": 6,
+      "caption": "Stop uses the existing save/recovery path; controls cannot start another action.",
+      "recording": true,
+      "paused": false,
+      "busy": true
+    }
+  ],
+  "disclosure": "Captioned production Qt widget captures composed over a synthetic QTextEdit. Engine, time, audio, save and device events are fixtures. No native encoding, host capture or playback. Separate private-Xvfb tests verify native input routing; this video does not verify saved pixels or audio.",
+  "source_sha256": {
+    "app.py": "3137effb3a7f87f9c32ba4e7be90648d9e5deed2fb2f6923a8b65710a91a4c8d",
+    "theme.py": "aaef2e44d44ca870a73fc34d5e2aad4cb4044afd960a1882bc0be2588870a9ee"
+  }
+}
