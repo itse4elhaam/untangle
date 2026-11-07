@@ -1,7 +1,8 @@
 """Explicit Google authorization and selected-recording uploads."""
+from .widgets import ScrollComboBox
 from .diagnostics import observed, failure as diagnostic_failure
 from PySide6.QtCore import QThread, Signal, QSettings, Qt
-from PySide6.QtWidgets import (QDialog, QVBoxLayout, QLabel, QPushButton, QComboBox,
+from PySide6.QtWidgets import (QDialog, QVBoxLayout, QLabel, QPushButton,
                                QFileDialog, QMessageBox, QCheckBox, QScrollArea, QWidget)
 from .drive import DriveClient
 
@@ -62,7 +63,7 @@ class DriveDialog(QDialog):
         self.refresh = QPushButton('Load Drive folders')
         self.refresh.clicked.connect(self.load_folders)
         layout.addWidget(self.refresh)
-        self.folders = QComboBox()
+        self.folders = ScrollComboBox()
         layout.addWidget(self.folders)
         from .archive import config
         self.archive_enabled = QCheckBox('Archive automatically in the background')

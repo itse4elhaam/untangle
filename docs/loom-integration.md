@@ -58,6 +58,14 @@ indeterminate indicator. `parse_upload_progress` accepts labeled human
 uploading/processing lines and an actual percentage if present; a final
 `transfer.bytes` count never becomes invented progress.
 
+Local diagnostics emit `upload.phase` timings for upload help, the transfer
+command, title help, title updates and sharing permissions, plus total time on
+`upload.result`. Only fixed stage/outcome labels and milliseconds are added;
+filenames, links and command output are excluded. The transfer-command duration
+includes any processing the CLI waits for. It cannot measure network throughput
+or isolate Loom processing time. These measurements do not establish a speed
+improvement; recording quality is unchanged.
+
 ## Default sharing
 
 New uploads default to **Anyone with the link** (`public`). Saved sharing

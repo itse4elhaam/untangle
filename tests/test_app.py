@@ -542,7 +542,7 @@ class AppChecks(unittest.TestCase):
     def test_successful_save_auto_uploads_saved_file(self):
         path = self.root / 'saved.mp4'
         path.write_bytes(b'saved recording')
-        self.window.prefs.setValue('auto_upload', True)
+        self.window._take_auto_upload = True  # Consent captured when this take started.
         with patch.object(self.window, 'upload') as upload:
             self.window.finish_save(path, '')
             upload.assert_called_once_with()
@@ -551,7 +551,7 @@ class AppChecks(unittest.TestCase):
     def test_saved_video_name_is_resolved_before_automatic_upload(self):
         path = self.root / 'Screen recording - 2026-10-23 at 12.30.mp4'
         path.write_bytes(b'saved synthetic recording')
-        self.window.prefs.setValue('auto_upload', True)
+        self.window._take_auto_upload = True  # Consent captured when this take started.
         def name(parent, original, rename, *, new_recording, discard):
             self.assertTrue(new_recording)
             self.assertTrue(callable(discard))
@@ -573,7 +573,7 @@ class AppChecks(unittest.TestCase):
     def test_skip_name_keeps_saved_video_and_allows_auto_upload(self):
         path = self.root / 'saved.mp4'
         path.write_bytes(b'synthetic recording')
-        self.window.prefs.setValue('auto_upload', True)
+        self.window._take_auto_upload = True  # Consent captured when this take started.
         with patch.object(glint, 'prompt_recording_name', return_value=None) as prompt, \
                 patch.object(self.window, 'upload') as upload:
             self.window.finish_save(path, '')
@@ -610,7 +610,7 @@ class AppChecks(unittest.TestCase):
     def test_recording_error_blocks_automatic_upload(self):
         path = self.root/'RecIt-error.mp4'
         path.write_bytes(b'partial recording')
-        self.window.prefs.setValue('auto_upload', True)
+        self.window._take_auto_upload = True  # Consent captured when this take started.
         self.window.recording_error = 'Recording ended with an error. Review before sharing.'
         with patch.object(self.window, 'upload') as upload:
             self.window.finish_save(path, self.window.recording_error)

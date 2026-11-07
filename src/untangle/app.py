@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Untangle: a small native frontend for the OBS recording engine."""
 from __future__ import annotations
+from .widgets import ScrollComboBox
 
 import json
 import os
@@ -290,6 +291,8 @@ class Window(QMainWindow):
         self._upload_process = None
         self._loom_help_cache = CliHelpCache()
         self._title_job = None
+        self._take_auto_upload = False
+        self._take_saved_identity = None
         self.build()
         self.set_theme(self.prefs.value('theme', 'light'))
         self.setup_tray()
@@ -350,7 +353,7 @@ class Window(QMainWindow):
         title_box.addWidget(label('Screen and camera recording', 'muted'))
         header.addLayout(title_box)
         header.addStretch()
-        self.theme_choice = QComboBox()
+        self.theme_choice = ScrollComboBox()
         self.theme_choice.setAccessibleName('Appearance')
         self.theme_choice.addItem('Light', 'light')
         self.theme_choice.addItem('Dark', 'dark')
@@ -361,6 +364,10 @@ class Window(QMainWindow):
         settings_outer = QVBoxLayout(self.settings_dialog)
         settings_outer.setContentsMargins(24, 24, 24, 20)
         settings_outer.addWidget(label('Settings', 'title'))
+        self.settings_lock_notice = label('Recording settings are locked for this take. Stop recording to change them.', 'muted')
+        self.settings_lock_notice.setWordWrap(True)
+        self.settings_lock_notice.hide()
+        settings_outer.addWidget(self.settings_lock_notice)
         settings_scroll = QScrollArea()
         settings_scroll.setWidgetResizable(True)
         settings_body = QWidget()
@@ -441,6 +448,9 @@ class Window(QMainWindow):
         self.record_button.setMinimumHeight(36)
         header.addWidget(self.record_button)
         layout.addLayout(header)
+        self.upload_this_take = QCheckBox('Upload this take to Loom')
+        self.upload_this_take.setChecked(self.prefs.value('auto_upload', False, type=bool))
+        self.upload_this_take.setToolTip('Upload after saving this take only. The default for future takes is in Sharing. Uncheck to keep this take local.')
 
         content = QGridLayout()
         self.recorder_content = content
@@ -464,6 +474,7 @@ class Window(QMainWindow):
         summary = controls
         summary.setContentsMargins(12, 12, 12, 12)
         self.setup_sections = []
+        summary.addWidget(self.upload_this_take)
 
         def section(title, advanced=False):
             frame = QFrame()
@@ -494,7 +505,7 @@ class Window(QMainWindow):
         controls.addSpacing(0)
         self.capture_label = label('Capture', 'section')
         controls.addWidget(self.capture_label)
-        self.capture_kind = QComboBox()
+        self.capture_kind = ScrollComboBox()
         self.capture_kind.addItem('Screen or window (system picker)' if self.wayland_session() else 'Entire screen', 'screen')
         if not self.wayland_session():
             self.capture_kind.addItem('A specific window', 'window')
@@ -503,7 +514,7 @@ class Window(QMainWindow):
         self.portal_button.clicked.connect(self.choose_portal_source)
         self.portal_button.setVisible(self.wayland_session())
         controls.addWidget(self.portal_button)
-        self.screen = QComboBox()
+        self.screen = ScrollComboBox()
         for index, screen in enumerate(QApplication.screens()):
             geo = screen.geometry()
             ratio = screen.devicePixelRatio()
@@ -512,7 +523,7 @@ class Window(QMainWindow):
         self.window_row = QWidget()
         window_layout = QHBoxLayout(self.window_row)
         window_layout.setContentsMargins(0, 0, 0, 0)
-        self.capture_window = QComboBox()
+        self.capture_window = ScrollComboBox()
         self.capture_window.setMinimumWidth(0)
         self.capture_window.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.capture_window.addItem('Select a window…', None)
@@ -526,7 +537,7 @@ class Window(QMainWindow):
         self.window_row.setVisible(False)
         controls.addWidget(self.window_row)
         controls = self.camera_setup = section('Camera')
-        self.camera = QComboBox()
+        self.camera = ScrollComboBox()
         self.camera.addItem('Camera off', None)
         for name, path in cameras():
             self.camera.addItem(name, path)
@@ -549,7 +560,7 @@ class Window(QMainWindow):
         controls.addWidget(self.camera_settings_button)
         self._last_camera_device = self.camera.currentData()
         controls = self.microphone_setup = section('Microphone')
-        self.microphone = QComboBox()
+        self.microphone = ScrollComboBox()
         self.microphone.addItem('Automatic microphone', 'default')
         self.microphone.addItem('Microphone off', None)
         for name, source in microphones():
@@ -579,7 +590,7 @@ class Window(QMainWindow):
         widget_layout.setContentsMargins(14, 12, 14, 14)
         widget_layout.setSpacing(9)
         widget_layout.addWidget(label('YOUR CAMERA WIDGET', 'eyebrow'))
-        self.shape = QComboBox()
+        self.shape = ScrollComboBox()
         for name, value in [('Circle', 'circle'), ('Rounded square', 'rounded'), ('Square', 'square'), ('Custom shape…', 'custom')]:
             self.shape.addItem(name, value)
         widget_layout.addWidget(self.shape)
@@ -590,7 +601,7 @@ class Window(QMainWindow):
         self.size.setValue(23)
         size_row.addWidget(self.size)
         widget_layout.addLayout(size_row)
-        self.position = QComboBox()
+        self.position = ScrollComboBox()
         for name, value in [('Bottom right', 'bottom-right'), ('Bottom left', 'bottom-left'), ('Top right', 'top-right'), ('Top left', 'top-left')]:
             self.position.addItem(name, value)
         widget_layout.addWidget(self.position)
@@ -606,7 +617,7 @@ class Window(QMainWindow):
         controls.addWidget(self.clean_microphone)
         controls.addWidget(label('Recording quality', 'muted'))
         quality_row = QHBoxLayout()
-        self.quality = QComboBox()
+        self.quality = ScrollComboBox()
         self.quality.addItem('4K · 30 fps', (3840, 2160))
         self.quality.addItem('1080p · 30 fps', (1920, 1080))
         quality_row.addWidget(self.quality)
@@ -636,14 +647,14 @@ class Window(QMainWindow):
         self.capture_caption.hide()
         canvas_row = QHBoxLayout()
         canvas_row.addWidget(label('Canvas', 'muted'))
-        self.canvas = QComboBox()
+        self.canvas = ScrollComboBox()
         self.canvas.setAccessibleName('Recording canvas')
         for title, value in [('Landscape · 16:9', 'landscape'), ('Reels / Shorts · 9:16', 'portrait'),
                              ('Square · 1:1', 'square'), ('Portrait · 4:5', 'portrait45'),
                              ('Raw · source size', 'raw')]:
             self.canvas.addItem(title, value)
         canvas_row.addWidget(self.canvas, 1)
-        self.framing = QComboBox(self)
+        self.framing = ScrollComboBox(self)
         self.framing.setAccessibleName('Source framing')
         self.framing.addItem('Fit · whole image', 'fit')
         self.framing.addItem('Fill · crop center', 'fill')
@@ -725,7 +736,7 @@ class Window(QMainWindow):
         zoom_row.addWidget(self.presentation_button)
         zoom_row.addStretch()
         zoom_row.addWidget(self.zoom_button)
-        self.zoom_amount = QComboBox()
+        self.zoom_amount = ScrollComboBox()
         self.zoom_amount.setAccessibleName('Pointer zoom amount')
         self.zoom_amount.setToolTip('Magnification used by Zoom to pointer')
         for title, value in [('1.5×', 1.5), ('2×', 2.0), ('2.5×', 2.5)]:
@@ -871,8 +882,9 @@ class Window(QMainWindow):
             combo.currentIndexChanged.connect(self.update_setup_summary)
 
     def open_settings(self):
-        if self.busy or self.recording or self.counting:
+        if self.busy or self.counting or self._closing:
             return
+        self.settings_lock_notice.setVisible(self.recording)
         available, reason = local_title_capability()
         self.title_capability.setText('Local transcription is ready. Codex access is checked when naming a recording.' if available else reason)
         self.settings_dialog.show()
@@ -1626,6 +1638,8 @@ class Window(QMainWindow):
         elif self.counting:
             self.cancel_countdown()
         elif self.engine and not self.busy and self.record_button.isEnabled():
+            self._take_auto_upload = self.upload_this_take.isChecked()
+            self._take_saved_identity = None
             self.counting = True
             self.countdown = 3
             self.lock_controls(True)
@@ -1670,6 +1684,7 @@ class Window(QMainWindow):
             self.count_timer.stop()
             self.start_timer.stop()
             self.counting = False
+            self._take_auto_upload = False
             self.lock_controls(False)
             self.record_button.setText('●  Start recording')
             self.notice('Countdown cancelled. Ready when you are.')
@@ -1743,6 +1758,7 @@ class Window(QMainWindow):
 
     @observed("app.audio_start_failed")
     def audio_start_failed(self, error):
+        self._take_auto_upload = False
         emit(self, 'preparation.aborted', level='warning', reason='preparation_failed_or_cancelled')
         self._audio_generation += 1
         self.busy = self.preparing_audio = False
@@ -1832,6 +1848,7 @@ class Window(QMainWindow):
             self.paused_duration = 0
             self.paused = False
             self.recording = True
+            self.settings_button.setEnabled(True)
             self.presentation_button.setEnabled(not self.wayland_session() and bool(self.camera.currentData()) and not self._recording_compact)
             self.tray_presentation.setEnabled(not self.wayland_session() and bool(self.camera.currentData()) and not self._recording_compact)
             self._audio_warning_since = None
@@ -1858,6 +1875,7 @@ class Window(QMainWindow):
         except Exception as exc:
             diagnostic_failure('application.operation.failed', exc)
             emit(self, 'record_start.failed', level='warning', exception_type=type(exc).__name__)
+            self._take_auto_upload = False
             self.release_audio()
             self.lock_controls(False)
             self.record_button.setText('●  Start recording')
@@ -1872,6 +1890,7 @@ class Window(QMainWindow):
         if not self.recording or self.busy:
             return
         self.busy = True
+        self.settings_button.setEnabled(False)
         self.zoom_timer.stop()
         self.zoom_button.setEnabled(False)
         self.tray_zoom.setEnabled(False)
@@ -1891,6 +1910,7 @@ class Window(QMainWindow):
     def stopped(self, path, error):
         if error and self.engine.recording:
             self.busy = False
+            self.settings_button.setEnabled(True)
             self.record_button.setEnabled(True)
             self.pause_button.setEnabled(True)
             self.tray_record.setEnabled(True)
@@ -1990,6 +2010,7 @@ class Window(QMainWindow):
         self.stop()
 
     def finish_discard(self, path):
+        self._take_auto_upload = False
         self._restarting = False
         emit(self, 'save.result', outcome='kept')
         self.ready_after_save()
@@ -2039,6 +2060,7 @@ class Window(QMainWindow):
 
     def ready_after_save(self):
         self.busy = False
+        self.upload_this_take.setChecked(self.prefs.value('auto_upload', False, type=bool))
         self.record_button.setText('●  Start recording')
         self.record_button.setEnabled(self.configuration_valid)
         self.pause_button.setEnabled(True)
@@ -2048,6 +2070,7 @@ class Window(QMainWindow):
         self.lock_controls(False)
 
     def finish_save(self, path, error):
+        self._take_saved_identity = self.upload_store.file_identity(path) if path else None
         emit(self, 'save.result', outcome='warning' if error else 'saved')
         self.ready_after_save()
         if path and path.exists():
@@ -2100,6 +2123,8 @@ class Window(QMainWindow):
             self._title_job.cancel()
 
     def complete_saved_video(self, path, error, *, prompt=True):
+        auto_upload = self._take_auto_upload
+        self._take_auto_upload = False
         self._review_path = None
         self.review_saved_button.hide()
         self.cancel_title_button.setEnabled(True)
@@ -2129,7 +2154,10 @@ class Window(QMainWindow):
             self._review_path = Path(path)
             self.review_saved_button.show()
         self.notice(error or 'Saved. Play it back, or upload to Loom when you are ready.')
-        if not error and self.prefs.value('auto_upload', False, type=bool):
+        if (auto_upload and not error and not self.quit_after_save and not self._closing
+                and path and self._take_saved_identity is not None
+                and self.upload_store.file_identity(path) == self._take_saved_identity):
+            self.set_last(path)
             self.upload()
         if self.quit_after_save and not self.busy:
             self.close()
@@ -2351,7 +2379,11 @@ class Window(QMainWindow):
 
     def lock_controls(self, locked):
         self.bubble.resize_enabled = not locked
-        self.settings_button.setEnabled(not locked)
+        self.settings_button.setEnabled(not locked or (self.recording and not self.busy))
+        self.settings_lock_notice.setVisible(locked)
+        self.storage_settings_button.setEnabled(not locked)
+        self.drive_setup_guide.setEnabled(not locked)
+        self.upload_this_take.setEnabled(not locked)
         self.focus_button.setEnabled(not locked)
         self.live_microphone.setEnabled(not locked)
         self.audio_check_button.setEnabled(not locked)
@@ -2729,12 +2761,12 @@ class Window(QMainWindow):
         self._show_loom_account = show_account
         show_account()
         layout.addWidget(label('Who can watch uploaded videos?', 'section'))
-        visibility = QComboBox()
+        visibility = ScrollComboBox()
         for title, value in [('Only me', 'owner'), ('My Loom workspace', 'workspace'), ('Anyone with the link', 'public')]:
             visibility.addItem(title, value)
         visibility.setCurrentIndex(max(0, visibility.findData(self.prefs.value('visibility', 'public'))))
         layout.addWidget(visibility)
-        auto = QCheckBox('Upload automatically after I stop recording')
+        auto = QCheckBox('Select upload to Loom by default for new takes')
         auto.setChecked(self.prefs.value('auto_upload', False, type=bool))
         auto.setEnabled(bool(cli))
         layout.addWidget(auto)
@@ -2769,6 +2801,7 @@ class Window(QMainWindow):
             QTimer.singleShot(0, probe)
         if dialog.exec():
             self.prefs.setValue('auto_upload', auto.isChecked())
+            self.upload_this_take.setChecked(auto.isChecked())
             self.prefs.setValue('visibility', visibility.currentData())
             self.prefs.setValue('loom_auto_titles', titles.isChecked())
         self._sharing_dialog = None
@@ -3032,8 +3065,26 @@ class Window(QMainWindow):
         process = self._upload_process
         process.setProgram(self._upload_cli)
         process.setArguments(args)
-        process.finished.connect(lambda code, status: finished(code, status)
-            if self._upload_process is process and self._upload_active else None)
+        # The CLI's transfer command includes any processing it waits for.
+        # Fixed labels keep filenames, links, CLI output and credentials out.
+        stage = {self.upload_help: 'upload_help', self.upload_done: 'transfer_command',
+                 self.upload_title_help: 'title_help', self.upload_title_done: 'title',
+                 self.visibility_done: 'visibility'}.get(finished, 'other')
+        started = time.monotonic()
+        reported = False
+        def report_phase(outcome):
+            nonlocal reported
+            if not reported:
+                reported = True
+                diagnostic_event('upload.phase', stage=stage, outcome=outcome,
+                                 elapsed_ms=max(0, round((time.monotonic() - started) * 1000)))
+        def completed(code, status):
+            if self._upload_process is process and self._upload_active:
+                report_phase('finished' if code == 0 and status == QProcess.NormalExit else 'failed')
+                finished(code, status)
+        process.finished.connect(completed)
+        process.errorOccurred.connect(lambda error: report_phase('failed_to_start')
+            if error == QProcess.FailedToStart and self._upload_process is process and self._upload_active else None)
         process.errorOccurred.connect(lambda error: self.upload_process_error(error)
             if self._upload_process is process and self._upload_active else None)
         if not stream:
@@ -3041,6 +3092,7 @@ class Window(QMainWindow):
             timer.setSingleShot(True)
             def expired():
                 if self._upload_process is process and self._upload_active:
+                    report_phase('timeout')
                     process.kill()
                     if self._upload_process is not process or not self._upload_active:
                         return
@@ -3230,7 +3282,10 @@ class Window(QMainWindow):
 
     @observed("app.upload_end")
     def upload_end(self, text, state='failed', visibility_warning=''):
-        diagnostic_event('upload.result', outcome=state)
+        timing = {}
+        if getattr(self, '_upload_started', None) is not None:
+            timing['elapsed_ms'] = max(0, round((time.monotonic() - self._upload_started) * 1000))
+        diagnostic_event('upload.result', outcome=state, **timing)
         self._upload_active = False
         self._upload_setting_title = False
         self.upload_timer.stop()

@@ -323,7 +323,7 @@ class ClearlineClickthrough(unittest.TestCase):
             QTest.mouseClick(control, Qt.LeftButton)
         self.assertFalse(w.framing.isVisible())
         self.assertFalse(w.framing.isEnabled())
-        self.assertFalse(w.settings_button.isEnabled())
+        self.assertEqual(w.settings_button.isEnabled(), w.recording and not w.busy)
         self.assertEqual((w.canvas.currentData(), w.framing.currentData(),
                           w.camera_zoom.value()), before)
         # Queued signals must also respect the state guard after inputs lock.

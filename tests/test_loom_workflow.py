@@ -186,6 +186,26 @@ class LoomWorkflowChecks(unittest.TestCase):
         self.assertFalse(self.window.busy)
         self.assertNotIn('copied', self.window.upload_detail.text())
 
+    def test_phase_timings_distinguish_setup_transfer_and_metadata_without_content(self):
+        self.window.prefs.setValue('loom_auto_titles', False)
+        with patch.object(glint.time, 'monotonic', return_value=100) as clock, \
+                patch.object(glint, 'diagnostic_event') as event:
+            self.window.upload()
+            for now, response in ((102, HELP), (112, video_response()),
+                                  (113, '  --title <title> New title'),
+                                  (115, '{}'), (118, '{}')):
+                clock.return_value = now
+                self.window._upload_process.finish(response)
+        phases = [call.kwargs for call in event.call_args_list
+                  if call.args == ('upload.phase',)]
+        self.assertEqual(phases, [
+            {'stage': stage, 'outcome': 'finished', 'elapsed_ms': elapsed}
+            for stage, elapsed in (('upload_help', 2000), ('transfer_command', 10000),
+                                   ('title_help', 1000), ('title', 2000), ('visibility', 3000))])
+        event.assert_any_call('upload.result', outcome='processing', elapsed_ms=18000)
+        self.assertEqual(qt.clipboard().text(), URL)
+        self.assert_unlocked()
+
     def test_upload_keeps_recording_and_navigation_available(self):
         process = self.begin_upload()
         self.assertFalse(self.window.busy)
@@ -266,7 +286,8 @@ class LoomWorkflowChecks(unittest.TestCase):
         process.finish(video_response())
         self.assertEqual(self.window.record_button.text(), 'Stop recording')
         self.assertEqual(self.window.status.text(), 'Recording')
-        self.assertFalse(self.window.settings_button.isEnabled())
+        self.assertTrue(self.window.settings_button.isEnabled())
+        self.assertFalse(self.window.quality.isEnabled())
         with patch.object(self.window, 'stop') as stop:
             self.window.toggle_record()
             stop.assert_called_once()

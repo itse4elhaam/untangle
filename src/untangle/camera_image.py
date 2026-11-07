@@ -1,11 +1,12 @@
 """V4L2 picture controls (contrast, exposure, focus…) and the page that edits them."""
+from .widgets import ScrollComboBox
 from .diagnostics import observed, failure as diagnostic_failure
 from dataclasses import dataclass, field
 import re
 import subprocess
 
 from PySide6.QtCore import Qt, QTimer, Signal
-from PySide6.QtWidgets import (QCheckBox, QComboBox, QFrame, QGridLayout, QHBoxLayout, QLabel,
+from PySide6.QtWidgets import (QCheckBox, QFrame, QGridLayout, QHBoxLayout, QLabel,
     QPushButton, QScrollArea, QSlider, QVBoxLayout, QWidget)
 
 
@@ -308,7 +309,7 @@ class CameraAdjustments(QWidget):
             return row + 1
         grid.addWidget(QLabel(control.label), row, 0)
         if control.kind == 'menu':
-            combo = QComboBox()
+            combo = ScrollComboBox()
             combo.setAccessibleName(control.label)
             for index, text in control.menu.items():
                 combo.addItem(text, index)
