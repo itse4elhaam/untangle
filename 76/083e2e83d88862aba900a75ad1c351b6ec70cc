@@ -1,0 +1,33 @@
+TODO.md
+  s_d8a44e289656bc::t_0e5ad2a75b12e5 1-30
+src/untangle/app.py
+  s_c1cf704570e5d5::t_7e93164b986dfb 60,68,71-72
+src/untangle/camera_devices.py
+  s_d8a44e289656bc::t_a9fb5820da436d 1-32
+tests/test_camera_selection.py
+  s_d8a44e289656bc::t_3f9088064ed472 1-42
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "76083e2e83d88862aba900a75ad1c351b6ec70cc",
+  "prompts": {},
+  "sessions": {
+    "s_c1cf704570e5d5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1aaf6-f8c8-7f21-bf45-b4aad65730ec",
+        "model": "unknown"
+      },
+      "human_author": "Elhaam Basheer Chaudhry <e4elhaam@gmail.com>"
+    },
+    "s_d8a44e289656bc": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1aaee-7b47-7161-b140-62c104c2542c",
+        "model": "unknown"
+      },
+      "human_author": "Elhaam Basheer Chaudhry <e4elhaam@gmail.com>"
+    }
+  }
+}
