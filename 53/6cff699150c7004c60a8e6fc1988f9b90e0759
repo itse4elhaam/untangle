@@ -1,0 +1,43 @@
+docs/research/screen-recording-experience.md
+  s_ae25019c42f49d::t_2c5fd5d2579455 1-53
+scripts/render-safe.sh
+  s_ae25019c42f49d::t_ee2e88c0551e43 14-15
+src/untangle/app.py
+  s_ae25019c42f49d::t_ab107b12c30e23 22,90,94,103,109-112,122-127,250-253,296-302,327,1168,1174-1176,1178,1249-1253,1255-1256,1611,1633,1927-1928,1952,1954-1955,2018-2019,2260,2262,2264-2275,2286-2287,2292-2295,2475,2481,3486,3493-3570,3572-3575,3630-3632,3727-3728
+src/untangle/theme.py
+  s_ae25019c42f49d::t_1c835a756e74e9 70-73
+tests/test_app.py
+  s_ae25019c42f49d::t_b6edc1fdee1f1d 104,146
+tests/test_overlay_input.py
+  s_ae25019c42f49d::t_2590136a1a4add 144-146,221,231-262
+tests/test_recording_controls.py
+  s_f72f1cdcd526aa::t_952f254d169171 1-65
+tests/test_screen_recording_experience.py
+  s_ae25019c42f49d::t_ddf2a98c8c55a3 1-135
+tests/test_window_state.py
+  s_ae25019c42f49d::t_fad7f920198e54 30
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "536cff699150c7004c60a8e6fc1988f9b90e0759",
+  "prompts": {},
+  "sessions": {
+    "s_ae25019c42f49d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1b050-8b9d-7951-9c41-c9ee8b7caa92",
+        "model": "unknown"
+      },
+      "human_author": "Elhaam Basheer Chaudhry <e4elhaam@gmail.com>"
+    },
+    "s_f72f1cdcd526aa": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1b7c0-da18-7b60-b20c-904fd4301df0",
+        "model": "unknown"
+      },
+      "human_author": "Elhaam Basheer Chaudhry <e4elhaam@gmail.com>"
+    }
+  }
+}
