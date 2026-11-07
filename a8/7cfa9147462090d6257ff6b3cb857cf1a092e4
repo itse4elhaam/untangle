@@ -1,0 +1,49 @@
+docs/google-drive.md
+  s_d8a44e289656bc::t_3ba7256648f2f6 19-46
+scripts/setup-archive.sh
+  s_d8a44e289656bc::t_41f6abea4e88db 1-37
+scripts/test.sh
+  s_c1cf704570e5d5::t_9cf15f7d813663 30
+src/untangle/app.py
+  s_c1cf704570e5d5::t_3ba44a9d03a5a3 1749,1751-1752,1759-1764
+src/untangle/archive.py
+  s_d8a44e289656bc::t_3a0e584a9a97e8 1-154
+src/untangle/drive_dialog.py
+  s_d8a44e289656bc::t_00de3ae19822fc 5,41,55-65,76,125-126,131-139
+src/untangle/recordings.py
+  s_d8a44e289656bc::t_7786a878cd7fe8 9,258-260,291-294,616-630,660,671-693,698-700
+tests/test_archive.py
+  s_d8a44e289656bc::t_67391169088ccf 1-95
+tests/test_discard_cleanup.py
+  s_d8a44e289656bc::t_09008af8a6f594 33-35,109-114,149-151,173,176,238,240
+tests/test_loom_workflow.py
+  s_d8a44e289656bc::t_ba152d0b52b40f 104-106
+tests/test_recordings.py
+  s_d8a44e289656bc::t_01f969cd269831 32-34,142-144,306-310
+tests/test_recordings_loom.py
+  s_d8a44e289656bc::t_45647f2a0b5cc3 23-25
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a87cfa9147462090d6257ff6b3cb857cf1a092e4",
+  "prompts": {},
+  "sessions": {
+    "s_c1cf704570e5d5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1aaf6-f8c8-7f21-bf45-b4aad65730ec",
+        "model": "unknown"
+      },
+      "human_author": "Elhaam Basheer Chaudhry <e4elhaam@gmail.com>"
+    },
+    "s_d8a44e289656bc": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1aaee-7b47-7161-b140-62c104c2542c",
+        "model": "unknown"
+      },
+      "human_author": "Elhaam Basheer Chaudhry <e4elhaam@gmail.com>"
+    }
+  }
+}
