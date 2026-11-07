@@ -188,7 +188,7 @@ class IdleAudioTests(unittest.TestCase):
         test_app.qt.processEvents()
         engine.begin_audio_monitor.assert_not_called()
         self.assertIsNone(self.w.idle_audio.owner)
-        self.w.audio_devices.restore.assert_called()
+        self.w.audio_devices.restore.assert_called_with(exiting=True)
 
     def test_pending_selection_change_discards_old_preparation(self):
         gate = threading.Event()

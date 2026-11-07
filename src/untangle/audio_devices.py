@@ -1,7 +1,7 @@
 """Pulse device selection. Enumeration never opens capture or changes profiles.
 
 Call prepare() only on a user recording start. Release OBS audio sources before
-restore(); it conservatively defers restoration while any card streams remain.
+restore(); it defers while card streams remain, allowing playback on app exit.
 """
 import json
 import os
@@ -256,7 +256,7 @@ class AudioDevices:
                 raise AudioDeviceError('Headset microphone did not become available. Reconnect it or select another microphone.')
             self.sleep(.1)
 
-    def restore(self):
+    def restore(self, *, exiting=False):
         with self._capture_lock:
             # A later capture can begin before a deferred profile restore.
             # Keep restoration evidence with the session that changed it.
@@ -264,22 +264,27 @@ class AudioDevices:
             if self.lease and self._lease_trace is not None:
                 self.audio_trace = self._lease_trace
             try:
-                return self._restore_traced()
+                deadline = self.clock() + (2 if exiting else 0)
+                while True:
+                    restored = self._restore_traced(exiting=exiting)
+                    if restored or self._capture_owner is not None or self.clock() >= deadline:
+                        return restored
+                    self.sleep(.1)
             finally:
                 self.audio_trace = trace
 
     @traced('restore', every=5)
-    def _restore_traced(self):
+    def _restore_traced(self, *, exiting=False):
         if self._capture_owner is not None:
             emit(self, 'restore.deferred', every=5, reason='capture_owned')
             return False
-        return self._restore_idle()
+        return self._restore_idle(exiting=exiting)
 
-    def _restore_idle(self):
+    def _restore_idle(self, *, exiting=False):
         """After releasing capture, restore only a profile still owned by us.
 
-        Return False when streams still use the card; retry at a later idle
-        boundary. Failure to inspect streams raises, leaving the lease intact.
+        Playback can follow a profile switch on exit, but microphone streams
+        always block restoration. Inspection failures leave the lease intact.
         """
         if not self.lease:
             return True
@@ -293,7 +298,7 @@ class AudioDevices:
         sources = {str(s['index']) for s in self.read('sources') if on_card(s, card)}
         sinks = {str(s['index']) for s in self.read('sinks') if on_card(s, card)}
         if (any(str(s.get('source')) in sources for s in self.read('source-outputs'))
-                or any(str(s.get('sink')) in sinks for s in self.read('sink-inputs'))):
+                or (not exiting and any(str(s.get('sink')) in sinks for s in self.read('sink-inputs')))):
             emit(self, 'restore.deferred', every=5, card=name, reason='active_streams',
                  prior_profile=selected, target_profile=previous)
             return False

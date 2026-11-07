@@ -139,6 +139,39 @@ class AudioDevicesTests(unittest.TestCase):
         self.assertTrue(self.devices.restore())
         self.assertEqual(self.card['active_profile'], 'off')
 
+    def test_exit_restores_listening_profile_while_music_is_playing(self):
+        self.devices.prepare()
+        self.data['sink-inputs'] = [dict(sink=43)]
+        self.assertFalse(self.devices.restore())
+        self.assertTrue(self.devices.restore(exiting=True))
+        self.assertEqual(self.card['active_profile'], 'a2dp-sink')
+        self.assertIsNone(self.devices.lease)
+
+    def test_exit_waits_for_microphone_stream_to_disappear(self):
+        self.devices.prepare()
+        self.data['source-outputs'] = [dict(source=42)]
+        def release(duration):
+            self.assertEqual(self.card['active_profile'], 'headset-head-unit-msbc')
+            self.sleep(duration)
+            self.data['source-outputs'] = []
+        self.devices.sleep = release
+        self.assertTrue(self.devices.restore(exiting=True))
+        self.assertEqual(self.card['active_profile'], 'a2dp-sink')
+        self.assertGreater(self.now, 0)
+
+    def test_exit_preserves_active_microphone_and_capture_owner(self):
+        self.devices.prepare()
+        owner = self.devices.hold_capture()
+        self.assertFalse(self.devices.restore(exiting=True))
+        self.assertEqual(self.now, 0)
+        self.devices.release_capture(owner)
+        self.data['source-outputs'] = [dict(source=42)]
+        self.assertFalse(self.devices.restore(exiting=True))
+        self.assertGreaterEqual(self.now, 2)
+        self.assertLess(self.now, 2.2)
+        self.assertEqual(self.card['active_profile'], 'headset-head-unit-msbc')
+        self.assertIsNotNone(self.devices.lease)
+
     def test_profile_failure_and_removal(self):
         command = self.devices.command
         def fail(*args):
