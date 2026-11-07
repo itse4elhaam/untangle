@@ -1,0 +1,31 @@
+README.md
+  s_c1cf704570e5d5::t_31044ab95c1aed 62-64,72-77
+bin/untangle-doctor
+  s_c1cf704570e5d5::t_c1008b43a284e6 4
+docs/linux-support.md
+  s_c1cf704570e5d5::t_aae69cdeca80c2 14-24,39-40,44,50-87,92-95
+scripts/install.sh
+  s_c1cf704570e5d5::t_b7b80e0e8308bb 10-11,17-18,21-87,91-93
+src/untangle/preflight.py
+  s_c1cf704570e5d5::t_03adb65765f6b1 1,9,17,22-23,86,119-248,256-257,259-262,272-273
+tests/test_dependency_install.py
+  s_c1cf704570e5d5::t_60a40c764dad73 1-105
+tests/test_install_preflight.py
+  s_c1cf704570e5d5::t_797272689a2aa1 39-61
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3b22cc6fe16dea24d30cf4a4c79ff7157dcfbefb",
+  "prompts": {},
+  "sessions": {
+    "s_c1cf704570e5d5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1aaf6-f8c8-7f21-bf45-b4aad65730ec",
+        "model": "unknown"
+      },
+      "human_author": "Elhaam Basheer Chaudhry <e4elhaam@gmail.com>"
+    }
+  }
+}
