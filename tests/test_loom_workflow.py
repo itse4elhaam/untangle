@@ -1,6 +1,6 @@
 """Loom UI workflow with synthetic files and signal-driven, inert processes.
 
-Run only this file: PYTHONPATH=src .venv/bin/python -m unittest discover -s tests -p test_loom_workflow.py -v
+Run only this file: UNTANGLE_TEST_PATTERN=test_loom_workflow.py ./scripts/test.sh
 No app entry point, media backend, account command, upload, or capture runs.
 """
 import importlib.util

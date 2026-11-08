@@ -1,154 +1,44 @@
 # Automatic local recording titles
 
-`untangle.local_titles` extracts a short audio sample locally, transcribes it
-with whisper.cpp, and sends only the transcript text to Codex CLI for a title.
-It does not upload the video or audio. Title generation uses the Codex service
-and existing Codex authentication, so the complete flow is **not offline**.
-The helper never renames files, changes recording identity, or uploads anything.
+Untangle extracts a short audio sample and transcribes it locally with whisper.cpp, then sends only transcript text to Codex CLI. Video and audio are not uploaded for naming. Codex uses existing authentication, so the complete flow is not offline. Automatic naming is opt-in.
 
-## UI contract
+The helper never renames files, changes recording identity or uploads. The caller owns those actions and any subsequent upload must use the resulting recording identity.
 
-```python
-from pathlib import Path
-from .local_titles import LocalTitleJob, local_title_capability
+## Prerequisites
 
-available, reason = local_title_capability()
-job = LocalTitleJob(parent)
-job.finished.connect(on_title_finished)
-job.start(Path(video))
-# Wire "Skip automatic title" to job.cancel.
-```
+Supply `ffmpeg` and `codex` on PATH, `whisper-cli` or `whisper-cpp`, and an existing local ggml model. The helper also checks `~/.local/bin/whisper-cli`. The default model is `~/.local/share/whisper.cpp/models/ggml-base.en.bin`, for English. Set `UNTANGLE_WHISPER_MODEL` for another compatible model. A missing explicit path fails rather than selecting another model.
 
-Call the helper on the Qt main thread with its event loop running. Keep a
-reference to the job until completion. `start` returns immediately and defers
-even prerequisite failures until the next event-loop turn. Each job is
-single-use; calling `start` twice raises `RuntimeError`.
+`local_title_capability()` checks command locations and model-file metadata only. It does not run processes, inspect authentication, validate model contents or prove account/model access. Starting a job checks required CLI options asynchronously. Nothing installs software, downloads a model or starts sign-in.
 
-The `finished(str title, str error)` signal fires once per started job:
+The original 2026-10-23 inspection found local prerequisites, including Codex CLI 0.163.0; authentication and Luna access were deliberately not checked. This is historical evidence, not current machine readiness. Existing whisper.cpp was chosen instead of adding a Python transcription dependency. An unrelated Python `whisper` import was not evidence of a working transcriber.
 
-- `(title, '')`: apply the title through the parent's existing naming and
-  identity flow, then skip the manual prompt. Any subsequent upload belongs to
-  the parent and must use its resulting recording identity.
-- `('', error)`: show the existing manual prompt. This includes unavailable
-  prerequisites, unsupported CLI options, transcription failure, insufficient
-  speech, invalid/generic output, model/access failure, timeout, and cancellation.
+## Lifecycle contract
 
-`cancel()` is idempotent. Before `start`, it is a no-op. After `start`, it kills
-the current process group and completes asynchronously when Qt reaps the helper.
-Cancelling before the queued work begins starts no process. The parent should
-ignore cancellation during shutdown and guard against stale recording identity.
-Deleting the job or its parent kills remaining work and removes temporary files;
-destruction does not promise a completion signal.
+Use `LocalTitleJob` on the Qt main thread with its event loop running. Connect `finished` before `start(Path(video))`, and retain the job until completion. Start returns immediately; even prerequisite failures arrive on a later event-loop turn. Each job is single-use; a second start raises `RuntimeError`.
 
-Ordinary completion and cancellation never wait for a process on the UI thread.
-Only destruction of a still-running job uses a final wait of at most one second
-after killing its process group. The explicit standalone Codex invocation avoids
-leaving a request running in a shared daemon.
+`finished(title, error)` fires once per started job under ordinary completion:
 
-## Local prerequisites
+- A title with an empty error goes through the caller's naming/identity flow and skips manual prompting.
+- An empty title with an error returns to manual naming, including missing prerequisites, insufficient speech, invalid output, model/access failure, timeout or cancellation.
 
-`local_title_capability()` returns `(True, '')` when local prerequisites exist,
-or `(False, actionable_reason)` otherwise. It only checks command locations and
-model-file metadata. It does not run a process, read authentication files, make
-an API call, validate model contents, or prove Codex account/model access.
-`start` verifies Codex execution options asynchronously before extracting audio.
+Cancel is idempotent and a no-op before start. It kills the current process group and completes asynchronously after Qt reaps it. Cancellation before queued work starts launches no process. The caller must ignore shutdown cancellation and guard against stale recording identity.
 
-Inspection on 2026-10-23 found all supported prerequisites on this machine:
+Deleting the job or parent stops work and removes temporary files without promising a completion signal. Ordinary completion/cancellation never waits on the UI thread. Destruction alone may wait up to one second after killing a running process group. Standalone Codex execution avoids leaving a request in a shared daemon.
 
-| Requirement | Installed location |
-| --- | --- |
-| ffmpeg | `/usr/bin/ffmpeg` |
-| whisper.cpp CLI | `~/.local/bin/whisper-cli` |
-| Existing English model | `~/.local/share/whisper.cpp/models/ggml-base.en.bin` |
-| Codex CLI 0.163.0 | `~/.nvm/versions/node/v24.15.0/bin/codex` |
+## Privacy and request limits
 
-The default capability here is therefore available, provided ffmpeg and Codex
-are on the app's `PATH`. The helper also checks `~/.local/bin/whisper-cli` when
-it is absent from `PATH`. No missing prerequisite was found for this supported
-path. Authentication and Luna access have deliberately not been checked.
+The sample uses the first audio stream and at most its first 120 seconds, so later topics may be missed. Temporary audio and request artifacts are private and removed on completion, failure, cancellation or destruction. Process diagnostics are discarded because they may contain transcript or account data.
 
-The app's Python environment has neither `whisper` nor `faster_whisper` nor
-PyTorch installed. The system Python has an unrelated `whisper` import without
-PyTorch; this is not evidence of a working OpenAI Whisper transcriber. The
-implementation uses the existing whisper.cpp executable instead of adding a
-Python dependency or alternate backend.
+Requests pin `gpt-6-luna`, medium reasoning and the **default service tier**. There is no retry with another model or tier. Transcript text travels as JSON-quoted stdin, never in command arguments; recording paths are excluded from Codex arguments. User configuration and project instructions are excluded, while existing authentication remains in use. Read-only, ephemeral execution disables tools and treats transcript instructions as untrusted data. Reported tool actions, execution failures, incomplete turns or model substitutions reject the result.
 
-On another machine, supply `ffmpeg` and `codex` on `PATH`, plus `whisper-cli` or
-`whisper-cpp`, and an existing local ggml model. Set `UNTANGLE_WHISPER_MODEL` to
-the model file to override the default path. An explicit missing model path fails
-instead of choosing another model. This helper never installs software,
-downloads models, or starts an authentication flow. The default `.en` model
-transcribes English; another compatible model can be selected explicitly.
+Stages have deadlines and bounded output. Generic or malformed titles fall back to manual naming; syntax checks cannot establish factual accuracy. Exact limits, subprocess arguments and validation live in [local_titles.py](../src/untangle/local_titles.py).
 
-## Limits and request isolation
-
-Audio extraction uses the first audio stream and at most the first **120
-seconds**, converted to mono 16 kHz signed 16-bit PCM in a private temporary
-directory. The ffmpeg protocol whitelist permits local files and pipes only;
-`-nostdin` prevents interactive input. The sample can miss a topic introduced
-later in the recording. Failure or an insufficient sample returns to manual
-naming.
-
-The per-stage deadlines are 10 seconds for CLI help, 30 seconds for extraction,
-90 seconds for transcription, and 45 seconds for Codex. Each process runs in a
-new Linux session so cancellation also kills descendants, including the native
-Codex binary launched by its JavaScript wrapper. Combined stdout/stderr is
-limited to 256 KiB per stage. Transcript and title-file reads are limited to
-24,000 and 4,096 bytes. Temporary audio, transcript, instructions, schema, and
-response files are removed on completion, failure, cancellation, and destruction.
-Diagnostics are discarded rather than logged or displayed because they can
-contain transcript or account data.
-
-The installed CLI's `--help` verifies noninteractive execution, stdin prompts,
-`--ignore-user-config`, `--strict-config`, `--ephemeral`, `--output-schema`,
-`--output-last-message`, and read-only sandboxing. The title request pins:
-
-```text
-codex --no-daemon exec --ignore-user-config --strict-config --ephemeral
-  --skip-git-repo-check --sandbox read-only --model gpt-6-luna
-  -c model_reasoning_effort="medium" -c service_tier="priority"
-  ... --json --output-schema SCHEMA --output-last-message RESULT -
-```
-
-These are individual process arguments, not a shell command. The transcript is
-JSON-quoted and passed on stdin; recording paths and transcript text never
-appear in Codex arguments. The working directory contains only temporary job
-artifacts. User configuration and project instructions are excluded; existing
-Codex authentication remains in use. Shell execution, unified execution,
-plugins/hooks, browser/computer use, apps, image tools, memory tools, agent
-delegation, and web search are disabled. The prompt explicitly forbids tools
-and treats all transcript instructions as untrusted data. A reported tool action,
-execution error, incomplete turn, or reported model substitution rejects the
-result. Read-only sandboxing remains in effect even if the model ignores the
-prompt.
-
-The helper never retries with another model or service tier. It requires a
-structured title with 3-10 words and at most 80 characters and rejects empty,
-generic, multiline, malformed, or unsafe output. Factual accuracy still depends
-on transcription and generation; syntax validation cannot prove a title's
-meaning.
-
-Official OpenAI references checked alongside the installed CLI:
-
-- [CLI execution options](https://developers.openai.com/codex/cli/reference/).
-- [Configuration reference](https://developers.openai.com/codex/config-reference/)
-  documents reasoning effort and that legacy `fast` maps to request tier
-  `priority`; the [configuration schema](https://developers.openai.com/codex/config-schema.json)
-  also accepts explicit `priority`.
-- [GPT-6 Luna](https://developers.openai.com/api/docs/models/gpt-6-luna) supports
-  medium reasoning. These sources do not prove access for this account.
+Historical reference checks used the [CLI reference](https://developers.openai.com/codex/cli/reference/), [configuration reference](https://developers.openai.com/codex/config-reference/), [schema](https://developers.openai.com/codex/config-schema.json) and [Luna model page](https://developers.openai.com/api/docs/models/gpt-6-luna). Those checks recorded medium reasoning support and legacy fast-to-priority mapping, not account access. They are not a current vendor verification or the configured tier.
 
 ## Safe focused verification
 
 ```bash
-env -u DISPLAY -u WAYLAND_DISPLAY -u RECIT_TEST_MIC_HARDWARE \
-  -u RECIT_HARDWARE_PRIVATE_DISPLAY -u RECIT_NATIVE_PRIVATE_DISPLAY \
-  -u RECIT_TEST_XVFB PYTHONPATH=src QT_QPA_PLATFORM=offscreen \
-  .venv/bin/python -m unittest discover -s tests -p test_local_titles.py -v
+UNTANGLE_TEST_PATTERN=test_local_titles.py ./scripts/test.sh
 ```
 
-Tests use synthetic files and inert Qt processes. They cover the success and
-fallback contracts, cancellation, timeout, parent destruction, process groups,
-temporary cleanup, CLI arguments, output bounds, and title/event validation.
-They never run Codex inference, transcribe audio, inspect private recordings,
-capture devices, or authenticate.
+[Synthetic tests](../tests/test_local_titles.py) cover cancellation, cleanup, bounds and request isolation without inference, transcription, private recordings, capture or authentication. Passing them does not prove Codex account access.

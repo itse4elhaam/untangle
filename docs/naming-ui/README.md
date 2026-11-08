@@ -1,9 +1,11 @@
 # Recording names
 
+Historical capture pack. The manifest identifies its source; these images are not the current release. Use [UI standards](../ui-standards.md) for isolated reproduction.
+
 Actual Qt dialogs rendered with synthetic paths. No app launch, recording,
 playback, filesystem rename, or Loom request is used in these captures.
 
-Reproduce with `.venv/bin/python scripts/render-naming-ui.py`.
+The historical renderer was `scripts/render-naming-ui.py`; use the isolation policy in [AGENTS.md](../../AGENTS.md), not a direct host invocation. The current wrapper has no naming-only mode.
 The manifest records the source and screenshot hashes.
 
 - `finished-light.png` and `finished-dark.png`: prompt after a successful save.

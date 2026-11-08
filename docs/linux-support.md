@@ -1,143 +1,99 @@
-# Linux support and CLI installation
+# Linux support and installation
 
-Untangle runs on x86-64 Linux. X11 with OBS 27 is the existing recording path.
-OBS 30–33 use X11 EGL for the native Qt preview. On Wayland, including Omarchy's
-Hyprland desktop, the UI runs through Xwayland and OBS captures the selected
-screen or window through PipeWire and the desktop portal.
+Untangle targets x86-64 Linux. X11 supports OBS 27 or 30–33; modern OBS uses EGL
+for the native Qt preview. Wayland, including Omarchy/Hyprland, requires OBS
+30–33, Xwayland for the UI, and PipeWire/desktop-portal screen selection.
+OBS 28/29 and versions after 33 are rejected because the bindings call native C
+functions whose layouts must be reviewed. See
+[preflight.check](../src/untangle/preflight.py), [engine.py](../src/untangle/engine.py),
+and [native-version tests](../tests/test_modern_obs.py).
 
-The Wayland path has automated synthetic coverage. It is not yet verified by a
-live Omarchy recording. Passing the doctor command establishes software and
-version prerequisites, not camera, microphone, GPU or portal operation.
+Synthetic coverage does not establish a successful Omarchy recording. Passing
+preflight establishes software prerequisites, not camera, microphone, GPU,
+encoder loading or portal operation. Live Omarchy validation remains outstanding
+as of the 2026-11-09 documentation audit.
 
-## Install from a checkout
+## Check before installing
 
-Every installation runs the prerequisite checks, on every platform. If a
-required program is missing or its version is incompatible, the installer shows
-the repair commands and asks whether to install or upgrade those prerequisites.
-Declining stops the installation. No Untangle runtime is staged until all native
-prerequisites pass. If Python itself is missing, a shell bootstrap offers to
-install it before running the detailed checks.
-
-Automatic repair uses the native package manager on Arch/Omarchy, Debian/Ubuntu
-and derivatives, Fedora/RHEL and derivatives, and openSUSE. An unknown platform
-still gets the checks, but unsupported systems and package managers require
-manual repair. Untangle itself remains an x86-64 Linux application.
-
-An agent can check the checkout before making installation changes, including
-over SSH. Run these commands from the repository root:
+From the checkout, including over SSH:
 
 ```bash
 ./scripts/install.sh --check --json --wayland
 ```
 
-The JSON object includes `ok`, individual `checks` with `name`, `ok` and `detail`,
-and installation hints. Exit status 0 means the checks passed, 1 means a missing
-or incompatible prerequisite, and 2 means invalid arguments. `--json` implies
-check-only mode. Checks do not start Qt, OBS, audio, Bluetooth or portal sessions.
-They load libobs only to read its version and inspect plugin files.
+Omit `--wayland` for X11. `--json` implies check-only mode, even with `--yes`.
+Exit codes are 0 for success, 1 for failed prerequisites and 2 for invalid arguments.
+Checks never start Qt, OBS capture, audio, Bluetooth or portal sessions. They load
+libobs only to read its version and inspect plugin files. Missing Python produces
+a failing report; check-only mode never installs it.
 
-Check-only mode never installs Python or invokes a package manager. If Python
-is missing, it returns a failing JSON report. OBS 28/29 and versions after 33 are
-rejected. Do not bypass the guard: the Python bindings call native C functions.
-OBS 27 is accepted only for X11 capture, not Wayland.
-
-To install with the interactive prerequisite prompt:
+## Install only when explicitly authorized
 
 ```bash
 ./scripts/install.sh --wayland
 ```
 
-For X11, omit `--wayland`. For an agent or unattended terminal, explicitly
-approve prerequisite installation:
-
-```bash
-./scripts/install.sh --yes --wayland
-```
-
-Without `--yes`, a noninteractive run stops if prerequisites need repair. With
-`--yes`, sudo uses noninteractive mode too: missing privileges fail instead of
-waiting for a password. The plan remains visible in the output. `--check` and
-`--json` remain read-only even when combined with `--yes`.
-
-For Wayland setup over SSH, set `XDG_CURRENT_DESKTOP` to the target desktop when
-a screen-sharing backend must be installed. For Omarchy:
+Every installation checks native prerequisites before staging a runtime. The
+interactive prompt offers repairs; declining stops installation. Noninteractive
+runs stop when repair is needed unless explicitly authorized with `--yes`.
+That option also makes sudo noninteractive, so missing privileges fail.
+For Omarchy over SSH, identify the target desktop when planning portal packages:
 
 ```bash
 XDG_CURRENT_DESKTOP=Hyprland ./scripts/install.sh --yes --wayland
 ```
 
-The installer installs only packages needed by failed checks using configured
-repositories. It does not add repositories or force downgrades. If those
-repositories cannot provide supported versions, the mandatory fresh-process
-recheck fails and Untangle is not installed. A successful package-manager exit
-alone never counts as a passing version check.
+[preflight.py](../src/untangle/preflight.py) owns package plans for Arch,
+Debian/Ubuntu, Fedora/RHEL and openSUSE families. Unknown platforms require manual
+repair. Plans use configured repositories only, with no added repositories or
+forced downgrades. Arch repair includes `pacman -Syu`, potentially upgrading the
+whole system because [partial upgrades are unsupported](https://wiki.archlinux.org/title/System_maintenance#Partial_upgrades_are_unsupported).
+A fresh-process version recheck must pass even if the package manager succeeds.
+Approved package changes are not rolled back after later failure.
 
-Arch repairs include `pacman -Syu`, which can upgrade the entire system. This is
-shown before consent because [partial upgrades are unsupported](https://wiki.archlinux.org/title/System_maintenance#Partial_upgrades_are_unsupported).
-Other families use apt-get, dnf or zypper. Package-manager errors, unavailable
-packages and missing administrator privileges stop installation.
+Missing/old uv is installed through pip into
+`~/.local/share/glint/bootstrap-tools`, linked under `~/.local/share/glint/tools-bin`.
+This leaves system Python and unrelated uv installations alone. See uv's
+[pip installation guidance](https://docs.astral.sh/uv/getting-started/installation/#pypi).
+These external guidance links were retained, not revalidated in this audit.
 
-If uv is missing or too old, the plan installs it with pip in a private tool
-environment at `~/.local/share/glint/bootstrap-tools`, with a command link in
-`~/.local/share/glint/tools-bin`. This follows uv's [supported pip installation
-method](https://docs.astral.sh/uv/getting-started/installation/#pypi) and does not
-modify the system Python or an unrelated uv installation. The installer and
-doctor include this private command directory in their own PATH.
+[scripts/install.sh](../scripts/install.sh) stages pinned Python dependencies and
+checks their versions before replacing the runtime. Failure preserves the old
+environment; the previous successful one remains at
+`~/.local/share/glint/venv.previous`. Keep the checkout in place because installed
+launchers point to it. Rerunning refreshes dependencies, launchers and icons.
+Installation does not launch Untangle, authenticate, upload or change desktop settings.
 
-After native checks pass, the installer creates a separate Python environment,
-installs the pinned dependencies there and checks their versions before replacing
-the previous environment. Dependency failure leaves the old runtime in place.
-The previous successful environment is retained at
-`~/.local/share/glint/venv.previous`. Installation never starts Untangle, signs
-in to a service, uploads files, or changes desktop settings. System packages
-change only after the prerequisite prompt is accepted or `--yes` is provided.
-Approved package changes are not rolled back if a later check fails; the
-existing Untangle runtime remains in place.
-
-Keep this checkout in place. The CLI and desktop entry point to its launchers.
-Rerunning the installer refreshes dependencies, launchers and icons. Existing
-settings, recording paths and compatibility identifiers stay unchanged.
-
-After installation, from a terminal in the graphical session:
+After installation, in the graphical session:
 
 ```bash
 untangle-doctor --json --wayland --session
 ```
 
-This also checks the installed PySide6 Essentials, Addons and Shiboken versions
-against 6.11.1. `--session` checks DISPLAY and session-bus environment variables;
-it does not contact the services or request permission. Plugin file presence is
-checked, but loading each plugin and verifying encoders happens at engine startup.
-A session can still fail despite having the correct packages installed.
+`--session` checks environment variables without contacting services. Runtime
+checks include Essentials, Addons and Shiboken 6.11.1; see the
+[Qt crash rationale](testing.md#reasons-for-the-qt-safeguards).
 
-## Recording on Wayland
+## Wayland operation and remaining validation
 
-Launch Untangle explicitly from the application menu or `untangle`. Switch to
-Screen mode and choose a screen or window in the system picker. Use
-**Choose / change source** to retry a cancelled permission request or select a
-different source. Recording stays disabled while permission or video negotiation
-is pending. After two minutes without video, the pending session is released.
-Selection remains alive across microphone preparation and ordinary setup changes;
-it is released when switching to camera-only mode, opening Recordings, or quitting.
+In an explicitly launched session, choose Screen and select a source in the
+system picker. **Choose / change source** retries cancellation or changes source.
+Recording stays disabled during permission/video negotiation; a two-minute timeout
+releases a pending session. Selection survives microphone preparation and ordinary
+setup changes, but ends on camera-only mode, idle library navigation, or quit.
+Browsing Recordings during a stable active take preserves its portal source.
 
-The camera is composited into the recorded video. Global X11 shortcuts, pointer
-zoom, the desktop camera bubble, and camera presentation switching are disabled
-on Wayland. Use the recorder or tray menu to stop/save and pause. If no system
-tray is available, the recorder stays visible so stop/save remains reachable.
-The portal controls which displays/windows are available; Untangle does not use
-an X11 window catalogue to select native Wayland windows.
+The camera is composited into the recording. X11 global shortcuts, pointer zoom,
+the desktop camera bubble and presentation switching are disabled. Stop/save or
+pause through the recorder/tray; without a tray the recorder stays visible.
+The portal, not an X11 catalogue, determines available native Wayland windows.
+See [Wayland UI tests](../tests/test_wayland_ui.py).
 
-## Validation before calling Omarchy supported
-
-Automated tests use private devices, networking and runtime directories through
-`./scripts/test.sh`. They cover version guards, native structure layouts, portal
-readiness and ownership, UI gating, and failed installation preserving the runtime.
-They also run the existing X11/UI/audio regression tests with synthetic sources.
-
-Live validation requires explicit authorization and an Omarchy machine. Check
-screen and native Wayland-window selection, cancellation/retry, multi-monitor
-scaling, camera composition, microphone and desktop audio, pause/resume, stop and
-remux, portal termination, and exit cleanup. Review the saved MP4 with playback
-explicitly authorized. Test an existing X11 / OBS 27 installation too. Include
-Intel/AMD/NVIDIA results as available; a single GPU does not establish all-driver
-compatibility. No upload or authentication is part of this validation.
+Before claiming Omarchy support, obtain authorization for screen/window selection,
+cancel/retry, scaling, camera/audio, pause/resume, remux, portal termination and
+exit-cleanup checks. Playback needs explicit authorization too. Recheck X11/OBS 27
+and available Intel/AMD/NVIDIA systems; one GPU cannot establish all drivers.
+No authentication/upload is required. Safe regression owners are
+[test_preflight.py](../tests/test_preflight.py) and
+[test_install_preflight.py](../tests/test_install_preflight.py); run through
+[the isolated runner](testing.md).

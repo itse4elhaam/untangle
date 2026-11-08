@@ -1,5 +1,7 @@
 # Theo Browne: UI hill climbing
 
+Historical research. External claims retain their original dates and confidence limits; they were not reverified during documentation cleanup. Current contributor policy is in [AGENTS.md](../../AGENTS.md).
+
 Research note, 2026-11-06. Scope: identify the recent video and assess whether its approach transfers to automated UX iteration for Untangle, a Linux Qt recording app. No application launch or device access was performed.
 
 ## Video identification
