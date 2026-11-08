@@ -1,5 +1,7 @@
 # UI/UX benchmarks for Untangle
 
+Historical research. External claims retain their original dates and confidence limits; they were not reverified during documentation cleanup. Current contributor policy is in [AGENTS.md](../../AGENTS.md).
+
 Verified 2026-11-06 from official product pages, docs, release notes, and demos. Product-site claims are labeled as claims; no competitor application was launched or independently usability-tested.
 
 ## Recommendations

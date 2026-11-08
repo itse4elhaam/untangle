@@ -1,5 +1,7 @@
 # PR #26 visual evidence
 
+Historical capture pack. The manifest identifies its source; these images are not the current release. Use [UI standards](../ui-standards.md) for isolated reproduction.
+
 Actual production Qt widgets, offscreen Fusion, captured from the updated integration branch at 960 × 760; Settings 560 × 640 and guide 720 × 640. Native capture is replaced by a painted synthetic source. Engine, audio devices, subprocesses, playback, accounts and uploads are mocked. Rendering ran inside bubblewrap with private devices, runtime and networking, with only this output folder writable. No app entry point, hardware capture, audible playback, OAuth or service activation.
 
 The manifest records the UI/renderer source hashes and PNG hashes. These are review captures, not native OBS/output or optical quality verification. Camera ranking is tested with synthetic capabilities, not demonstrated by the single mock camera here.

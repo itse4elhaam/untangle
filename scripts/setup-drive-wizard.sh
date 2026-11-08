@@ -223,7 +223,7 @@ for executable in python3 uv obs ffmpeg v4l2-ctl pactl busctl systemctl xdg-open
         case "$executable" in
             python3) say 'sudo apt install python3 python3-venv' ;;
             uv) say 'If pipx is installed: pipx install uv. Otherwise follow https://docs.astral.sh/uv/getting-started/installation/' ;;
-            obs) say 'apt-cache policy obs-studio; install obs-studio only if the candidate is supported OBS 27. Otherwise arrange a supported runtime.' ;;
+            obs) say 'Run ./scripts/install.sh --check --json (add --wayland for Wayland). OBS 27 supports X11; OBS 30-33 supports X11/Wayland. Follow docs/linux-support.md before installing.' ;;
             ffmpeg) say 'sudo apt install ffmpeg' ;;
             v4l2-ctl) say 'sudo apt install v4l-utils' ;;
             pactl) say 'sudo apt install pulseaudio-utils' ;;

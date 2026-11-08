@@ -1,129 +1,73 @@
-# Loom CLI integration
+# Loom integration constraints
 
-Checked 23 October 2026 against official Atlassian sources and the installed
-`~/.local/share/glint/twg` help. Only help and static CLI code were inspected.
-No account probe, login, logout, upload, remote mutation, or capture was run.
+Original inspection: 2026-10-23, official Atlassian sources and installed
+`~/.local/share/glint/twg` help/static code only. No account probe, login, logout,
+upload or capture ran. External/installed-CLI observations below were not
+revalidated in the 2026-11-09 documentation audit.
 
-## Commands and payloads
+## CLI evidence and uncertainty
 
-Use `-o json --output-summary none` to receive JSON directly on stdout, with
-stderr kept separate. This disables file-backed agent summaries, as described
-in Atlassian's [output reference](https://github.com/atlassian/twg-cli/blob/main/skills/twg/references/OUTPUT.md).
-Run these commands through nonblocking QProcess only after the relevant user
-action. The helpers in `untangle.loom` never execute commands.
+[loom.py](../src/untangle/loom.py) owns arguments, capability detection and parsers;
+[app.py](../src/untangle/app.py) runs nonblocking QProcess operations after user
+actions. [test_loom.py](../tests/test_loom.py) and
+[test_loom_workflow.py](../tests/test_loom_workflow.py) own payload/workflow coverage.
+Use JSON stdout with summaries disabled; see the
+[output reference](https://github.com/atlassian/twg-cli/blob/main/skills/twg/references/OUTPUT.md)
+and [command catalog](https://developer.atlassian.com/cloud/twg-cli/commands/commands-catalog/).
 
-* Account identity: `twg whoami -o json --output-summary none`. Help describes
-  `data.accountId`, `data.name`, and `data.email`. A successful response proves
-  Atlassian identity, not Loom membership, upload entitlement, or AI settings.
-  `parse_account_status` returns `connected`, `disconnected`, or `unknown`;
-  `auto_titles_entitled` and `auto_titles_enabled` remain `None`.
-* Disconnect: `twg logout -o json --output-summary none`. This revokes OAuth and
-  removes the selected TWG login profile and its credentials, affecting other
-  products using that profile. No Loom-only disconnect command was found.
-* Inspect a saved video: `twg loom video get <id-or-url> -o json --output-summary none`.
-  `parse_video_info` returns `available`, `deleted`, or `unknown`, plus `url`,
-  `title`, `remote_id`, `visibility`, and `is_complete`. The installed single-video response
-  uses `data.id`, `data.name`, and `data.url`; `name` becomes the stored title.
-  It does not request `isComplete`; `is_complete` remains `None` unless an
-  actual boolean is returned. A successful get cannot establish processing
-  completion when that field is absent.
-* Upload: `twg loom video upload <absolute-file> -o json --output-summary none`.
-  Probe `--help` first and cache verified help for the current app session,
-  invalidating it when the CLI path, inode, size, or timestamps change. Failed
-  checks and unstatable binaries are not cached. The installed CLI uses a
-  positional file and has no `--visibility`. Apply `twg loom video visibility set <id-or-url> --visibility owner|workspace|public -o json --output-summary none`
-  separately. Newer releases can advertise visibility on upload. The
-  [official changelog](https://developer.atlassian.com/cloud/twg-cli/changelog/)
-  also documents exit code 3 when publication succeeds but visibility fails.
-* Title edit: probe `loom video rename --help`,
-  then `twg loom video rename <id-or-url> --title <title> -o json --output-summary none`.
-  `rename_title_args` and `upload_args` require advertised title options before
-  using them. The default upload title is the exact filename stem. The installed
-  upload command preserves the original extension even with `--title`, so a
-  differing returned title is corrected with rename after successful publication.
-  Older upload commands without `--title` use the same rename step. A failed
-  rename keeps the uploaded link and a warning, and sharing permissions are
-  still applied. `supports_option` matches option declarations exactly.
+`whoami` establishes Atlassian identity, not Loom membership, upload entitlement
+or AI settings. `logout` revokes OAuth and removes the selected TWG profile,
+affecting other products on that profile; no Loom-only disconnect was found.
 
-These operations are listed in the official [command catalog](https://developer.atlassian.com/cloud/twg-cli/commands/commands-catalog/).
-The installed upload response contains `data.video`, including `id`, `name`,
-`url`, `isComplete`, and `isArchived`, plus a final `data.transfer` byte count.
-`parse_upload_result` returns `uploaded`, `processing`, `uncertain`, or `failed`.
-It preserves a known remote link on partial failure so retry cannot silently
-create a duplicate. It never extracts URLs from arbitrary error messages.
+Probe upload/rename help rather than assuming flags. The inspected uploader used
+a positional file, lacked upload visibility, and preserved the original extension
+even with a title override. The app therefore corrects differing titles after
+publication and applies sharing separately when needed. Failed rename/sharing
+must retain the link and warning. See the [changelog](https://developer.atlassian.com/cloud/twg-cli/changelog/)
+for publication-success/visibility-failure exit code 3.
 
-The installed CLI does not wire intermediate transfer callbacks to stdout,
-and no public JSON upload-progress event contract was found. Show an
-indeterminate indicator. `parse_upload_progress` accepts labeled human
-uploading/processing lines and an actual percentage if present; a final
-`transfer.bytes` count never becomes invented progress.
+The inspected CLI had no intermediate JSON transfer-progress contract. A final
+byte count cannot become invented progress. Local `upload.phase` durations include
+CLI processing waits, cannot isolate network throughput or Loom processing, and
+establish no speed improvement. Timings exclude filenames, links and output.
 
-Local diagnostics emit `upload.phase` timings for upload help, the transfer
-command, title help, title updates and sharing permissions, plus total time on
-`upload.result`. Only fixed stage/outcome labels and milliseconds are added;
-filenames, links and command output are excluded. The transfer-command duration
-includes any processing the CLI waits for. It cannot measure network throughput
-or isolate Loom processing time. These measurements do not establish a speed
-improvement; recording quality is unchanged.
+New uploads default to Anyone with the link. Saved private/workspace choices
+still apply; changing the preference does not alter existing Loom videos.
 
-## Default sharing
-
-New uploads default to **Anyone with the link** (`public`). Saved sharing
-choices still apply, including Only me and My Loom workspace. For an older
-installation, select Anyone with the link in Untangle's sharing settings if
-a private choice was saved previously. This does not change existing Loom
-videos. Change their permissions in Loom separately.
-
-## Remote deletion
-
-The inspected video-get query does not request deletion flags. Null results,
-404/not-found errors, forbidden/private responses, archived videos, and network
-failures cannot prove deletion. Keep the existing link and report `unknown`.
-The parser accepts an explicit future `data.status: "DELETED"` with a video ID
-as deletion evidence; the synthetic test is not a claim that the current CLI
-emits it. Only confirmed deletion may call `UploadStore.mark_remote_deleted`.
-No destructive probe is appropriate.
+Video-get did not request deletion flags or `isComplete`; missing completion
+remains unknown. Null/404, private/forbidden, archived and network failures cannot
+prove deletion. Keep links. Only explicit deletion evidence permits
+`UploadStore.mark_remote_deleted`; the synthetic future `DELETED` payload is not
+a claim that today's CLI emits it. Never probe destructively.
 
 ## Auto titles
 
-Loom says auto titles are available on every plan and need a transcript with
-speech and at least 30 seconds of video. Editing the title before generation
-can prevent it. The optional **Let Loom generate titles when available** setting
-omits `--title` and skips the post-upload rename. It is off by default. See [Loom's auto-title guidance](https://support.atlassian.com/loom/docs/how-auto-titles-summaries-and-chapters-work/).
+The inspected [Loom guidance](https://support.atlassian.com/loom/docs/how-auto-titles-summaries-and-chapters-work/)
+said every plan could use auto titles with speech/transcript and at least 30 seconds
+of video; editing first could prevent generation. Imported-video support remained
+unresolved in [LOOM-21](https://jira.atlassian.com/browse/LOOM-21).
+The CLI normally supplies the filename even without an override. Preserve returned
+titles and promise no AI output.
 
-This does **not** establish auto-title support for imported Untangle videos.
-Atlassian's [request to apply AI features to uploaded videos](https://jira.atlassian.com/browse/LOOM-21)
-is still unresolved. The CLI normally supplies the source filename when no
-override is given. Preserve Loom's returned title and avoid promising AI output.
+**Let Loom generate titles when available** is off by default and omits explicit
+titling/rename. It cannot verify or enable a remote setting. No supported public
+CLI reads/enables auto titles; the changelog hid `loom settings get` because its
+field was internal-only. Do not invent properties or use undocumented APIs.
+Prior guidance pointed to video **Settings > Set Defaults > Enhancements/Loom AI**,
+with admin policy at [Workspace Settings](https://www.loom.com/settings/workspace).
 
-There is no supported public CLI to read or enable auto titles. The changelog
-says `loom settings get` is hidden because its backing field is internal-only.
-Do not invent JSON properties or call undocumented settings APIs. A local
-preference to accept Loom titles cannot verify or enable a remote setting.
+## Metadata ownership
 
-Loom's guidance directs users to a video's **Settings > Set Defaults**, then
-**Enhancements** or **Loom AI**, depending on their plan. Workspace admins can
-manage workspace-wide AI policy at [Workspace Settings](https://www.loom.com/settings/workspace).
+One app-owned [UploadStore](../src/untangle/upload_store.py) serves library and
+upload controller at explicit `STATE / 'uploads.json'`. It mutates metadata only,
+never videos/Loom. Atomic private writes preserve unreadable/malformed/unsupported
+files and expose errors; failed reads must not erase links.
 
-## Local metadata
-
-`UploadStore(STATE / 'uploads.json')` owns an explicit metadata file. `get`,
-`update`, `remove`, `rename`, and `mark_remote_deleted` never mutate videos or
-Loom. Writes use a private temporary file and atomic replacement; unreadable,
-malformed, or unsupported metadata remains untouched and exposes `store.error`.
-Mutations raise `OSError` when the original cannot be read safely.
-
-Records bind to device, inode, size, and modification time. Replaced or modified
-files do not inherit a previous link. Missing folders never trigger pruning.
-Call `rename(old, new)` after a successful local rename and `remove(path)` after
-local deletion or an explicit Forget action. Constructor recovery changes
-`uploading` and `processing` to `uncertain`, retaining any known remote metadata.
-One app-owned store instance should serve both the library and upload controller.
-
-Uploads snapshot the source identity before starting. Completion must still
-match that identity before attaching metadata or copying a link, including
-after a separate sharing-permissions command. A local file replaced during
-transfer must never inherit the original video's remote link.
-
-See [UI evidence and safe reproduction](loom-ui/README.md) for synthetic
-screenshots, render commands, and the remaining live-validation limits.
+Records bind to device, inode, size and modification time. Missing folders never
+prune history. Transfer completion must still match the original identity before
+attaching metadata or copying links, including after sharing. Rename metadata only
+after successful local rename; remove it after local deletion or explicit Forget.
+Interrupted uploading/processing becomes uncertain with known links retained:
+check Loom before retrying to avoid duplicates. See
+[test_upload_store.py](../tests/test_upload_store.py) and
+[synthetic UI evidence/limits](loom-ui/README.md).

@@ -4,37 +4,25 @@
 
 A clear recording beats another long message.
 
-Untangle records your screen, your camera, or both. Review the video in the app, give it a useful name, and share it when you're ready. Your recordings stay on your computer until you choose to upload them.
+Untangle is a native Linux screen and camera recorder built with Qt and OBS. Record, review, name, and optionally share a video. Recordings stay on your computer until you choose an upload, including opting in for an individual take.
 
-This is a native Linux app built with Qt and OBS. Python handles the interface and recording controls. OBS handles capture, composition, and encoding.
+## Record and review
 
-## What it does
+Choose Camera or Screen, select your devices, check the microphone, and use **Start recording** in the bottom bar. Camera mode offers landscape, social canvases, source-size output and zoom. Recordings lets you review saved videos, rename them, recover MKVs, and share through Loom or Google Drive.
 
-- Record a whole screen, a selected window, or your camera in a chosen canvas.
-- Choose landscape, Reels / Shorts, square, or 4:5 output. Frame your camera with 100–300% zoom and Reset; pointer zoom remains separate.
-- See microphone levels before recording and listen to a quick audio check.
-- Reduce microphone noise with RNNoise and limit loud peaks.
-- Browse, play, rename, delete, and copy paths to saved recordings.
-- Connect your Loom account and upload a selected video through Atlassian's official CLI.
+Recording starts in MKV for interruption recovery; FFmpeg prepares MP4 without re-encoding after stopping. Optional smaller camera files trade some detail for size. Screen encoding stays unchanged.
 
-Recording starts in MKV so an interrupted session has a better chance of recovery. Screen recordings retain the original encoding settings. Smaller camera recording files are an optional setting, off by default. After you stop, FFmpeg prepares an MP4 without re-encoding. Existing recordings are uploaded unchanged. The local file stays yours if sharing fails.
+[Using Untangle](docs/usage.md) covers controls, audio, sharing and recovery. [Google Drive setup](docs/google-drive.md) covers the manual setup wizard and credentials.
 
-## Where it stands
+## Linux support
 
-Untangle targets x86-64 Linux. The existing X11 / OBS 27 path remains available.
-Arch and Omarchy support adds OBS 30–33 with an EGL preview; Wayland recording
-uses the system screen/window picker through PipeWire and requires Xwayland.
-This path has synthetic regression coverage; live Omarchy validation is pending.
-See [Linux support and CLI installation](docs/linux-support.md) for requirements
-and the remaining validation gate. Output options are 4K or 1080p at 30 fps, with Intel VAAPI preferred when available.
+Untangle targets x86-64 Linux. OBS 27 supports X11; OBS 30–33 adds EGL preview and Wayland screen/window selection through PipeWire, the desktop portal and Xwayland. The Wayland path has synthetic coverage; live Omarchy validation remains pending. See [requirements and installation](docs/linux-support.md).
 
-Bluetooth audio still needs work. A OnePlus test produced silence through native PulseAudio, PipeWire, and OBS capture. We haven't established why that happened or why the reported Meet/Loom path worked. Microphone checks and visible levels help detect failures. They don't prove audio quality. See the [diagnostic evidence](docs/testing.md).
+Bluetooth silence remains unresolved. A OnePlus test produced silence through native PulseAudio, PipeWire and OBS; why the reported Meet/Loom path worked is unknown. Levels and microphone checks detect some failures but do not prove usable saved audio. See [verification evidence](docs/testing.md).
 
-Browser-tab and region capture are outside this baseline. The separate [capture-selection PR](https://github.com/itse4elhaam/dotfiles/pull/29) remains unmerged. The Clearline interface has light and dark themes, visible device controls, and a large preview.
+## Development
 
-## Set up development
-
-You'll need Python 3.10+, `uv` 0.9+, supported system OBS libraries and plugins, FFmpeg, `v4l2-ctl`, `pactl`, and X11 or Xwayland. Bluetooth preparation also uses `busctl` to check the live connection.
+With Python 3.10+, uv 0.9+ and the [system prerequisites](docs/linux-support.md):
 
 ```bash
 uv venv --python /usr/bin/python3 .venv
@@ -42,94 +30,22 @@ uv pip install --python .venv/bin/python -r requirements.txt
 ./scripts/test.sh
 ```
 
-The safe runner requires bubblewrap (`bwrap`). It isolates devices, audio and Bluetooth servers, desktop sockets, and networking, and makes the host filesystem read-only. It fails if isolation is unavailable. Use this runner rather than direct unittest discovery.
+The runner requires bubblewrap and fails closed if isolation is unavailable. It isolates devices, audio/desktop services and networking with a read-only host filesystem. Use it for all tests; launching the app can open capture devices and requires explicit authorization.
 
+Qt is pinned to 6.11.1 because 6.12.0 crashed the tested Python 3.10 runtime during repeated widget updates. Keep Essentials, Addons and Shiboken matched.
 
-The test command uses offscreen Qt, mocks, and synthetic media. It doesn't open your camera or microphone. T3's Untangle project has setup and headless-test commands too. Neither runs automatically.
+## Installation and existing data
 
-Qt is pinned to 6.11.1. Version 6.12.0 crashed the tested Python 3.10 runtime during repeated widget updates. Keep Essentials, Addons, and Shiboken on matching versions.
-
-## Install when you're ready
-
-Check prerequisites without installing, launching, or opening devices:
+Check prerequisites without installing or opening devices:
 
 ```bash
 ./scripts/install.sh --check --json
-# Include Wayland requirements even from SSH or an agent session:
+# Include Wayland requirements:
 ./scripts/install.sh --check --json --wayland
 ```
 
-Installation always runs the prerequisite check. If software is missing or has
-an unsupported version, it shows a repair plan and asks before installing it.
-Untangle installation continues only after a fresh check passes:
+Installation is a separate manual action. Follow the [installation guide](docs/linux-support.md); tests and cloning do not redirect an installed app.
 
-```bash
-./scripts/install.sh
-# On Omarchy / Wayland:
-./scripts/install.sh --wayland
-```
+Untangle was formerly RecIt. Compatibility paths remain `~/Videos/RecIt`, `~/.local/share/glint` and `~/.local/state/glint`, alongside existing settings and single-instance identifiers. See [migration provenance and cutover](docs/migration.md) and [brand assets](docs/brand.md).
 
-For an agent without interactive input, `./scripts/install.sh --yes --wayland`
-approves the displayed prerequisite plan. Without `--yes`, missing prerequisites
-stop noninteractive installation. Automatic repairs support Arch, Debian/Ubuntu,
-Fedora/RHEL and openSUSE families; other platforms still run the mandatory check
-and stop with manual instructions if repair is needed.
-
-After installation, `untangle-doctor --json --wayland --session` checks the
-installed Qt versions, software, and graphical-session environment without
-contacting capture or audio services. Missing dependencies and unsupported
-versions produce a nonzero exit status and installation hints.
-
-Installation changes your local launchers and desktop entry. It points `untangle` and the compatibility `recit` command at this checkout and reuses the existing private runtime. Cloning the repo or running tests doesn't perform that cutover.
-
-After installation, open Untangle from your application launcher or run `untangle`. The recorder itself opens selected capture devices, including live microphone monitoring when enabled.
-
-For Loom, open Sharing to check your connected account or connect through Atlassian's sign-in flow. Uploads show activity and elapsed time, then a Loom link you can open or copy. Recordings keeps the link and upstream title across restarts. Connecting does not upload a recording. The optional official CLI needs to be installed separately; [the usage guide](docs/usage.md#loom) covers setup, account limits, and AI-title availability.
-
-For Google Drive setup or sign-in recovery, run `./scripts/setup-drive-wizard.sh`.
-The [Drive guide](docs/google-drive.md) covers prerequisites, Desktop OAuth, private
-credentials, destination, optional scheduling and cleanup checks. The same guide
-is available in Settings and the Google Drive dialog. The wizard leaves all
-installation, sign-in, uploads and timer activation to explicit manual actions.
-
-## Recording controls
-
-Use the visible setup controls on the left to choose the recording mode, capture source, camera, and microphone. Less frequent settings are under More options. Choose Camera for camera-only video, or Screen for screen and camera recording. In Camera mode, choose your canvas and Fit or Fill above the preview. Social presets use Fill to crop the center; Fit keeps the whole image with bars. Camera zoom has a slider, −/+ buttons, percentage and Reset beside the camera selector. Framing edits update the existing feed. Quality remains under More options. In screen mode, choose your display or a specific window. Check the microphone, then start recording.
-
-- `Ctrl + Shift + F9` starts recording or stops and saves.
-- `Ctrl + Shift + F10` pauses or resumes.
-- `Ctrl + Shift + F8` toggles pointer zoom during screen recording.
-- `Escape` cancels a pending start.
-
-The Light/Dark selector changes the whole app and remembers your choice. Quick audio check opens below the preview; it records only after you choose Record sample and plays only after you choose Play sample.
-
-Recordings opens the local library with thumbnails. Select a video, then choose Play to watch it, rename it, copy its path, delete it, or upload it to Loom.
-
-## Find your way around
-
-```text
-src/untangle/    app, recording engine, audio helpers, and player
-tests/         regression checks and synthetic fixtures
-scripts/       setup helpers and headless test runner
-bin/           Untangle and legacy RecIt launchers
-assets/        editable logos and app icons
-docs/          usage, debugging, verification, and migration notes
-```
-
-[Using Untangle](docs/usage.md) covers camera shapes, window capture, microphone selection, Loom, and recovery. [Audio troubleshooting](docs/audio-troubleshooting.md) explains the structured logs. [Verification](docs/testing.md) records what has been tested and what still needs hardware validation.
-
-## Existing RecIt data
-
-Untangle was called RecIt. The standalone repo preserves its app history. Your settings, recordings, logs, and Loom credentials keep their existing locations so a rename doesn't reset your setup.
-
-Recordings remain in `~/Videos/RecIt`. Logs remain in `~/.local/state/glint/glint.log`. The private runtime stays in `~/.local/share/glint`, and the existing settings and single-instance identifiers remain compatible.
-
-See [migration notes](docs/migration.md) before switching an existing installation. The [brand files](docs/brand.md) contain the editable logo assets.
-
-## Local diagnostics
-
-Untangle writes structured application diagnostics to `~/.local/state/glint/diagnostics.jsonl` when you next start the app. The current file and three rotated backups are limited to 2 MiB each and use private file permissions. The existing launcher/OBS output remains in `glint.log`.
-
-Diagnostics record process revision, operation boundaries, typed failures and code locations, recording transitions, native window and parent-frame geometry, input-region bounds, Qt popup/grabber state, and a recording heartbeat every ten seconds. A separate watchdog records a stalled UI thread without calling Qt from that thread. Camera input-region requests are checked; a rejected region makes that bubble pass clicks through for the remainder of the process. Tray controls remain available.
-
-Diagnostics do not collect recording contents, window titles, recording filenames, OAuth credentials, exception messages, or upload payloads. Nothing is uploaded. Application diagnostics begin on the next manual launch; installing an update does not restart an existing instance.
+Local diagnostics exclude recording contents, window titles, recording filenames, credentials, exception messages and upload payloads. Nothing is uploaded. Logs live under `~/.local/state/glint`; [audio troubleshooting](docs/audio-troubleshooting.md) explains investigation. Updates do not restart an existing instance.

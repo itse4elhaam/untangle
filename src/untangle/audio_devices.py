@@ -1,6 +1,7 @@
 """Pulse device selection. Enumeration never opens capture or changes profiles.
 
-Call prepare() only on a user recording start. Release OBS audio sources before
+prepare() is used by authorized preview, check, and recording lifecycles.
+Release OBS audio sources before
 restore(); it defers while card streams remain, allowing playback on app exit.
 """
 import json
