@@ -1,0 +1,21 @@
+src/untangle/floating.py
+  s_db91926fadf35d::t_55e375cd9d1fab 9,132-133,299-300,305-310,342-344,349-350,380,412,421-422,434
+tests/test_floating.py
+  s_db91926fadf35d::t_7234c21a4031ec 198-211
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "39bae61f0cb3eeee8ddc54486a60bc740a3f4efa",
+  "prompts": {},
+  "sessions": {
+    "s_db91926fadf35d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1bca4-9115-7c90-9afb-9d0777762f5e",
+        "model": "unknown"
+      },
+      "human_author": "Elhaam Basheer Chaudhry <e4elhaam@gmail.com>"
+    }
+  }
+}
