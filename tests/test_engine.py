@@ -313,6 +313,60 @@ class CameraPreviewTests(unittest.TestCase):
                 self.configure(window_id=window_id)
         e._obs.obs_scene_release.assert_not_called()
 
+    def test_bottom_cut_is_applied_before_scene_add_and_zoom(self):
+        e = self.engine
+        e._source.side_effect = [300, 301, 302]
+        e._dimensions.side_effect = [(1920, 1080), (1920, 1032), (640, 480)]
+        def add(scene, source):
+            if source == 301:
+                self.assertEqual(e._dimensions.call_args, call(301, "Cropped screen capture"))
+            return 201 if source == 301 else 202
+        e._obs.obs_scene_add.side_effect = add
+        self.configure(screen_cut_bottom=48)
+        self.assertEqual(e._source.call_args_list[1], call(
+            "xshm_input", "RecIt screen",
+            {"screen": 0, "show_cursor": True, "advanced": True, "cut_bot": 48}))
+        e._obs.obs_source_release.assert_any_call(300)
+        self.assertEqual(e._screen_dimensions, (1920, 1032))
+        self.assertIn(call(301, 'crop_filter', 'Untangle recorded area', {
+            'relative': False, 'left': 0, 'top': 0, 'cx': 1920, 'cy': 1032}), e._filter.call_args_list)
+        e.set_screen_zoom(3, 1, 1)
+        self.assertEqual(e._screen_dimensions, (1920, 1032))
+
+    def test_bottom_cut_rejects_invalid_and_unsupported_requests(self):
+        for value in (-1, True, 1.5, "48"):
+            with self.subTest(value=value), self.assertRaises(EngineError):
+                self.configure(screen_cut_bottom=value)
+        for options in ({"mode": "camera"}, {"window_id": 123}, {}):
+            self.engine.portal_capture = not options
+            with self.subTest(options=options), self.assertRaises(EngineError):
+                self.configure(screen_cut_bottom=48, **options)
+        self.engine._source.assert_not_called()
+
+    def test_strip_rejects_a_different_physical_display(self):
+        self.engine._source.side_effect = [300, 301, 302]
+        self.engine._dimensions.side_effect = [(1920, 1080)]
+        with self.assertRaisesRegex(EngineError, 'display does not match'):
+            self.configure(screen_cut_bottom=120, screen_expected_size=(3840, 2160))
+        self.engine._obs.obs_scene_add.assert_not_called()
+        self.engine._obs.obs_source_release.assert_any_call(300)
+
+    def test_strip_expected_size_requires_positive_physical_dimensions(self):
+        for size in ((0, 1080), (True, 1080), (1920,), [1920, 1080]):
+            with self.subTest(size=size), self.assertRaises(EngineError):
+                self.configure(screen_cut_bottom=120, screen_expected_size=size)
+        self.engine._source.assert_not_called()
+
+    def test_bottom_cut_fails_closed_on_empty_or_inconsistent_dimensions(self):
+        for dimensions in ([(1920, 48)], [(1920, 1080), (1920, 1080)],
+                           [(1920, 1080), (1919, 1032)]):
+            with self.subTest(dimensions=dimensions):
+                self.setUp()
+                self.engine._dimensions.side_effect = dimensions
+                with self.assertRaises(EngineError):
+                    self.configure(screen_cut_bottom=48)
+                self.engine._obs.obs_scene_add.assert_not_called()
+
     def test_desktop_keeps_xshm_and_has_no_window_dimensions(self):
         self.configure(screen=1)
         self.assertEqual(self.engine._source.call_args_list[0],

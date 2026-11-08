@@ -4,6 +4,7 @@ from __future__ import annotations
 from .widgets import ScrollComboBox
 
 import json
+import math
 import os
 from pathlib import Path
 import shutil
@@ -13,13 +14,13 @@ import sys
 import threading
 import time
 
-from PySide6.QtCore import Qt, QTimer, Signal, QThread, QProcess, QUrl, QSettings, QEvent, QPropertyAnimation, QEasingCurve
+from PySide6.QtCore import Qt, QTimer, Signal, QThread, QProcess, QUrl, QSettings, QEvent, QPropertyAnimation, QEasingCurve, QRect
 from PySide6.QtGui import QColor, QDesktopServices, QIcon, QPainter, QPen, QPixmap, QShortcut, QKeySequence, QCursor
 from .diagnostics import event as diagnostic_event, failure as diagnostic_failure, observed, snapshot, install as install_diagnostics
 from .floating import CameraBubble, ZoomMotion, release_window_input
 from .windows import WindowCatalog
 from .recordings import Recordings
-from .recording_controls import RecordingControls
+from .recording_controls import RecordingControls, CONTROL_STRIP_HEIGHT
 from .camera_image import CameraAdjustments, CameraControlError, restore_saved
 from .naming import next_recording_path, recording_files
 from .naming import recording_title, rename_recording
@@ -249,6 +250,8 @@ class Window(QMainWindow):
         self._capture_preview_detached = False
         self._shortcut_available = {}
         self._changing_pause = False
+        self._configured_control_strip = None
+        self._control_strip_invalidated = False
         self._take_target = ''
         self._bubble_size_fraction = None
         self._diagnostic_at = 0.
@@ -295,11 +298,12 @@ class Window(QMainWindow):
         self.bubble.resized.connect(self.resize_camera_overlay)
         self.recording_controls = RecordingControls()
         self.recording_controls.pause_requested.connect(self.toggle_pause)
-        self.recording_controls.stop_requested.connect(self.stop)
+        self.recording_controls.stop_requested.connect(self.stop_or_cancel)
         self.recording_controls.restart_requested.connect(self.restart_recording)
         self.recording_controls.discard_requested.connect(self.discard_recording)
         self.recording_controls.open_requested.connect(self.reveal)
         self.recording_controls.hide_requested.connect(self.hide_recording_controls)
+        self.recording_controls.strip_invalidated.connect(self.control_strip_display_changed)
         VIDEOS.mkdir(parents=True, exist_ok=True)
         STATE.mkdir(parents=True, exist_ok=True)
         self.upload_store = UploadStore(STATE / 'uploads.json')
@@ -318,6 +322,11 @@ class Window(QMainWindow):
         self.build()
         self.set_theme(self.prefs.value('theme', 'light'))
         self.setup_tray()
+        for display in QApplication.screens():
+            display.geometryChanged.connect(self.control_strip_display_changed)
+            display.logicalDotsPerInchChanged.connect(self.control_strip_display_changed)
+        QApplication.instance().screenAdded.connect(self.control_strip_display_changed)
+        QApplication.instance().screenRemoved.connect(self.control_strip_display_changed)
         self.restore_preferences()
         self.hotkeys = Hotkeys(self)
         self.hotkeys.toggle.connect(self.toggle_record)
@@ -548,7 +557,7 @@ class Window(QMainWindow):
         for index, screen in enumerate(QApplication.screens()):
             geo = screen.geometry()
             ratio = screen.devicePixelRatio()
-            self.screen.addItem(f'{screen.name()} · {round(geo.width() * ratio)} × {round(geo.height() * ratio)}', index)
+            self.screen.addItem(f'{screen.name() or f"Screen {index + 1}"} · {round(geo.width() * ratio)} × {round(geo.height() * ratio)}', index)
         controls.addWidget(self.screen)
         self.window_row = QWidget()
         window_layout = QHBoxLayout(self.window_row)
@@ -984,9 +993,13 @@ class Window(QMainWindow):
         width, height = self.output_dimensions()
         if hasattr(self, 'preview_frame'):
             self.preview_frame.set_canvas(width, height)
-        self.capture_caption.setText(f'{capture} · {width} × {height}')
+        strip_note = ' · control strip not recorded' if self.control_strip_spec() else ''
+        self.capture_caption.setText(f'{capture} · {width} × {height}{strip_note}')
         self.capture_caption.setToolTip(f'{capture} · {width} × {height} · 30 fps')
-        self.preview_title.setText(f'{"Camera" if self.mode == "camera" else "Screen"} · {width} × {height}')
+        heading = f'{"Camera" if self.mode == "camera" else "Screen"} · {width} × {height}'
+        if strip_note:
+            heading = f'Output · {width} × {height} · bottom strip excluded'
+        self.preview_title.setText(heading)
         self.preview_title.setToolTip(self.capture_caption.toolTip())
         self.camera_zoom_value.setText(f'{self.camera_zoom.value()}%')
         self.update_camera_controls()
@@ -1167,7 +1180,8 @@ class Window(QMainWindow):
         screen = QApplication.screens()[self.screen.currentIndex()]
         self.bubble.arrange(screen, self.bubble_size_fraction(), self.position.currentData(),
             self.shape.currentData(), self.mask_path,
-            mirror_mask=self.capture_kind.currentData() == 'window' and self.mirror.isChecked())
+            mirror_mask=self.capture_kind.currentData() == 'window' and self.mirror.isChecked(),
+            bounds=self.camera_recording_bounds())
         ratio = self.bubble.devicePixelRatioF()
         self.engine.resize_camera_preview(round(self.bubble.width() * ratio), round(self.bubble.height() * ratio))
 
@@ -1495,6 +1509,8 @@ class Window(QMainWindow):
         self._live_update_failed = False
         self.configuration_valid = False
         self._portal_configured = False
+        self._configured_control_strip = None
+        self._control_strip_invalidated = False
         try:
             self.hide_bubble()
             camera = self.camera.currentData()
@@ -1508,6 +1524,10 @@ class Window(QMainWindow):
                 self.notice('Camera off. Turn it on to record in Camera mode.')
                 return
             self.engine.set_canvas(*self.output_dimensions())
+            strip = self.control_strip_spec()
+            crop = ({'screen_cut_bottom': strip[3], 'screen_expected_size': (
+                round(strip[1].width() * strip[0].devicePixelRatio()),
+                round(strip[1].height() * strip[0].devicePixelRatio()))} if strip else {})
             self.engine.configure(mode=self.mode, camera=camera, microphone=microphone,
                 microphone_processing=self.clean_microphone.isChecked(),
                 desktop_audio=recording_setup and self.desktop_audio.isChecked(), shape=self.shape.currentData(),
@@ -1515,7 +1535,8 @@ class Window(QMainWindow):
                 position=self.position.currentData(), screen=self.screen.currentData() or 0,
                 mirror=self.mirror.isChecked(), floating_camera=self.uses_floating_camera(), window_id=window_id,
                 camera_zoom=self.camera_zoom.value() / 100, framing=self.effective_framing(),
-                camera_offset=self.camera_offset())
+                camera_offset=self.camera_offset(), **crop)
+            self._configured_control_strip = strip
             if self.mode == 'camera' and self.canvas.currentData() == 'raw':
                 self.engine.set_canvas(*self.output_dimensions())
                 self.update_setup_summary()
@@ -1609,7 +1630,8 @@ class Window(QMainWindow):
     def show_bubble(self):
         screen = QApplication.screens()[self.screen.currentIndex()]
         self.bubble.arrange(screen, self.bubble_size_fraction(), self.position.currentData(), self.shape.currentData(), self.mask_path,
-            mirror_mask=self.capture_kind.currentData() == 'window' and self.mirror.isChecked())
+            mirror_mask=self.capture_kind.currentData() == 'window' and self.mirror.isChecked(),
+            bounds=self.camera_recording_bounds())
         self.bubble.recording = self.recording
         self.bubble.show()
         try:
@@ -1667,7 +1689,7 @@ class Window(QMainWindow):
             self.zoom_motion.last_time = time.monotonic()
             return
         screen = QApplication.screens()[self.screen.currentIndex()]
-        bounds = screen.geometry()
+        bounds = self.camera_recording_bounds() or screen.geometry()
         pointer = QCursor.pos()
         x, y = self.zoom_motion.x, self.zoom_motion.y
         if bounds.contains(pointer):
@@ -1725,6 +1747,13 @@ class Window(QMainWindow):
             self.count_timer = QTimer(self)
             self.count_timer.timeout.connect(self.countdown_tick)
             self.count_timer.start(1000)
+            if self._configured_control_strip:
+                try:
+                    self.update_capture_controls()
+                    self.place_recording_controls()
+                except ValueError as exc:
+                    self.cancel_countdown()
+                    self.notice(f'Could not reserve recording controls: {exc}')
 
     def preflight_summary(self):
         target = ('Camera only' if self.mode == 'camera' else
@@ -1734,7 +1763,8 @@ class Window(QMainWindow):
         camera = self.camera.currentText() if self.camera.currentData() else 'off'
         microphone = self.microphone.currentText() if self.microphone.currentData() else 'off'
         desktop = 'on' if self.desktop_audio.isChecked() else 'off'
-        return (f'{target} · Camera: {camera}\nMicrophone: {microphone} · Desktop audio: {desktop}\n'
+        strip_note = 'Bottom control strip is excluded from the video.\n' if self._configured_control_strip else ''
+        return (strip_note + f'{target} · Camera: {camera}\nMicrophone: {microphone} · Desktop audio: {desktop}\n'
                 'Audio readiness is checked before capture. A meter does not verify saved speech.')
 
     def countdown_tick(self):
@@ -1757,6 +1787,7 @@ class Window(QMainWindow):
             self.audio_start_failed('Microphone check cancelled. Recording has not started.')
             return
         if self.counting:
+            self.recording_controls.finish()
             self.count_timer.stop()
             self.start_timer.stop()
             self.counting = False
@@ -1834,6 +1865,7 @@ class Window(QMainWindow):
 
     @observed("app.audio_start_failed")
     def audio_start_failed(self, error):
+        self.recording_controls.finish()
         self._take_auto_upload = False
         emit(self, 'preparation.aborted', level='warning', reason='preparation_failed_or_cancelled')
         self._audio_generation += 1
@@ -1917,6 +1949,10 @@ class Window(QMainWindow):
             self.recording_error_baseline = len(self.engine.errors)
             self.presentation_amount = self.presentation_target = self.presentation_committed = 1. if self.mode == 'camera' else 0.
             self._recording_compact = self.mode == 'camera' and self.compact_recordings.isChecked()
+            if self.live_controls_safe():
+                self.recording_controls.update_state(state='starting', elapsed='--:--',
+                    target=self.capture_target_label(), microphone='Starting this take', hide_allowed=False)
+                self.place_recording_controls()  # Validate placement before any output starts.
             self.engine.start(self.record_path, compact=self._recording_compact)
             encoder = self.engine.stats().get('encoder', '')
             self.encoder_label.setText('Intel hardware · H.264' if encoder == 'ffmpeg_vaapi' else 'CPU encoding · H.264')
@@ -1951,9 +1987,17 @@ class Window(QMainWindow):
             self.tray.setIcon(self.record_icon())
             self.engine_notice(('Recording. ' + self.recording_stop_hint() + '.\n')
                 + (f'Microphone: {source}' if source else 'Microphone off'))
-            if self.window_controls_safe() and not self.isVisible():
-                self.show_recording_controls()
+            self.update_capture_controls()
         except Exception as exc:
+            if self.recording or self.engine.recording is True:
+                diagnostic_failure('application.operation.failed', exc)
+                self.recording = True
+                self.recording_error = f'Recording startup failed after capture began: {exc}'
+                if self._capture_window_state is None:
+                    self._capture_window_state = self.windowState() & ~Qt.WindowMinimized
+                self.stop()  # Keep audio/source ownership until the existing save worker finishes.
+                return
+            self.recording_controls.finish()
             diagnostic_failure('application.operation.failed', exc)
             emit(self, 'record_start.failed', level='warning', exception_type=type(exc).__name__)
             self._take_auto_upload = False
@@ -2261,7 +2305,10 @@ class Window(QMainWindow):
             return
         self._changing_pause = True
         try:
-            if self.paused and not self.window_controls_safe():
+            if self.paused and self._control_strip_invalidated:
+                self.notice('Display layout changed. Stop and restart the take before resuming.')
+                return
+            if self.paused and not self.live_controls_safe():
                 if not self.isVisible() and not self.other_stop_route():
                     self.notice('Resume needs a reachable Stop control. Open Untangle from More, '
                                 'or restore the tray or stop shortcut, then resume.')
@@ -2288,6 +2335,9 @@ class Window(QMainWindow):
         except Exception as exc:
             diagnostic_failure('application.operation.failed', exc)
             self.notice(f'Could not change pause state: {exc}')
+            if self._control_strip_invalidated:
+                self.stop()
+                return
             self.restore_capture_window()
             if self.paused:
                 self.show_recording_controls()
@@ -3490,6 +3540,70 @@ class Window(QMainWindow):
                 self.recording_timer.style().unpolish(self.recording_timer)
                 self.recording_timer.style().polish(self.recording_timer)
 
+    def control_strip_spec(self):
+        if (self.mode != 'screen' or self.wayland_session()
+                or self.capture_kind.currentData() != 'screen'):
+            return None
+        displays = QApplication.screens()
+        # Source-index order is not a cross-toolkit monitor identity. Keep the
+        # existing paused-controls path when the display cannot be identified.
+        if len(displays) != 1:
+            return None
+        display = self.screen_for_controls()
+        geometry = QRect(display.geometry())
+        if (geometry.left() or geometry.top() or geometry.width() < 700
+                or geometry.height() < CONTROL_STRIP_HEIGHT + 240):
+            return None
+        return (display, geometry, CONTROL_STRIP_HEIGHT,
+                math.ceil(CONTROL_STRIP_HEIGHT * display.devicePixelRatio()))
+
+    def camera_recording_bounds(self):
+        strip = self._configured_control_strip
+        if strip is None:
+            return None
+        display, geometry, height, pixels = strip
+        return geometry.adjusted(0, 0, 0, -height).intersected(display.availableGeometry())
+
+    def live_controls_safe(self):
+        return self.window_controls_safe() or bool(
+            self._configured_control_strip and not self._control_strip_invalidated)
+
+    def place_recording_controls(self):
+        if self._configured_control_strip and not self._control_strip_invalidated:
+            display, geometry, height, pixels = self._configured_control_strip
+            if display.geometry() != geometry or math.ceil(height * display.devicePixelRatio()) != pixels:
+                raise ValueError('Display layout changed. Restart the take.')
+            self.recording_controls.show_in_strip(display, height)
+        else:
+            self.recording_controls.show_on_screen(self.screen_for_controls())
+
+    def stop_or_cancel(self):
+        if self.recording:
+            self.stop()
+        else:
+            self.cancel_countdown()
+
+    def control_strip_display_changed(self, *_):
+        if not self._configured_control_strip:
+            return
+        self.recording_controls.hide()
+        if self.recording:
+            self._control_strip_invalidated = True
+            if not self.paused and not self.busy:
+                self.toggle_pause()
+            self.recording_controls.hide()
+            if not self.paused:
+                return  # A failed pause requests Stop without reopening capture UI.
+            self.restore_capture_window()
+            if not self.isVisible():
+                self.show()
+            self.notice('Display layout changed. Recording paused; stop and restart this take.')
+        elif self.counting or self.preparing_audio:
+            self.cancel_countdown()
+            self.notice('Display layout changed. Start the take again.')
+        else:
+            self.schedule_configure()
+
     def capture_target_label(self):
         if self.mode != 'screen':
             return 'Camera only'
@@ -3526,7 +3640,12 @@ class Window(QMainWindow):
         self.update_capture_controls()
 
     def update_capture_controls(self):
-        if not hasattr(self, 'recording_controls') or not self.recording:
+        if not hasattr(self, 'recording_controls'):
+            return
+        if not self.recording:
+            if self._configured_control_strip and (self.counting or self.preparing_audio):
+                self.recording_controls.update_state(state='starting', elapsed='--:--',
+                    target=self.capture_target_label(), microphone='Preparing this take', hide_allowed=False)
             return
         now = self.pause_started if self.paused else time.monotonic()
         elapsed = max(0, int(now - self.started - self.paused_duration))
@@ -3552,12 +3671,12 @@ class Window(QMainWindow):
     def show_recording_controls(self):
         if not self.recording or self.busy or self.mode != 'screen':
             return
-        if not self.window_controls_safe() and not self.paused:
+        if not self.live_controls_safe() and not self.paused:
             self.toggle_pause()
             if not self.paused:
                 return
         self.update_capture_controls()
-        self.recording_controls.show_on_screen(self.screen_for_controls())
+        self.place_recording_controls()
 
     def screen_for_controls(self):
         screens = QApplication.screens()
@@ -3569,7 +3688,9 @@ class Window(QMainWindow):
             self.recording_controls.hide()
 
     def hide_for_capture(self):
-        if not self.other_stop_route():
+        strip_stop = (self._configured_control_strip and self.recording_controls.isVisible()
+                      and not self._control_strip_invalidated)
+        if not self.other_stop_route() and not strip_stop:
             self.notice('Untangle stays visible because no other Stop control is available. '
                         'It may appear in a full-screen recording.')
             return
