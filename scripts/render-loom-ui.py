@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Render integrated Loom widgets with synthetic data and inert Qt processes.
 
-    .venv/bin/python scripts/render-loom-ui.py --output /tmp/untangle-loom-ui
+Historical evidence renderer; use the repository's isolation policy.
+The current render-safe.sh wrapper has no Loom-only mode.
 
 No app entry point, real processes, media, capture, authentication or uploads.
 """

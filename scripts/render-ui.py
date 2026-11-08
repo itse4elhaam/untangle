@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Render production Qt widgets safely; no OBS, desktop, devices, or playback.
 
-Run from any directory, using the repository venv:
-    .venv/bin/python scripts/render-ui.py --output docs/ui-baselines
+Run from the repository root through the isolated wrapper:
+    ./scripts/render-safe.sh docs/ux-overhaul/matrix ui
 Use --scenes recorder library while another contributor changes other views.
 """
 import argparse

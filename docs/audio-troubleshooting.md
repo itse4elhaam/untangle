@@ -1,21 +1,59 @@
 # Audio troubleshooting
 
-The existing stderr log at `~/.local/state/glint/glint.log` now includes lines starting with `recit.audio ` followed by one JSON object. The launcher's 10 MB rotation is unchanged. Each new capture session gets a `session` ID before device preparation, shared by the UI, device worker, OBS engine, restoration and saved-file validation. Live monitoring starts a session with `purpose:"idle"`; recording reuses that session and emits `record.requested` and `idle.handoff` when it takes the live source. `purpose` records the capture origin and stays `idle` through the recording, save and restoration. A genuinely new recording capture uses `purpose:"record"`; each Quick audio check uses `purpose:"check"`. A deferred profile restore retains the session that originally changed the profile, even if a newer capture has begun. `elapsed_ms` uses a monotonic clock; `duration_ms` measures individual operations. Failures name their `phase` and `exception_type`, without copying raw exception or command output.
+Inspect existing logs only. A new microphone check, Bluetooth profile change,
+capture or audible playback requires explicit authorization; use
+[the safe verification rules](testing.md).
 
-To inspect one capture session after it finishes, find its `session.start` and filter by that session:
+The launcher writes stderr to `~/.local/state/glint/glint.log` with 10 MB rotation.
+Audio records start with `recit.audio ` and one JSON object. Find a finished
+capture's `session.start`, then filter its session:
 
 ```bash
 rg 'recit.audio ' ~/.local/state/glint/glint.log
 rg '"session":"YOUR_SESSION_ID"' ~/.local/state/glint/glint.log
 ```
 
-Look for `selection.chosen`, `profile.selected`, `profile.requested`, `profile.ready`, and `source.resolved`. The exact Pulse source and BlueZ card are separate fields. `changed:false` means the hands-free profile was already active. `connection.checked` identifies the live BlueZ signal separately from PipeWire's potentially stale connection property. `source.resolved` reports mute, per-channel Pulse volume values, input sample specification and OBS's 48000 Hz rate. A 16000 Hz headset input remains limited by that input even though OBS mixes at 48000 Hz. Untangle does not change mute or gain.
+## Follow the evidence
 
-`obs.source` distinguishes requested, created and retained capture sources. `filters.backend`, `filter.applied` and `filter.failed` show the actual suppression backend and limiter settings or fallback. `route.verified` records the server's actual attachment; `route.mismatch` records both `requested_source` and `actual_source` plus the stream index. A device ID requested from OBS alone does not prove attachment.
+A session starts before device preparation and follows capture, release,
+restoration and file validation. `purpose` means origin, not current UI state.
+An idle monitor handed to recording stays `idle`; a fresh recording is `record`
+and Quick audio check is `check`. Deferred restoration retains the session that
+changed the profile. `elapsed_ms` is monotonic; `duration_ms` measures one operation.
 
-`idle.preparing`, `idle.opened`, `idle.verified`, `idle.stopping`, `idle.stopped` and `idle.discarded` describe the live monitor lifecycle. `idle.failed` reports a monitor failure without copying its error text. `idle.telemetry`, `readiness.telemetry`, `health.telemetry` and Quick audio check's `check.telemetry` contain packet/nonzero-packet counts, packet age, state and post-filter levels. Summaries come from polling at most once per five seconds, with explicit readiness/final-check results and warnings at event boundaries. There is no logging in native callbacks and no per-frame log. JSON `null` for a level represents no finite dBFS value. A readiness timeout distinguishes missing/stale packets from zero-only audio through these fields. Quick audio check shows the friendly headset label and keeps the exact source ID in its tooltip and logs.
+Read selection/profile/source resolution first. Pulse source and BlueZ card are
+separate identities; `changed:false` means hands-free mode was already active.
+`connection.checked` separates live BlueZ connection evidence from potentially
+stale PipeWire properties. Source metadata reports mute, gain and input format;
+16000 Hz input is still bandwidth-limited even when OBS mixes at 48000 Hz.
+Untangle does not change mute/gain.
 
-Follow `record_start`, `record_stop`, `audio_release`, and `restore` events after capture. `restore.deferred` gives the ownership or busy-stream reason; `restore.skipped` means the card vanished, disconnected, or another app changed its profile. `restore.requested` means the server accepted the restoration command, not independent proof that the hardware completed it. `saved_validation.result` distinguishes missing track, exact digital silence and nonzero decoded audio. `saved_validation.failed` means validation could not finish; it does not mean silence. Validation currently decodes the stopped MKV before MP4 remux. Quick checks validate their temporary sample instead.
+Then compare `route.verified` or `route.mismatch` with the requested source.
+A requested OBS device ID alone never proves actual attachment. Telemetry reports
+packet counts, nonzero packets, age and post-filter levels. Missing/stale packets
+and zero-only audio are different failures. JSON `null` means no finite dBFS
+value. Summaries are polled at most every five seconds, with explicit boundary
+results; native callbacks never log per-frame data.
 
-The structured events contain no voice samples, PCM, transcripts, credentials, environment dumps, full pactl JSON, filenames or raw process output. Source/card IDs and friendly device names are included as diagnostic evidence. These traces identify where the path failed; meter activity or nonzero decoded samples do not prove intelligible speech or headset quality. Automated checks use mocks and synthetic samples only. Live Bluetooth capture, audible playback and hardware profile changes remain unverified by these checks.
+Finally inspect release/restoration and saved validation. `restore.deferred`
+means ownership/busy-stream protection; `restore.skipped` means the card vanished,
+disconnected or another app changed its profile. `restore.requested` proves only
+server acceptance, not completed hardware restoration. `saved_validation.result`
+distinguishes missing track, exact digital silence and nonzero decoded audio;
+`failed` means validation could not finish. Recording validation decodes stopped
+MKV before remux; Quick check validates its temporary sample.
 
+## Owners and limits
+
+[AudioTrace](../src/untangle/audio_debug.py) owns fields, redaction and throttling;
+[test_audio_debug.py](../tests/test_audio_debug.py) owns correlation and privacy
+regressions. Event producers live in [audio_devices.py](../src/untangle/audio_devices.py),
+[idle_audio.py](../src/untangle/idle_audio.py), [audio_check.py](../src/untangle/audio_check.py)
+and [engine.py](../src/untangle/engine.py). Consult these instead of a copied event inventory.
+
+Logs exclude samples, PCM, transcripts, credentials, environment dumps, filenames,
+full pactl payloads and raw error/process output. They include source/card IDs
+and friendly names, so review before sharing. Meter activity and nonzero samples
+do not prove intelligible speech or headset quality. Synthetic tests cannot
+establish live Bluetooth reliability. The [dated OnePlus diagnostic](testing.md#dated-hardware-evidence)
+observed exact zeros across native and OBS paths; its root cause remains unresolved.

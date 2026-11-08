@@ -4,8 +4,8 @@ Create after QApplication and a visible native preview widget. Call public metho
 from one controlling thread, never from an OBS callback. Keep the widget alive
 until close() finishes. preview_wid=0 disables preview, useful for smoke tests.
 configure() is idle-only and activates capture immediately for the live preview.
-GLX supports both desktop and window capture. platform="egl" retains the
-desktop-only backend for systems without working GLX.
+OBS 27 uses GLX for desktop/window capture; its EGL fallback is desktop-only.
+OBS 30–33 use X11 EGL, including the preview for Wayland portal capture.
 start() writes MKV; the caller owns any later remux. stop() waits up to ten seconds
 for OBS, raising rather than freeing resources still owned by a stuck output.
 

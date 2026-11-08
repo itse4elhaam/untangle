@@ -1,31 +1,32 @@
 # UI standards
 
-The shipped interface is Clearline, in light and dark modes. Review actual production Qt widgets. Do not substitute an HTML or SVG recreation of the app.
+Review production Qt widgets, not an HTML or SVG imitation. Use [AGENTS.md](../AGENTS.md) for session safety, test isolation, compatibility, and delivery authority. [Brand guidance](brand.md) owns identity; `theme.py` owns styling values.
 
 ## Required behavior
 
-- Mode, camera, microphone, computer sound and live-monitor controls are visible on entry. Only less frequent settings need a disclosure.
-- Setup stays left of the large preview. The recording action stays at the lower right; Recordings and Sharing stay outside the scrolling setup region.
-- Screen mode names its display or window. Camera mode states that only the camera is recorded. Expanding the camera changes local layout, not output composition.
-- Canvas and Fit/Fill stay above the preview in Camera mode and are hidden in Screen mode. Screen output always uses landscape/Fit and preserves the camera choices for return. Camera zoom, − / + steps, percentage and Reset stay with the camera selector; widget size and pointer zoom remain separate. The native preview retains the selected aspect ratio within an outlined, contrasting workspace. Camera social presets select Fill on entry; explicit Fit remains available and persists. The workspace is excluded from the recording.
-- More options scrolls its fields into view on opening at 960 × 760. New canvas, quality and camera framing controls lock through countdown, preparation, recording and saving.
-- Microphone off, monitoring off, waiting, no packets, silence and signal are distinct. A live meter never certifies a saved file or intelligible speech.
-- The audio check retains visible source context and a clear return. Returning safely releases the check, unlocks setup and permits a different input. Samples play only after Play sample.
-- Library selection is silent. Play is explicit. Return releases playback and preserves recorder setup.
-- At 960 × 760 and 1120 × 840, both themes and both recording modes must fit. No overlapping primary controls, clipped action text or horizontal scrolling. Long device names may elide with a full tooltip.
-- Focus uses a subtle solid cue with no dotted native outline, remains visible, and must not change control geometry. Stop, saving and recoverable errors retain readable text; color alone is insufficient.
+- Essential mode, source, camera, microphone, and recording actions must be discoverable without opening advanced settings. Ordinary scrolling over a closed dropdown must not change the selection.
+- Setup stays beside the preview. Recording state, elapsed time, Pause, and Stop remain reachable when setup is hidden or the library is open during a stable take. Countdown, preparation, and saving retain their guards. Sharing settings cannot mutate an active take.
+- Preview expansion changes local layout, not recording composition. Canvas presets select framing; the compatibility Fit/Fill preference is not a visible picker. Camera crop/zoom, overlay size, and screen pointer zoom are distinct. Preserve per-mode preferences and input locks.
+- Microphone off, monitoring off, waiting, no packets, silence, and signal are distinct. A meter never certifies intelligible speech or a saved file. Audio-check playback requires Play; returning releases its resources before setup resumes.
+- Library selection stays silent until Play. Returning stops playback and preserves recorder setup. Upload choice is explicit for each take; failures retain local media and distinguish a known link from verified audience permissions.
+- At 960 x 760 and 1120 x 840, both themes and recording modes must fit without overlapping primary controls, clipped actions, or horizontal scrolling. Long names can elide with full tooltips. Focus stays visible without changing geometry. Warnings need text as well as color.
 
-## Release gate
+Exact labels, control positions, and styling values belong to the source and current captures. Do not copy an old layout back into the app to satisfy a dated screenshot.
 
-1. Run `./scripts/test.sh`. This includes actual Qt click-through checks, layout checks, ownership/recovery tests and an installer test in an isolated temporary home.
-2. Run `bash -n scripts/*.sh bin/*`.
-3. Regenerate synthetic Qt captures through `./scripts/render-safe.sh docs/ux-overhaul/matrix ui`. The wrapper isolates devices, networking and desktop services and fails closed. Inspect recorder, expanded camera, Settings, audio failure/recovery, and populated/empty library at both sizes and themes. Inspect long names and failure states at the minimum size.
-4. Compare the complete client windows to the pinned captures in `ui-baselines/`. Explain intended changes in the PR. Do not accept a screenshot cropped around a defect or a test weakened to hide it.
+## Visual release gate
 
-The canvas matrix covers landscape, Reels / Shorts, square, 4:5, zoom/reset and Fit/Fill at both sizes and themes, including plus/minus zoom and returning to landscape Screen output after a portrait camera selection. Only capture pixels are synthetic; source crop/placement uses the production composition helper. Native OBS filter execution and encoded pixels still need separately authorized capture verification.
+1. Run the required safe checks in AGENTS.md.
+2. Regenerate affected complete windows through the isolated renderer:
 
-[Browse the pinned Qt windows](ui-baselines/index.html). The manifest records source hashes, PNG hashes, exact dimensions and the mocked boundaries for each image.
+   ```bash
+   ./scripts/render-safe.sh docs/ux-overhaul/matrix ui
+   ```
 
-The PNGs are review references, not exact pixel-hash assertions. Font rasterization and Qt patch releases can differ. The tests pin interaction, geometry and text fit. For the user-approved UI/UX overhaul, two fresh agent reviews of complete Qt windows check hierarchy and appearance; preserve their disagreements and evidence. This replaces routine manual visual QA for styling, copy, layout and the explicitly requested review/sharing navigation. It does not authorize capture, audio, account, upload, deletion, retention or recording-format changes, certify hardware, or authorize merging the overhaul. The user reviews its stacked PRs and comparison video before merge.
+3. Inspect affected recorder, expanded controls, Settings, audio recovery, and populated/empty library states. Include long names, failures, both sizes/themes, and relevant canvas presets. Compare with the [reference gallery](ui-baselines/index.html); explain intended differences in the PR.
+4. For the user-approved UX loop, obtain two fresh agent reviews of anonymous complete-window evidence and task traces. Preserve disagreements. This replaces routine manual visual QA only for styling, copy, layout, and the approved review/sharing navigation scope. Product and merge approval remain with the user.
 
-All captures use isolated settings, mocked device/engine boundaries, a painted SYNTHETIC source and synthetic local media. They do not open capture devices, change Bluetooth profiles, play audible audio or change desktop accessibility settings. Never use the production app launch as an incidental verification step.
+The original overhaul also required user review of its stacked PRs and comparison video before merge. Only later explicit approval for that task superseded the hold; agent scores alone did not.
+
+The manifests identify source/image hashes, dimensions, and mocked boundaries. PNGs are references, not pixel-hash assertions; font rasterization can differ. Geometry and interaction checks supplement visual review. Never crop away a defect or weaken a check to hide it.
+
+Synthetic source pixels, devices, files, media backends, and service events establish only the disclosed evidence. Native input checks on private Xvfb establish that tested environment, not host-compositor behavior. Capture/audio changes, authentication, uploads, deletion, retention, recording formats, and live hardware acceptance remain outside visual-review authority.

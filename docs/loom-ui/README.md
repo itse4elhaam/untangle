@@ -1,5 +1,7 @@
 # Camera and Loom UI evidence
 
+Historical capture pack. The manifest identifies its source; these images are not the current release. Use [UI standards](../ui-standards.md) for isolated reproduction.
+
 These are production Qt widgets rendered offscreen with synthetic data. Camera,
 audio, playback, account commands, and uploads are mocked. No installed app or
 user recording was opened. The camera sheet uses synthetic pixels to show alpha
@@ -15,9 +17,9 @@ Reproduce from the repository root:
 ```bash
 ./scripts/test.sh
 bash -n scripts/*.sh bin/*
-.venv/bin/python scripts/render-loom-ui.py --output /tmp/untangle-loom-ui
-.venv/bin/python scripts/render-camera-edges.py --output /tmp/untangle-camera-edges.png
 ```
+
+`render-loom-ui.py` and `render-camera-edges.py` produced this historical pack. The current wrapper has no dedicated modes for them; do not reproduce them by bypassing isolation.
 
 The Loom renderer produces light and dark versions at 960×760 and 1120×840.
 It covers uploading, success, authentication failure, connected account,

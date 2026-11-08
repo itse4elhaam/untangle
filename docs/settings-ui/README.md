@@ -1,11 +1,13 @@
 # Minimal recorder and Settings
 
+Historical capture pack. The manifest identifies its source; these images are not the current release. Use [UI standards](../ui-standards.md) for isolated reproduction.
+
 Actual Qt renders at 960×760, in light and dark themes. The capture source is a
 software-painted fixture. Devices, playback, subprocesses, transcription,
 accounts, and inference are mocked; no normal app launch or recording occurs.
 The Settings title capability is a synthetic ready state.
 
-Reproduce with `.venv/bin/python scripts/render-settings-ui.py`.
+Reproduce the current Settings through `./scripts/render-safe.sh docs/ux-overhaul/settings settings`.
 The manifest records source and screenshot hashes. Safe checks are
 `./scripts/test.sh` and `bash -n scripts/*.sh bin/*`.
 

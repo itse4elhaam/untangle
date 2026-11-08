@@ -1,5 +1,7 @@
 # Active screen recording experience: competitor research
 
+Historical research. External claims retain their original dates and confidence limits; they were not reverified during documentation cleanup. Current contributor policy is in [AGENTS.md](../../AGENTS.md).
+
 Research date: 2026-11-08. Sources below are official product documentation/changelogs. This is documentation evidence, not hands-on observation; UI details not explicitly documented are marked unknown. Scope is active capture and immediate review, not setup or library design.
 
 ## Findings
