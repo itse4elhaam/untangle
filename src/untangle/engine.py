@@ -624,7 +624,8 @@ class Engine:
                   desktop_audio=False, shape="circle", mask_path=None, size=.22,
                   position="bottom-right", screen=0, mirror=True, floating_camera=False,
                   window_id: int | None = None, *, microphone_processing=True,
-                  camera_zoom=1.0, framing="fit", camera_offset=(0., 0.)):
+                  camera_zoom=1.0, framing="fit", camera_offset=(0., 0.),
+                  screen_cut_bottom: int = 0, screen_expected_size=None):
         """Replace the scene and detach any camera display. Reattach afterward.
 
         In screen mode floating_camera omits the camera scene item: XShm captures
@@ -646,6 +647,16 @@ class Engine:
         self._check_open()
         if self._output:
             raise EngineError("Stop the recording before changing the scene.")
+        if type(screen_cut_bottom) is not int or screen_cut_bottom < 0:
+            raise EngineError("Screen bottom cut must be a nonnegative integer.")
+        if screen_cut_bottom and (mode != "screen" or window_id is not None
+                                  or getattr(self, "portal_capture", False)):
+            raise EngineError("Screen bottom cut requires entire-screen X11 capture.")
+        if screen_expected_size is not None:
+            if (not screen_cut_bottom or not isinstance(screen_expected_size, tuple)
+                    or len(screen_expected_size) != 2
+                    or any(type(n) is not int or n <= 0 for n in screen_expected_size)):
+                raise EngineError('Screen strip requires an expected physical display size.')
         if not isinstance(microphone_processing, bool):
             raise EngineError("Microphone processing must be enabled or disabled.")
         if framing not in ("fit", "fill"):
@@ -705,8 +716,34 @@ class Engine:
                         "include_border": False})
                     self._window_id = window_id
                 else:
-                    source = self._source("xshm_input", "RecIt screen", {"screen": screen, "show_cursor": True})
-                if not getattr(self, 'portal_capture', False):
+                    settings = {"screen": screen, "show_cursor": True}
+                    expected_dimensions = None
+                    if screen_cut_bottom:
+                        # Probe outside the scene: no uncropped frame can reach output.
+                        probe = self._source("xshm_input", "RecIt screen dimensions", settings)
+                        try:
+                            sw, sh = self._dimensions(probe, "Screen capture")
+                        finally:
+                            o.obs_source_release(probe)
+                        if screen_expected_size is not None and (sw, sh) != screen_expected_size:
+                            raise EngineError('Capture display does not match the control-strip display.')
+                        if sh <= screen_cut_bottom:
+                            raise EngineError("Screen bottom cut leaves no video height.")
+                        expected_dimensions = (sw, sh - screen_cut_bottom)
+                        settings = dict(settings, advanced=True, cut_bot=screen_cut_bottom)
+                    source = self._source("xshm_input", "RecIt screen", settings)
+                    self._sources.append(source)
+                    if screen_cut_bottom:
+                        actual = self._dimensions(source, "Cropped screen capture")
+                        if actual != expected_dimensions:
+                            raise EngineError("Screen capture dimensions do not match the requested bottom cut.")
+                        # Freeze the clean rectangle as well: if the display
+                        # grows before Qt receives its layout event, the source
+                        # must not expose pixels from the old control strip.
+                        self._filter(source, 'crop_filter', 'Untangle recorded area', {
+                            'relative': False, 'left': 0, 'top': 0,
+                            'cx': actual[0], 'cy': actual[1]})
+                if not getattr(self, 'portal_capture', False) and source not in self._sources:
                     self._sources.append(source)
                 self._screen_source = source
                 item = o.obs_scene_add(self._scene, source)
@@ -716,7 +753,8 @@ class Engine:
                 if getattr(self, 'portal_capture', False):
                     self.screen_ready()
                 else:
-                    self._screen_dimensions = self._dimensions(source, "Screen capture")
+                    self._screen_dimensions = (actual if screen_cut_bottom else
+                                               self._dimensions(source, "Screen capture"))
                     self.restore_screen_zoom()
             if camera:
                 # Presets retain the quality's short edge. A square/portrait

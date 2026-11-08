@@ -1,7 +1,7 @@
 """Synthetic controls checks; no capture or host input."""
 import unittest
-from unittest.mock import patch
-from PySide6.QtCore import Qt
+from unittest.mock import patch, Mock
+from PySide6.QtCore import Qt, QRect, QPoint, QEvent
 from PySide6.QtWidgets import QApplication
 from untangle.recording_controls import RecordingControls
 
@@ -63,3 +63,31 @@ class RecordingControlsTests(unittest.TestCase):
         with patch('untangle.recording_controls.floating.release_window_input') as release:
             self.widget.hide()
             release.assert_called_once_with(self.widget)
+
+    def test_strip_bounds_and_normal_mode_restore(self):
+        screen = Mock()
+        screen.devicePixelRatio.return_value = 1
+        screen.geometry.return_value = QRect(-1920, 80, 1920, 1080)
+        screen.availableGeometry.return_value = screen.geometry.return_value
+        self.widget.show_in_strip(screen)
+        strip = QRect(-1920, 1040, 1920, 120)
+        self.assertEqual(self.widget.strip_rect, strip)
+        self.assertIn('controls excluded', self.widget.state_label.text())
+        self.assertTrue(strip.contains(self.widget.geometry()))
+        self.assertTrue(self.widget.more_button.isHidden())
+        self.assertIsNone(self.widget.more_button.menu())
+        self.assertTrue(self.widget.eventFilter(self.widget.target_label, QEvent(QEvent.ToolTip)))
+        point = self.widget._clamp(QPoint(9999, -9999), screen)
+        self.assertEqual(point.y(), self.widget.y())
+        self.assertEqual(point.x(), strip.right() - self.widget.width() + 1)
+        self.widget.show_on_screen(screen)
+        self.assertIsNone(self.widget.strip_rect)
+        self.assertIs(self.widget.more_button.menu(), self.widget.menu)
+
+    def test_strip_rejects_small_screen_hidden(self):
+        screen = Mock()
+        screen.devicePixelRatio.return_value = 1
+        screen.geometry.return_value = QRect(0, 0, 300, 800)
+        with self.assertRaises(ValueError):
+            self.widget.show_in_strip(screen)
+        self.assertFalse(self.widget.isVisible())

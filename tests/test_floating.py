@@ -195,3 +195,17 @@ class FloatingChecks(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+class BoundedCameraChecks(unittest.TestCase):
+    def test_bounds_preserve_screen_fraction_and_constrain_placement(self):
+        screen = Mock()
+        screen.availableGeometry.return_value = QRect(-1600, 50, 1600, 1000)
+        bubble = CameraBubble()
+        bounds = QRect(-1600, 50, 1600, 880)
+        bubble.arrange(screen, .2, 'bottom-right', 'square', bounds=bounds)
+        self.assertEqual(bubble.width(), 200)
+        self.assertTrue(bounds.contains(bubble.geometry()))
+        self.assertEqual(bubble._placement_bounds(), bounds)
+        bubble.arrange(screen, .2, 'bottom-right', 'square')
+        self.assertEqual(bubble._placement_bounds(), screen.availableGeometry())
+        bubble.close()

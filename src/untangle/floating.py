@@ -6,7 +6,7 @@ from pathlib import Path
 import re
 import time
 
-from PySide6.QtCore import QEvent, Qt, Signal, QRectF, QTimer
+from PySide6.QtCore import QEvent, Qt, Signal, QRect, QRectF, QTimer
 from PySide6.QtGui import QImage, QPainter
 from PySide6.QtWidgets import QWidget, QMenu, QApplication
 from .diagnostics import event as diagnostic_event, failure as diagnostic_failure
@@ -129,6 +129,8 @@ class CameraBubble(QWidget):
         self._resize_start = None
         self.resize_enabled = True
         self.size_limits = (.12, .42)
+        self._bounds = None
+        self.setFocusPolicy(Qt.NoFocus)
         self._screen = None
         self._placement_key = None
         self._drag_position = None
@@ -294,14 +296,18 @@ class CameraBubble(QWidget):
             connection.close()
         self._update_input_shape()
 
-    def arrange(self, screen, fraction, position, shape, mask_path=None, mirror_mask=False):
-        key = screen, position
+    def arrange(self, screen, fraction, position, shape, mask_path=None, mirror_mask=False, bounds=None):
+        key = screen, position, bounds
         if key != self._placement_key:
             self._drag_position = None
         self._placement_key = key
         self._screen = screen
-        bounds = screen.availableGeometry()
-        side = round(min(bounds.width(), bounds.height()) * fraction)
+        self._bounds = QRect(bounds) if bounds is not None else None
+        full = screen.availableGeometry()
+        bounds = self._placement_bounds()
+        if bounds.isEmpty():
+            raise ValueError('Camera placement bounds are empty')
+        side = round(min(full.width(), full.height()) * fraction)
         minimum, maximum = self._side_limits()
         side = max(minimum, min(side, maximum))
         self.setFixedSize(side, side)
@@ -333,10 +339,15 @@ class CameraBubble(QWidget):
         if self.isVisible() and QApplication.platformName() == 'xcb':
             self._update_input_shape()
 
+    def _placement_bounds(self):
+        return QRect(self._bounds) if self._bounds is not None else self._screen.availableGeometry()
+
     def _side_limits(self):
         bounds = self._screen.availableGeometry()
         short = min(bounds.width(), bounds.height())
         maximum = max(1, round(short * self.size_limits[1]))
+        placement = self._placement_bounds()
+        maximum = min(maximum, placement.width(), placement.height())
         return min(maximum, max(100, round(short * self.size_limits[0]))), maximum
 
     def _resize_direction(self, point):
@@ -366,7 +377,7 @@ class CameraBubble(QWidget):
 
     def _remember_position(self):
         if self._screen is not None:
-            bounds = self._screen.availableGeometry()
+            bounds = self._placement_bounds()
             self._drag_position = (
                 min(1., max(0., (self.x() - bounds.left()) / max(1, bounds.width() - self.width()))),
                 min(1., max(0., (self.y() - bounds.top()) / max(1, bounds.height() - self.height()))))
@@ -398,7 +409,7 @@ class CameraBubble(QWidget):
             change = (delta.x() * sx + delta.y() * sy) / (abs(sx) + abs(sy))
             minimum, maximum = self._side_limits()
             side = max(minimum, min(maximum, round(rect.width() + change)))
-            bounds = self._screen.availableGeometry()
+            bounds = self._placement_bounds()
             # Keep the opposite edge/corner fixed, centering the unused axis.
             x = rect.x() + round((rect.width() - side) * (1 - sx) / 2)
             y = rect.y() + round((rect.height() - side) * (1 - sy) / 2)
@@ -407,7 +418,8 @@ class CameraBubble(QWidget):
             self.setFixedSize(side, side)
             self.move(x, y)
             self._remember_position()
-            self.resized.emit(side / min(bounds.width(), bounds.height()))
+            self.resized.emit(side / min(self._screen.availableGeometry().width(),
+                                         self._screen.availableGeometry().height()))
             event.accept()
             return
         # A release can be lost when a menu or another window takes the grab.
@@ -419,7 +431,7 @@ class CameraBubble(QWidget):
         if self._drag_offset is not None:
             point = event.globalPosition().toPoint() - self._drag_offset
             if self._screen:
-                bounds = self._screen.availableGeometry()
+                bounds = self._placement_bounds()
                 point.setX(max(bounds.left(), min(bounds.right() - self.width() + 1, point.x())))
                 point.setY(max(bounds.top(), min(bounds.bottom() - self.height() + 1, point.y())))
             self.move(point)
