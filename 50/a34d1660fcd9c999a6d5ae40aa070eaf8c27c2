@@ -1,0 +1,34 @@
+prototypes/frame-review/server.py
+  s_093f359f2c4756::t_42df89857e63f6 1-139
+prototypes/frame-review/index.html
+  s_093f359f2c4756::t_e202c389291911 28,64
+  s_093f359f2c4756::t_3cb804346ab3ab 101,133,166,189
+  s_093f359f2c4756::t_db8099f023124c 1-18,20-27,29-32,34-41,43-63,65-88,90-100,102-132,134-139,141-165,167-188,190-199
+  s_093f359f2c4756::t_98457d4e313fb5 33
+  s_093f359f2c4756::t_c0ff3496e63111 19,89
+  s_093f359f2c4756::t_2624381b6d5092 42,140
+prototypes/frame-review/record-demo.mjs
+  s_093f359f2c4756::t_6774c15315f0a9 3-4
+  s_093f359f2c4756::t_12145efd3b1248 98,104
+  s_093f359f2c4756::t_d10955d10704ad 1-2,5-11,13-23,25-97,99-103,105-138
+  s_093f359f2c4756::t_98457d4e313fb5 24
+  s_093f359f2c4756::t_c6ac20f0828914 12
+prototypes/frame-review/agent.py
+  s_093f359f2c4756::t_6018ce44eb897f 1-36
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "50a34d1660fcd9c999a6d5ae40aa070eaf8c27c2",
+  "prompts": {},
+  "sessions": {
+    "s_093f359f2c4756": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2daa977e-c8ca-4c31-9fe3-3d05465fb173",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Elhaam Basheer Chaudhry <e4elhaam@gmail.com>"
+    }
+  }
+}
