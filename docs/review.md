@@ -25,7 +25,7 @@ Comments are **open**, **addressed** in a named version, or **resolved**. Agents
 Register the MCP server once per agent:
 
 ```bash
-claude mcp add untangle-review -- /path/to/untangle/bin/untangle-review mcp
+claude mcp add -s user untangle-review -- /path/to/untangle/bin/untangle-review mcp
 codex mcp add untangle-review -- /path/to/untangle/bin/untangle-review mcp
 ```
 
