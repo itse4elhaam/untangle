@@ -4,7 +4,7 @@ Untangle is a standalone Python Linux recording app, formerly RecIt. Protect rec
 
 ## Where code lives
 
-`src/untangle/` contains production code: `app.py` owns Qt, `engine.py` wraps OBS, audio helpers prepare/restore devices, and `recordings.py` owns library/playback. Tests and synthetic fixtures live in `tests/`, helpers in `scripts/`, launchers in `bin/`, and branding assets in `assets/`.
+`src/untangle/` contains production code: `app.py` owns Qt, `engine.py` wraps OBS, audio helpers prepare/restore devices, and `recordings.py` owns library/playback. `review/` is the frame-review tool (web app, CLI, MCP); it is standard-library only and must never import Qt. Tests and synthetic fixtures live in `tests/`, helpers in `scripts/`, launchers in `bin/`, and branding assets in `assets/`.
 
 ## Protect the user's session
 
