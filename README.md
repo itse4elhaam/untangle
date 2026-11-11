@@ -12,7 +12,9 @@ Choose Camera or Screen, select your devices, check the microphone, and use **St
 
 Recording starts in MKV for interruption recovery; FFmpeg prepares MP4 without re-encoding after stopping. Optional smaller camera files trade some detail for size. Screen encoding stays unchanged.
 
-[Using Untangle](docs/usage.md) covers controls, audio, sharing and recovery. [Google Drive setup](docs/google-drive.md) covers the manual setup wizard and credentials.
+[Using Untangle](docs/usage.md) covers controls, audio, sharing and recovery.
+
+[Frame review](docs/review.md) lets you comment on exact frames of a video, local or on Google Drive, while agents read and answer those comments through MCP. [Google Drive setup](docs/google-drive.md) covers the manual setup wizard and credentials.
 
 ## Linux support
 
