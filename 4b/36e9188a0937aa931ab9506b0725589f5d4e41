@@ -1,0 +1,46 @@
+src/untangle/audio_debug.py
+  s_3aa001d852ecae::t_a9079c1d320343 27,80-82
+tests/test_idle_audio.py
+  s_3aa001d852ecae::t_c80f860cdb456c 48,76,80-90,93,122-123,129-137,140-170,173-238,300,312
+  s_3aa001d852ecae::t_7474a064c23846 91,138-139,171-172
+tests/test_headset_integration.py
+  s_3aa001d852ecae::t_e210fcc03b22b3 285-308
+src/untangle/audio_devices.py
+  s_3aa001d852ecae::t_f13a5ab846f82c 3-7,25-27,29-33,197,202-204,206-207,241-246
+  s_3aa001d852ecae::t_a9079c1d320343 28
+src/untangle/idle_audio.py
+  s_3aa001d852ecae::t_4a7c2aaa32fca1 1-5,8,20,40,79,119-122,131-147
+src/untangle/app.py
+  s_3aa001d852ecae::t_da172b518212ec 614,2502-2506
+  s_3aa001d852ecae::t_bf6790d79cd128 33
+tests/test_audio_devices.py
+  s_3aa001d852ecae::t_e210fcc03b22b3 109-123
+tests/test_audio_check.py
+  s_3aa001d852ecae::t_e210fcc03b22b3 109,176-195
+  s_3aa001d852ecae::t_c80f860cdb456c 209
+  s_3aa001d852ecae::t_5b82200e3df155 196
+docs/audio-troubleshooting.md
+  s_3aa001d852ecae::t_4060cc553e0344 26-27
+tests/test_inline_audio_check.py
+  s_3aa001d852ecae::t_c80f860cdb456c 169
+docs/usage.md
+  s_3aa001d852ecae::t_4060cc553e0344 29
+src/untangle/audio_check.py
+  s_3aa001d852ecae::t_93cc88375ac8f2 11,117-118,264,266-269,277-278,371-378
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4b36e9188a0937aa931ab9506b0725589f5d4e41",
+  "prompts": {},
+  "sessions": {
+    "s_3aa001d852ecae": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a5bf7763-9f60-4179-b3ae-5e92f146536d",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Elhaam Basheer Chaudhry <e4elhaam@gmail.com>"
+    }
+  }
+}
