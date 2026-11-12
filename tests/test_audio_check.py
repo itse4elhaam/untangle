@@ -106,7 +106,7 @@ class DialogChecks(unittest.TestCase):
         self.devices.restore.side_effect = lambda: order.append('restore') or True
         self.dialog.player.play.side_effect = lambda: order.append('play')
         self.capture()
-        self.devices.prepare.assert_called_once_with('default')
+        self.devices.prepare.assert_called_once_with('default', switch_profile=False)
         self.engine.begin_audio_check.assert_called_once_with('exact.headset.source', True)
         self.assertEqual(order, ['release', 'restore'])
         self.dialog.player.play.assert_not_called()
@@ -173,6 +173,27 @@ class DialogChecks(unittest.TestCase):
         self.dialog.stop_check()
         self.dialog.player.stop.assert_called()
 
+    def test_earbud_mic_needs_explicit_switch_then_restores(self):
+        from untangle.audio_devices import EarbudMicDeferred
+        self.devices.source_label = 'OnePlus Buds 4'
+        self.devices.prepare.side_effect = [EarbudMicDeferred(), 'exact.headset.source']
+        self.dialog.start_check()
+        self.wait()
+        self.engine.begin_audio_check.assert_not_called()
+        self.devices.prepare.assert_called_once_with('default', switch_profile=False)
+        self.assertIn('Earbud mic switches on when recording starts.', self.dialog.status.text())
+        self.assertIn('call quality', self.dialog.status.text())
+        self.assertEqual(self.dialog.record.text(), 'Switch earbuds and record')
+        self.assertTrue(self.dialog.record.isEnabled())
+        self.assertFalse(self.dialog.failed_capture)
+        self.devices.release_capture.assert_called_once()
+        self.devices.restore.reset_mock()
+        self.capture()
+        self.assertEqual(self.devices.prepare.call_args_list[-1].kwargs, dict(switch_profile=True))
+        self.engine.begin_audio_check.assert_called_once_with('exact.headset.source', True)
+        self.devices.restore.assert_called_once()
+        self.assertIn('Sample contains sound', self.dialog.status.text())
+
     def test_prepare_error_releases_and_restores(self):
         self.devices.prepare.side_effect = RuntimeError('Headset disconnected')
         self.dialog.start_check()
@@ -185,7 +206,7 @@ class DialogChecks(unittest.TestCase):
     def test_close_during_preparation_waits_and_never_plays(self):
         import threading
         ready = threading.Event()
-        self.devices.prepare.side_effect = lambda _: ready.wait(2) and 'exact'
+        self.devices.prepare.side_effect = lambda *_, **__: ready.wait(2) and 'exact'
         self.dialog.start_check()
         self.dialog.reject()
         self.assertTrue(self.dialog.closing)

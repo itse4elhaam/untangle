@@ -30,7 +30,7 @@ from .upload_store import UploadStore
 from .loom import (parse_account_status, parse_video_info, parse_upload_result,
                    parse_upload_progress, valid_share_url, video_id, CliHelpCache,
                    rename_title_args, supports_option)
-from .audio_devices import AudioDevices, AudioDeviceError
+from .audio_devices import AudioDevices, AudioDeviceError, EarbudMicDeferred
 from .audio_debug import AudioTrace, emit
 from .engine import recording_audio_warning
 from .composition import canvas_dimensions, camera_composition
@@ -611,7 +611,7 @@ class Window(QMainWindow):
         self.audio_check_button.clicked.connect(self.open_audio_check)
         self.live_microphone = QCheckBox('Live microphone levels')
         self.live_microphone.setChecked(True)
-        self.live_microphone.setToolTip('Uses your microphone while the recorder is visible. Bluetooth headsets use hands-free audio. Turn off to release the microphone.')
+        self.live_microphone.setToolTip('Uses your microphone while the recorder is visible. Bluetooth earbuds keep high-quality playback; their mic switches on only when recording starts. Turn off to release the microphone.')
         self.live_microphone.toggled.connect(lambda _: self.idle_audio.reconcile())
         self.settings_layout.addWidget(label('Audio', 'section'))
         self.settings_layout.addWidget(self.audio_check_button)
@@ -2499,6 +2499,11 @@ class Window(QMainWindow):
             elif not self.live_microphone.isChecked():
                 self.microphone_meter.show_status(None, self.microphone.currentText())
                 self.microphone_meter.message.setText('Live monitoring off')
+            elif self.idle_audio.deferred:
+                # Live levels would force hands-free playback; wait for recording.
+                label = friendly if isinstance(friendly, str) and friendly else self.microphone.currentText()
+                self.microphone_meter.show_status(None, label)
+                self.microphone_meter.message.setText(EarbudMicDeferred.message)
             elif self.idle_audio.error:
                 self.microphone_meter.message.setText('Monitor unavailable: ' + self.idle_audio.error)
             elif self.idle_audio.pending or (self.idle_audio.source and not self.idle_audio.verified):
