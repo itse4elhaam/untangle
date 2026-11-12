@@ -106,6 +106,21 @@ class AudioDevicesTests(unittest.TestCase):
         self.devices.sleep = publish
         self.assertEqual(self.devices.prepare(timeout=.2), self.mic['name'])
 
+    def test_no_switch_mode_defers_earbud_mic_without_side_effects(self):
+        from untangle.audio_devices import EarbudMicDeferred
+        for active in ('a2dp-sink', 'headset-head-unit-msbc'):
+            with self.subTest(active=active):
+                self.card['active_profile'] = active
+                with self.assertRaises(EarbudMicDeferred):
+                    self.devices.prepare(switch_profile=False)
+                self.assertIsNone(self.devices.lease)
+                self.assertEqual(self.card['active_profile'], active)
+        self.assertFalse(any(c[0] == 'set-card-profile' for c in self.calls))
+        # Other microphones and non-Bluetooth outputs are unaffected.
+        self.assertEqual(self.devices.prepare('brio', switch_profile=False), 'brio')
+        self.data['sinks'] = [dict(name='buds', index=43)]
+        self.assertEqual(self.devices.prepare(switch_profile=False), 'brio')
+
     def test_explicit_and_disabled_auto_do_not_switch(self):
         self.assertEqual(self.devices.prepare('brio'), 'brio')
         self.assertEqual(self.devices.prepare(auto_headset=False), 'brio')

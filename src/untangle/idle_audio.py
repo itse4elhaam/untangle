@@ -1,6 +1,11 @@
-"""Recorder-page microphone ownership. All device work uses the app's one worker."""
+"""Recorder-page microphone ownership. All device work uses the app's one worker.
+
+Idle monitoring never switches Bluetooth earbuds to hands-free. When the
+earbud mic needs that switch, monitoring waits (deferred) until recording.
+"""
 import time
 from .audio_debug import AudioTrace, emit
+from .audio_devices import EarbudMicDeferred
 
 
 class IdleAudio:
@@ -12,6 +17,7 @@ class IdleAudio:
         self.pending = False
         self.generation = 0
         self.error = ''
+        self.deferred = False
         self.retry_at = 0
         self.verify_at = 0
         self.verified = False
@@ -31,6 +37,7 @@ class IdleAudio:
         self.generation += 1
         self.key = self.source = None
         self.verified = False
+        self.deferred = False
         w = self.window
         if w.engine and self.owner is not None:
             w.engine.release_audio()
@@ -69,6 +76,7 @@ class IdleAudio:
             self.stop()
             self.key = key
             self.error = ''
+            self.deferred = False
             self.retry_at = 0
         if self.pending or (w.audio_worker and w.audio_worker.isRunning()):
             return
@@ -108,6 +116,10 @@ class IdleAudio:
             if error:
                 self.fail(error)
                 return
+            if source is EarbudMicDeferred:
+                self.defer()
+                return
+            self.deferred = False
             try:
                 w.engine.begin_audio_monitor(source, key[1])
                 self.source = source
@@ -116,7 +128,23 @@ class IdleAudio:
             except Exception as exc:
                 emit(self, 'idle.open_failed', level='warning', exception_type=type(exc).__name__)
                 self.fail(str(exc))
-        w.run_audio(lambda: w.audio_devices.prepare(key[0]), prepared)
+        def prepare():
+            try:
+                return w.audio_devices.prepare(key[0], switch_profile=False)
+            except EarbudMicDeferred:
+                return EarbudMicDeferred  # Expected; not a worker failure.
+        w.run_audio(prepare, prepared)
+
+    def defer(self):
+        """The earbud mic stays off until recording; recheck for output changes."""
+        if not self.deferred:
+            emit(self, 'idle.deferred', reason='switch_on_record')
+        self.stop()
+        self.deferred = True
+        self.error = ''
+        self.retry_at = time.monotonic() + 10
+        w = self.window
+        self.key = (w.microphone.currentData(), w.clean_microphone.isChecked())
 
     def fail(self, error):
         emit(self, 'idle.failed', level='warning', reason='monitor_unavailable', source=self.source)

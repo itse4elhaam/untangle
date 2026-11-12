@@ -282,6 +282,30 @@ class HeadsetRoundtripTests(unittest.TestCase):
         self.assertIsNone(self.pulse.devices.lease)
         self.assertEqual(self.switches(), ['headset-head-unit-msbc', 'a2dp-sink', 'headset-head-unit-msbc'])
 
+    def test_discard_restores_after_release(self):
+        self.start_and_wait()
+        self.assertEqual(self.pulse.card['active_profile'], 'headset-head-unit-msbc')
+        with patch.object(app.QMessageBox, 'question', return_value=app.QMessageBox.Yes):
+            self.window.discard_recording()
+        self.assertTrue(self.window.worker.wait(3000))
+        deadline = time.monotonic() + 3
+        while self.window.busy and time.monotonic() < deadline:
+            test_app.qt.processEvents()
+            time.sleep(.001)
+        self.drain()
+        self.assertEqual(self.events, ['capture', 'record', 'stop', 'release'])
+        self.assertEqual(self.switches(), ['headset-head-unit-msbc', 'a2dp-sink'])
+        self.assertIsNone(self.pulse.devices.lease)
+
+    def test_user_profile_change_mid_recording_is_kept(self):
+        self.start_and_wait()
+        # The user (or another app) picks a different hands-free codec.
+        self.pulse.card['active_profile'] = 'headset-head-unit-cvsd'
+        self.finish()
+        self.assertEqual(self.pulse.card['active_profile'], 'headset-head-unit-cvsd')
+        self.assertIsNone(self.pulse.devices.lease)
+        self.assertEqual(self.switches(), ['headset-head-unit-msbc'])
+
     def test_disconnect_stops_and_releases_then_can_record_again(self):
         self.start_and_wait()
         self.pulse.data['sources'] = []

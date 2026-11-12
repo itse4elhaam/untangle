@@ -8,6 +8,7 @@ import tempfile
 import time
 import wave
 from .audio_debug import AudioTrace, emit
+from .audio_devices import EarbudMicDeferred
 from .microphone_meter import MicrophoneMeter
 
 from PySide6.QtCore import Qt, QThread, QTimer, QUrl, Signal
@@ -113,6 +114,8 @@ class AudioCheck(QDialog):
         self.sample = None
         self.capture_owner = None
         self.pending_finish = None
+        # Earbuds switch to hands-free here only after an explicit second click.
+        self.switch_earbuds = False
         self.temp = tempfile.TemporaryDirectory(prefix='recit-audio-check-')
         self.path = Path(self.temp.name) / 'microphone.wav'
         self.setWindowTitle('Quick audio check')
@@ -258,8 +261,12 @@ class AudioCheck(QDialog):
         self.status.setText('Preparing microphone…')
         self.device.setText('Microphone: verifying actual capture source…')
         self.capture_owner = self.devices.hold_capture()
+        switch = self.switch_earbuds
         def prepare():
-            source = self.devices.prepare(self.selection)
+            try:
+                source = self.devices.prepare(self.selection, switch_profile=switch)
+            except EarbudMicDeferred:
+                return EarbudMicDeferred  # Expected; offer the switch instead.
             if not source:
                 raise RuntimeError('No microphone is available. Choose an input device and retry.')
             self.sample = self.engine.begin_audio_check(source, self.processing)
@@ -267,6 +274,8 @@ class AudioCheck(QDialog):
         self.run_action(prepare, self.prepared)
 
     def prepared(self, source, error):
+        if source is EarbudMicDeferred:
+            error = EarbudMicDeferred.message
         if error or self.closing:
             self.finish_capture(error=error)
             return
@@ -359,7 +368,14 @@ class AudioCheck(QDialog):
                 self.complete_close()
                 return
             restored, peak, sample_error = result
-            if error:
+            if error == EarbudMicDeferred.message:
+                self.switch_earbuds = True
+                self.record.setText('Switch earbuds and record')
+                label = getattr(self.devices, 'source_label', None)
+                self.device.setText('Microphone: ' + (label if isinstance(label, str) and label else 'earbuds'))
+                self.status.setText(error + ' To test it now, choose Switch earbuds and record. '
+                                    'Earbud sound drops to call quality until this check ends.')
+            elif error:
                 self.device.setText('Microphone: source verification failed')
                 self.status.setText(f'Could not prepare microphone: {error}')
             elif sample_error:

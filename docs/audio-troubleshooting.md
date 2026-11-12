@@ -23,6 +23,8 @@ changed the profile. `elapsed_ms` is monotonic; `duration_ms` measures one opera
 
 Read selection/profile/source resolution first. Pulse source and BlueZ card are
 separate identities; `changed:false` means hands-free mode was already active.
+`profile.deferred` means live levels or Quick check found the earbud microphone
+and left the profile alone until recording or an explicit check switch.
 `connection.checked` separates live BlueZ connection evidence from potentially
 stale PipeWire properties. Source metadata reports mute, gain and input format;
 16000 Hz input is still bandwidth-limited even when OBS mixes at 48000 Hz.

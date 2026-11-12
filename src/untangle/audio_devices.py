@@ -1,8 +1,10 @@
 """Pulse device selection. Enumeration never opens capture or changes profiles.
 
-prepare() is used by authorized preview, check, and recording lifecycles.
-Release OBS audio sources before
-restore(); it defers while card streams remain, allowing playback on app exit.
+prepare() is used by authorized preview, check, and recording lifecycles. Only
+recording (or an explicit check opt-in) may switch Bluetooth earbuds to
+hands-free; live levels must not trade away playback quality. Release OBS audio
+sources before restore(); it defers while card streams remain, allowing
+playback on app exit.
 """
 import json
 import os
@@ -18,6 +20,15 @@ class AudioDeviceError(RuntimeError):
 
 class AudioStreamPending(AudioDeviceError):
     """The new OBS stream has not been published by the audio server yet."""
+
+
+class EarbudMicDeferred(AudioDeviceError):
+    """The earbud mic needs hands-free mode, which only recording may enable."""
+    message = 'Earbud mic switches on when recording starts.'
+    expected = True
+
+    def __init__(self):
+        super().__init__(self.message)
 
 
 def pactl(*args):
@@ -183,13 +194,17 @@ class AudioDevices:
         return name
 
     @traced('prepare')
-    def prepare(self, selection='default', auto_headset=True, timeout=4):
+    def prepare(self, selection='default', auto_headset=True, timeout=4, *, switch_profile=True):
         """Return an exact OBS device_id, never the OBS default sentinel.
 
         Explicit microphone choices win. Default follows the system, except an
         enabled headset preference uses the current Bluetooth output's mic.
+        Without switch_profile, that headset path raises EarbudMicDeferred
+        instead of opening it, even when it is already hands-free: a pending
+        restore must not be extended by idle monitoring.
         """
-        emit(self, 'selection.chosen', selection=selection, auto_headset=auto_headset)
+        emit(self, 'selection.chosen', selection=selection, auto_headset=auto_headset,
+             switch_profile=switch_profile)
         if not selection:
             return None
         if selection != 'default' or not auto_headset:
@@ -223,6 +238,12 @@ class AudioDevices:
         profile = handsfree_profile(card)
         if profile is None:
             raise AudioDeviceError('Bluetooth output has no available hands-free microphone. Choose another microphone.')
+        if not switch_profile:
+            self.source_label = (card.get('properties', {}).get('device.alias')
+                or card.get('properties', {}).get('device.description') or self.source_label)
+            emit(self, 'profile.deferred', card=card['name'], prior_profile=card.get('active_profile'),
+                 target_profile=profile, reason='switch_on_record')
+            raise EarbudMicDeferred()
         if self.lease and self.lease[0] != card['name']:
             raise AudioDeviceError('Previous headset profile still needs restoration. Choose a microphone explicitly.')
         emit(self, 'profile.selected', card=card['name'], prior_profile=card.get('active_profile'),

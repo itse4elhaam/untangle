@@ -166,7 +166,7 @@ class InlineAudioCheckTests(unittest.TestCase):
         dialog = self.dialog
         gate = threading.Event()
         self.gates.append(gate)
-        self.devices.prepare.side_effect = lambda _: gate.wait(3) and 'synthetic.input'
+        self.devices.prepare.side_effect = lambda *_, **__: gate.wait(3) and 'synthetic.input'
         rejected = MagicMock()
         dialog.rejected.connect(rejected)
         dialog.record.click()

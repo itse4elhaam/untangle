@@ -26,7 +26,7 @@ On X11, drag the floating camera to position it; its context menu offers recordi
 
 ## Check audio
 
-Live levels can switch a Bluetooth headset into hands-free mode, reducing playback quality. Explicit microphone selection wins over automatic headset selection. Turn levels off to release idle monitoring. Quick audio check captures four seconds only after **Record sample**, and plays only after **Play sample**.
+Bluetooth earbuds have two modes: high-quality playback with no microphone, or hands-free, which adds the microphone but lowers playback quality. Untangle switches them to hands-free only while a recording uses their microphone, then restores the earlier mode when the take ends, fails or is discarded, or when Untangle quits. **Automatic microphone** uses the earbuds' microphone whenever they are the sound output; choose another microphone, such as a wireless receiver, explicitly to keep earbud playback at full quality. Until a recording starts, live levels for the earbud microphone pause and show *Earbud mic switches on when recording starts*. Other microphones keep live levels. Turn levels off to release idle monitoring. Quick audio check captures four seconds only after **Record sample**, and plays only after **Play sample**; for the earbud microphone it asks for a second click, **Switch earbuds and record**, and restores playback afterwards.
 
 Untangle checks connection, mute and volume without changing system gain or mute, then requests fresh nonzero microphone samples. Microphone Off bypasses this check. Clean microphone suppression may hide very quiet speech; try disabling it when diagnosing. Computer sound cannot satisfy the microphone check.
 
