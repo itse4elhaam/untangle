@@ -597,6 +597,21 @@ class AppChecks(unittest.TestCase):
             prompt.assert_not_called()
         self.window.quit_after_save = False
 
+    def test_reviews_opens_running_app_or_starts_it(self):
+        with patch.object(glint, 'review_url', return_value='http://127.0.0.1:8740'), \
+                patch.object(glint.subprocess, 'Popen') as popen, \
+                patch.object(glint.QDesktopServices, 'openUrl') as open_url:
+            self.window.reviews_button.click()
+        popen.assert_not_called()
+        self.assertEqual(open_url.call_args.args[0].toString(), 'http://127.0.0.1:8740')
+        with patch.object(glint, 'review_url', side_effect=[None, 'http://127.0.0.1:8741']), \
+                patch.object(glint.subprocess, 'Popen') as popen, \
+                patch.object(glint.QDesktopServices, 'openUrl') as open_url:
+            self.window.open_reviews()
+        self.assertEqual(popen.call_args.args[0][1:], ['serve'])
+        self.assertTrue(popen.call_args.kwargs['start_new_session'])
+        self.assertEqual(open_url.call_args.args[0].toString(), 'http://127.0.0.1:8741')
+
     def test_failed_stop_restores_pointer_zoom(self):
         self.window.set_mode('screen')
         self.window.recording = self.window.busy = True

@@ -16,6 +16,8 @@ Reviews live in `~/Videos/reviews/<name>/` (`--root` or `UNTANGLE_REVIEW_ROOT` c
 
 ## In the app
 
+In Untangle, **Reviews** at the bottom of the recorder, or **Review videos** in the tray menu, opens the app in your browser and starts it first when needed. It keeps running after Untangle quits.
+
 Step with the arrow keys (Shift for ten frames), scrub the timeline, or click the timecode and type a frame number or `mm:ss:ff`. Drag on the frame to mark a region, then write the comment; Ctrl+Enter sends. Choose another version under **Compare with** to see the same moment side by side, as a wipe, or as a difference image that shows only what changed. Playback uses the original video, with sound off until you press M. Pausing returns to the exact extracted frame, so a comment always matches what you saw. **Hand off to agent** copies a prompt for an agent thread. Press `?` for every shortcut.
 
 Comments are **open**, **addressed** in a named version, or **resolved**. Agents can reply and mark comments addressed; only the reviewer resolves or reopens. An addressed comment offers **Check in v2**, which opens the newer version at the same moment beside the version you commented on.
@@ -29,7 +31,7 @@ claude mcp add -s user untangle-review -- /path/to/untangle/bin/untangle-review 
 codex mcp add untangle-review -- /path/to/untangle/bin/untangle-review mcp
 ```
 
-The tools are `list_reviews`, `get_review`, `add_version`, `list_comments`, `get_frame`, `add_comment`, `reply`, `mark_addressed`, `open_review` and `export_review`. `get_frame` returns the frame as an image, plus a crop of the commented region and, on request, the same moment in another version. `open_review` starts the app if it is not running and returns a deep link to a version, frame or comment; T3 Code can show it in the preview panel. Without MCP, `untangle-review list <name>`, `reply`, `status --agent` and `export` cover the same loop.
+The tools are `list_reviews`, `get_review`, `add_version`, `list_comments`, `get_frame`, `add_comment`, `reply`, `mark_addressed`, `open_review` and `export_review`. `get_frame` returns the frame as an image, plus a crop of the commented region and, on request, the same moment in another version. `open_review` starts the app if it is not running and returns a deep link to a version, frame or comment; T3 Code can show it in the preview panel. Without MCP, `untangle-review --help` explains the loop: `list <name>` shows unresolved comments, `show <name> <comment>` prints a comment's thread with paths to its frame and region crop so an agent can open the images, `reply --agent` and `status --agent` answer it, and `export <name> --all` prints a video's whole history.
 
 ## Frame accuracy
 
