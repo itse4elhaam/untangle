@@ -140,6 +140,7 @@ fi
 ln -sfn "$app_dir/bin/untangle-doctor" "$HOME/.local/bin/untangle-doctor"
 ln -sfn "$app_dir/bin/untangle" "$HOME/.local/bin/untangle"
 ln -sfn "$app_dir/bin/recit" "$HOME/.local/bin/recit"
+ln -sfn "$app_dir/bin/untangle-review" "$HOME/.local/bin/untangle-review"
 # Copy rather than link so icon lookup does not depend on the checkout path.
 cp --remove-destination "$data_dir/venv/untangle-icons/scalable/apps/tech.truedevs.Untangle.svg" "$icon_dir/scalable/apps/tech.truedevs.Untangle.svg"
 for size in 16 24 32 48 64 128 256 512; do

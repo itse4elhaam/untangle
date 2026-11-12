@@ -123,6 +123,22 @@ class ClipTests(unittest.TestCase):
         self.assertEqual((resolved['status'], resolved['addressed_in']), ('resolved', 'v2'))
         self.assertIn('Too dark', self.review.export_markdown(statuses=('resolved',)))
 
+    def test_cli_show_gives_agents_the_frame_and_history(self):
+        from contextlib import redirect_stdout
+        from untangle.review import cli
+        comment = self.review.add_comment('v1', 7, 'Fix the fade', 'Elhaam', region=[0.25, 0.25, 0.5, 0.5])
+        self.assertEqual(cli.main(['--root', str(self.root), 'reply', 'demo', '#1', 'On it', '--agent']), 0)
+        out = io.StringIO()
+        with redirect_stdout(out):
+            self.assertEqual(cli.main(['--root', str(self.root), 'show', 'demo', '#1']), 0)
+        text = out.getvalue()
+        self.assertIn(f'#1 [{comment["id"]}] v1 00:00:07 (frame 7', text)
+        self.assertIn('Agent: On it', text)
+        frame = Path(text.split('Frame: ')[1].splitlines()[0])
+        self.assertAlmostEqual(mean_luma(frame), 6 * 7 * 255 / 219, delta=3)
+        self.assertTrue(Path(text.split(': ')[-1].strip()).is_file())  # Region crop
+        self.assertEqual(cli.main(['--root', str(self.root), 'show', 'demo', '#9']), 1)
+
     def test_versions_map_through_the_edit_list(self):
         edl = self.root / 'edl.json'
         edl.write_text(json.dumps([{'start': 0, 'end': 2, 'source_start': 10, 'source_end': 12}]))

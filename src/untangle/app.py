@@ -37,6 +37,7 @@ from .composition import canvas_dimensions, camera_composition
 from .camera_framing import CropPosition, load_framing
 from .microphone_meter import MicrophoneMeter
 from .idle_audio import IdleAudio
+from .review.server import running_url as review_url
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
     QPushButton, QComboBox, QSlider, QCheckBox, QFileDialog, QFrame, QGraphicsOpacityEffect,
@@ -867,7 +868,7 @@ class Window(QMainWindow):
         self.preview_column = right
         content.addLayout(right, 0, 1, 2, 1)
         self.navigation_footer = QWidget()
-        self.navigation_footer.setFixedWidth(240)
+        self.navigation_footer.setFixedWidth(330)
         navigation = QHBoxLayout(self.navigation_footer)
         navigation.setContentsMargins(0, 0, 0, 0)
         navigation.setSpacing(6)
@@ -875,7 +876,10 @@ class Window(QMainWindow):
         self.library_button.clicked.connect(lambda: self.open_recordings())
         self.sharing_button = QPushButton('Sharing')
         self.sharing_button.clicked.connect(self.sharing_settings)
-        for button in (self.library_button, self.sharing_button):
+        self.reviews_button = QPushButton('Reviews')
+        self.reviews_button.setToolTip('Review video drafts frame by frame with agents. Opens in your browser.')
+        self.reviews_button.clicked.connect(self.open_reviews)
+        for button in (self.library_button, self.sharing_button, self.reviews_button):
             button.setObjectName('footerNavigation')
             navigation.addWidget(button, 1)
         self.action_bar = QFrame()
@@ -1266,6 +1270,7 @@ class Window(QMainWindow):
         self.tray_audio_status.setEnabled(False)
         menu.addSeparator()
         menu.addAction('Open Untangle', self.reveal)
+        menu.addAction('Review videos', self.open_reviews)
         self.tray_controls = menu.addAction('Recording controls', self.show_recording_controls)
         self.tray_controls.setEnabled(False)
         self.tray_record = menu.addAction('Start recording', self.toggle_record)
@@ -1282,6 +1287,30 @@ class Window(QMainWindow):
         self.tray.setContextMenu(menu)
         self.tray.activated.connect(lambda reason: self.reveal() if reason in (QSystemTrayIcon.Trigger, QSystemTrayIcon.DoubleClick) else None)
         self.tray.show()
+
+    def open_reviews(self):
+        """Open the frame-review web app, starting its local server when none is running."""
+        url = review_url()
+        if url:
+            QDesktopServices.openUrl(QUrl(url))
+            return
+        try:
+            # Detached so reviews stay open after Untangle quits; the server only listens on 127.0.0.1.
+            subprocess.Popen([str(ROOT / 'bin' / 'untangle-review'), 'serve'], stdin=subprocess.DEVNULL,
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+        except OSError as error:
+            QMessageBox.warning(self, 'Reviews', f'Could not start the review app: {error}')
+            return
+        self._await_reviews(0)
+
+    def _await_reviews(self, attempt):
+        url = review_url()
+        if url:
+            QDesktopServices.openUrl(QUrl(url))
+        elif attempt < 40:
+            QTimer.singleShot(150, lambda: self._await_reviews(attempt + 1))
+        else:
+            QMessageBox.warning(self, 'Reviews', 'The review app did not start. Run untangle-review serve in a terminal to see why.')
 
     def restore_preferences(self):
         for name in ('camera', 'microphone', 'shape', 'position', 'quality'):

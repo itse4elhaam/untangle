@@ -7,9 +7,33 @@ import sys
 from .frames import Frames
 from .store import Review, ReviewError, STATUSES, default_root, timecode
 
+AGENT_LOOP = """\
+how a review works:
+  A review holds every version of one video. The reviewer comments on exact frames in the
+  app (serve). Each comment is open, then addressed in a named version, then resolved.
+  Agents reply and mark comments addressed; only the reviewer resolves or reopens.
+
+agent loop (the MCP tools do the same):
+  untangle-review list                         reviews with open/addressed/resolved counts
+  untangle-review list REVIEW                  unresolved comments: #number [id] version timecode, thread
+  untangle-review show REVIEW COMMENT          thread, timing, and paths to the frame and region-crop JPEGs
+  untangle-review add REVIEW SOURCE --label v8 --note "what changed"
+                                               SOURCE is a file, Google Drive link or video URL
+  untangle-review reply REVIEW COMMENT "text" --agent
+  untangle-review status REVIEW COMMENT addressed --version v8 --agent
+  untangle-review export REVIEW --all          the whole history of a video as Markdown
+
+  COMMENT is the id in brackets or the #number. Frames count from 0; timecodes are mm:ss:ff.
+
+agents with MCP:
+  claude mcp add -s user untangle-review -- untangle-review mcp
+  codex mcp add untangle-review -- untangle-review mcp
+"""
+
 
 def build_parser():
-    parser = argparse.ArgumentParser(prog='untangle-review', description=__doc__)
+    parser = argparse.ArgumentParser(prog='untangle-review', description=__doc__, epilog=AGENT_LOOP,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--root', default=None, help=f'Review folder (default {default_root()}, or UNTANGLE_REVIEW_ROOT).')
     commands = parser.add_subparsers(dest='command', required=True)
 
@@ -51,9 +75,15 @@ def build_parser():
     status.add_argument('--version', help='Version that addresses it.')
     status.add_argument('--agent', action='store_true')
 
-    export = commands.add_parser('export', help='Print unresolved comments as Markdown or JSON.')
+    export = commands.add_parser('export', help='Print comments with their threads as Markdown, or the review as JSON.')
     export.add_argument('review')
     export.add_argument('--json', action='store_true')
+    export.add_argument('--all', action='store_true', help='Include resolved comments: the full history.')
+
+    show = commands.add_parser('show', help='Show one comment with paths to its frame and region crop, for agents.')
+    show.add_argument('review')
+    show.add_argument('comment', help='Comment id or #number.')
+    show.add_argument('--compare', metavar='VERSION', help='Also give the same moment in another version.')
 
     frames = commands.add_parser('frames', help='Extract frames now (otherwise the app does it on demand).')
     frames.add_argument('review')
@@ -72,6 +102,41 @@ def author(agent):
         return os.environ.get('UNTANGLE_REVIEW_AGENT_NAME', 'Agent'), 'agent'
     from .server import reviewer_name
     return reviewer_name(), 'human'
+
+
+def comment_id(review, reference):
+    """Accept a comment id or its #number."""
+    number = reference.lstrip('#')
+    if number.isdigit():
+        for comment in review.load()['comments']:
+            if comment['number'] == int(number):
+                return comment['id']
+        raise ReviewError(f'No comment #{number} in {review.name}.')
+    return reference
+
+
+def show_comment(review, reference, compare):
+    from .frames import crop, frame_path
+    data = review.load()
+    comment = review.comment(data, comment_id(review, reference))
+    version, frame, where = review.locate(data, comment['version'], comment['frame'])
+    print(f'#{comment["number"]} [{comment["id"]}] {version["label"]} {timecode(frame, version["fps"])} '
+          f'(frame {frame}, {where["time"]:.3f}s) · {comment["status"]}'
+          + (f' in {comment["addressed_in"]}' if comment.get('addressed_in') else ''))
+    if comment.get('caption'):
+        print(f'Caption: {comment["caption"]}')
+    for message in comment['thread']:
+        print(f'  {message["author"]}{" " if message.get("event") else ": "}{message["text"]}')
+    path = frame_path(review, comment['version'], frame)
+    print(f'Frame: {path}')
+    if comment.get('region'):
+        folder = review.path / 'frames' / 'crops'
+        folder.mkdir(parents=True, exist_ok=True)
+        print(f'Region {comment["region"]}: {crop(path, comment["region"], folder / (comment["id"] + ".jpg"))}')
+    if compare:
+        mapped = review.map_frame(data, comment['version'], frame, compare)
+        print(f'{compare} frame {mapped["frame"]} (mapped by {mapped["method"]}): '
+              f'{frame_path(review, compare, mapped["frame"])}')
 
 
 def print_comments(review, status, as_json):
@@ -143,16 +208,20 @@ def main(argv=None):
                           f'{counts["addressed"]} addressed · {counts["resolved"]} resolved')
         elif args.command == 'reply':
             name, role = author(args.agent)
-            Review.open(args.review, root).reply(args.comment, args.text, name, role)
+            review = Review.open(args.review, root)
+            review.reply(comment_id(review, args.comment), args.text, name, role)
         elif args.command == 'status':
             name, role = author(args.agent)
-            Review.open(args.review, root).set_status(args.comment, args.status, name, role, args.version)
+            review = Review.open(args.review, root)
+            review.set_status(comment_id(review, args.comment), args.status, name, role, args.version)
         elif args.command == 'export':
             review = Review.open(args.review, root)
             if args.json:
                 print(json.dumps(review.load(), indent=1, ensure_ascii=False))
             else:
-                print(review.export_markdown())
+                print(review.export_markdown(STATUSES if args.all else ('open', 'addressed')))
+        elif args.command == 'show':
+            show_comment(Review.open(args.review, root), args.comment, args.compare)
         elif args.command == 'frames':
             review = Review.open(args.review, root)
             data = review.load()

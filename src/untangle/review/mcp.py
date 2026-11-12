@@ -10,10 +10,9 @@ import sys
 import tempfile
 import threading
 
-from .frames import Frames, crop
+from .frames import Frames, crop, frame_path
 from .server import ReviewServer, running_url
 from .sources import add as add_source
-from .sources import refetch
 from .store import Review, ReviewError, STATUSES, default_root, timecode
 
 PROTOCOLS = ('2025-06-18', '2025-03-26', '2024-11-05')
@@ -118,19 +117,9 @@ class Session:
                 'replies': len([m for m in comment['thread'] if not m.get('event')]) - 1,
                 'addressed_in': comment.get('addressed_in')}
 
-    def frame_image(self, review, data, version_id, frame):
-        version = review.version(data, version_id)
-        frames = Frames(review, version)
-        if not frames.ready():
-            if not Path(version['path']).is_file():
-                refetch(review, version)
-            frames.extract()
-            version = review.version(review.load(), version_id)
-            frames = Frames(review, version)
-        path = frames.file(frame)
-        if not path:
-            raise ReviewError(f'{version_id} has no frame {frame}.')
-        return path
+    @staticmethod
+    def frame_image(review, data, version_id, frame):
+        return frame_path(review, version_id, frame)
 
     @staticmethod
     def image(path):

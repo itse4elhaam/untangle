@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import threading
 
+from .sources import refetch
 from .store import ReviewError, identity
 
 LONG_EDGE = int(os.environ.get('UNTANGLE_REVIEW_FRAME_SIZE', '1280'))
@@ -146,3 +147,18 @@ def crop(frame_path, region, destination):
     if result.returncode:
         raise ReviewError(f'Could not crop the frame: {result.stderr.strip()[-300:]}')
     return destination
+
+
+def frame_path(review, version_id, frame):
+    """Path of one cached frame, downloading the source and extracting frames first when needed."""
+    version = review.version(review.load(), version_id)
+    frames = Frames(review, version)
+    if not frames.ready():
+        if not Path(version['path']).is_file():
+            refetch(review, version)
+        frames.extract()
+        frames = Frames(review, review.version(review.load(), version_id))
+    path = frames.file(frame)
+    if not path:
+        raise ReviewError(f'{version_id} has no frame {frame}.')
+    return path
