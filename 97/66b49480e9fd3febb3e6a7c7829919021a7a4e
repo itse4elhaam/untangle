@@ -1,0 +1,34 @@
+src/untangle/app.py
+  s_093f359f2c4756::t_99414592c0ac2a 40,871,879-882,1273,1291-1313
+  s_093f359f2c4756::t_b1c1330e3e303a 1314
+tests/test_app.py
+  s_093f359f2c4756::t_99414592c0ac2a 600-614
+tests/test_review.py
+  s_093f359f2c4756::t_b6948e9edfd279 126-141
+src/untangle/review/mcp.py
+  s_093f359f2c4756::t_7e708f87b1898e 13,120-122
+src/untangle/review/cli.py
+  s_093f359f2c4756::t_a4d0a18a0d072b 10-32,35-36,78,81-86,107-141,211-212,215-216,222-224
+src/untangle/review/frames.py
+  s_093f359f2c4756::t_7e708f87b1898e 9,150-164
+docs/review.md
+  s_093f359f2c4756::t_342c88affe7c18 19-20,34
+scripts/install.sh
+  s_093f359f2c4756::t_99414592c0ac2a 143
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9766b49480e9fd3febb3e6a7c7829919021a7a4e",
+  "prompts": {},
+  "sessions": {
+    "s_093f359f2c4756": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2daa977e-c8ca-4c31-9fe3-3d05465fb173",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Elhaam Basheer Chaudhry <e4elhaam@gmail.com>"
+    }
+  }
+}
