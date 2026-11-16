@@ -7,7 +7,7 @@ Open Untangle from the application launcher or run `untangle`. Opening it can ac
 1. Choose **Camera** or **Screen** in the left sidebar. Select your camera and microphone. Camera Off disables camera-only recording or removes the screen overlay.
 2. On X11, choose a screen or window; refresh the list if needed. On Wayland, use the system picker and **Choose / change source** to retry or change selection.
 3. In Camera mode, choose **Canvas** above the preview and adjust **Zoom**. Use Settings for quality, microphone cleanup, computer sound and camera appearance.
-4. Check **Upload this take to Loom** only if you want upload after saving and naming. Sharing supplies future defaults. Countdown freezes this choice; cancelling preserves it.
+4. Check **Upload this take to Loom** to upload after saving and naming. Untangle remembers the choice for later takes, including after restart, until you uncheck it here or in Sharing. Camera-only takes show a reminder during countdown when upload is on. Countdown freezes the choice for the current take.
 5. Choose **Start recording** in the bottom bar. Escape cancels countdown or microphone preparation. Stop saves; Pause freezes capture. Discard and Restart ask for confirmation before deleting the take; Restart then begins a new take.
 
 On X11, **Ctrl+Shift+F9** starts or stops, **F10** with the same modifiers pauses/resumes, and **F8** toggles pointer zoom. Wayland disables global shortcuts, pointer zoom and the floating camera; use recorder/tray controls. See [Linux support](linux-support.md) for limitations and pending live validation.

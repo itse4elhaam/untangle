@@ -484,7 +484,9 @@ class Window(QMainWindow):
         layout.addLayout(header)
         self.upload_this_take = QCheckBox('Upload this take to Loom')
         self.upload_this_take.setChecked(self.prefs.value('auto_upload', False, type=bool))
-        self.upload_this_take.setToolTip('Upload after saving this take only. The default for future takes is in Sharing. Uncheck to keep this take local.')
+        self.upload_this_take.setToolTip('Upload after saving. Untangle remembers this choice for future takes. Uncheck to keep takes local.')
+        # Ticking once keeps uploading every later take, even after a restart.
+        self.upload_this_take.toggled.connect(lambda on: self.prefs.setValue('auto_upload', on))
 
         content = QGridLayout()
         self.recorder_content = content
@@ -1793,6 +1795,8 @@ class Window(QMainWindow):
         microphone = self.microphone.currentText() if self.microphone.currentData() else 'off'
         desktop = 'on' if self.desktop_audio.isChecked() else 'off'
         strip_note = 'Bottom control strip is excluded from the video.\n' if self._configured_control_strip else ''
+        if self.mode == 'camera' and self._take_auto_upload:
+            strip_note += 'Upload to Loom is on for this camera take. Esc, then untick it to keep this take local.\n'
         return (strip_note + f'{target} · Camera: {camera}\nMicrophone: {microphone} · Desktop audio: {desktop}\n'
                 'Audio readiness is checked before capture. A meter does not verify saved speech.')
 
@@ -2966,7 +2970,7 @@ class Window(QMainWindow):
         visibility.setCurrentIndex(max(0, visibility.findData(self.prefs.value('visibility', 'public'))))
         visibility.setEnabled(not read_only)
         layout.addWidget(visibility)
-        auto = QCheckBox('Select upload to Loom by default for new takes')
+        auto = QCheckBox('Upload new takes to Loom')
         auto.setChecked(self.prefs.value('auto_upload', False, type=bool))
         auto.setEnabled(not read_only and bool(cli))
         layout.addWidget(auto)
