@@ -24,7 +24,7 @@ _FIELDS = set('operation duration_ms exception_type frames mode recording paused
               'visible minimized geometry screen_geometry window_id parent_id mapped override_redirect '
               'input_bounds input_rectangles role popup grabber native pointer_child stage '
               'error_count warning_count thread qt_type category source line outcome '
-              'expected_geometry oversized elapsed_ms build_revision suppressed'.split())
+              'expected_geometry oversized elapsed_ms build_revision suppressed returncode'.split())
 _heartbeat = None
 
 

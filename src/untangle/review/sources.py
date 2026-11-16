@@ -14,6 +14,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+from ..rclone import drive_remote as shared_drive_remote, executable as rclone_executable
 from .store import ReviewError, identity
 
 DRIVE = re.compile(r'^https://(?:drive|docs)\.google\.com/.*?(?:/d/|[?&]id=)([A-Za-z0-9_-]{20,})')
@@ -31,16 +32,7 @@ def is_url(reference):
 
 def drive_remote():
     """The rclone remote for Drive: UNTANGLE_REVIEW_DRIVE_REMOTE, else the first Drive-type remote."""
-    configured = os.environ.get('UNTANGLE_REVIEW_DRIVE_REMOTE')
-    if configured:
-        return configured if configured.endswith(':') else configured + ':'
-    if not shutil.which('rclone'):
-        return None
-    result = subprocess.run(['rclone', 'listremotes', '--long'], capture_output=True, text=True, timeout=30)
-    remotes = [line.split() for line in result.stdout.splitlines() if line.strip()]
-    drives = [parts[0] for parts in remotes if len(parts) > 1 and parts[1] == 'drive']
-    # Prefer a remote rooted at "My Drive" when several exist; folder-scoped ones still resolve IDs.
-    return next((name for name in drives if name.startswith('gdrive')), drives[0] if drives else None)
+    return shared_drive_remote('UNTANGLE_REVIEW_DRIVE_REMOTE')
 
 
 def fetch(review, reference, progress=None):
@@ -83,14 +75,17 @@ def fetch_drive(review, file_id, url, progress=None):
     staging.mkdir(parents=True)
     errors = []
     remote = drive_remote()
-    if remote:
+    binary = rclone_executable()
+    if remote and binary:
         if progress:
             progress(f'Downloading {file_id} from Drive with rclone ({remote})')
-        result = subprocess.run(['rclone', 'backend', 'copyid', remote, file_id, f'{staging}/'],
+        result = subprocess.run([binary, 'backend', 'copyid', remote, file_id, f'{staging}/'],
                                 capture_output=True, text=True)
         if result.returncode == 0 and _cached(staging):
             return _publish(staging, folder)
         errors.append(f'rclone {remote}: {_last_line(result.stderr)}')
+    elif remote:
+        errors.append('rclone is not installed')
     else:
         errors.append('no rclone Drive remote is configured')
     if progress:

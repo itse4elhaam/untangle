@@ -1,4 +1,4 @@
-"""Local Drive setup instructions; opening help performs no Google operation."""
+"""Local Drive setup instructions; opening help runs no rclone or Google operation."""
 from pathlib import Path
 
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QTextBrowser, QPushButton
@@ -19,8 +19,9 @@ def show_drive_setup_guide(parent=None):
     except OSError:
         guide.setPlainText('The local Google Drive guide is missing. Restore docs/google-drive.md '
                            'and scripts/setup-drive-wizard.sh from your reviewed Untangle checkout. '
-                           'Run the wizard in a terminal for prerequisites, Desktop OAuth setup, '
-                           'sign-in recovery and optional scheduling. Do not share credential files.')
+                           'Untangle uploads with rclone: run "rclone config" in a terminal to add a '
+                           'Google Drive remote, then load folders here. Run the wizard in a terminal '
+                           'for prerequisites, recovery and optional scheduling. Do not share rclone.conf.')
     layout.addWidget(guide)
     done = QPushButton('Done')
     done.clicked.connect(dialog.accept)
