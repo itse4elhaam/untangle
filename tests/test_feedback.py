@@ -69,7 +69,7 @@ class FeedbackTests(unittest.TestCase):
         # Synthetic save below stands in for capture; never start the engine.
         self.w.counting = False
 
-    def test_upload_choice_is_per_take_and_uses_the_saved_file_after_naming(self):
+    def test_countdown_freezes_upload_choice_and_uses_the_saved_file_after_naming(self):
         w = self.w
         for consent in (False, True):
             with self.subTest(consent=consent):
