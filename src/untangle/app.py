@@ -27,9 +27,12 @@ from .naming import recording_title, rename_recording
 from .naming_dialog import prompt_recording_name
 from .local_titles import LocalTitleJob, local_title_capability
 from .upload_store import UploadStore
-from .loom import (parse_account_status, parse_video_info, parse_upload_result,
+from . import loom_cleanup
+from .notifications import NotificationLog
+from .notification_panel import NotificationPanel, button_text as notification_button_text
+from .loom import (video_playable, parse_account_status, parse_video_info, parse_upload_result,
                    parse_upload_progress, valid_share_url, video_id, CliHelpCache,
-                   rename_title_args, supports_option)
+                   rename_title_args, supports_option, video_info_args)
 from .audio_devices import AudioDevices, AudioDeviceError
 from .audio_debug import AudioTrace, emit
 from .engine import recording_audio_warning
@@ -308,6 +311,14 @@ class Window(QMainWindow):
         VIDEOS.mkdir(parents=True, exist_ok=True)
         STATE.mkdir(parents=True, exist_ok=True)
         self.upload_store = UploadStore(STATE / 'uploads.json')
+        self.notification_log = NotificationLog(STATE / 'notifications.json')
+        self.notification_panel = None
+        # Path -> upload identity for cleanups waiting out a busy state, and their retry counts.
+        self._loom_cleanup_pending = {}
+        self._loom_cleanup_attempts = {}
+        self._loom_cleanup_timer = QTimer(self)
+        self._loom_cleanup_timer.setInterval(30000)
+        self._loom_cleanup_timer.timeout.connect(self.retry_local_cleanups)
         self.loom_account = {'status': 'unknown'}
         self._account_operation = None
         self.loom_probes = set()
@@ -462,6 +473,13 @@ class Window(QMainWindow):
         self.settings_button.setObjectName('quiet')
         self.settings_button.clicked.connect(self.open_settings)
         header.addWidget(self.settings_button)
+        self.notifications_button = QPushButton()
+        self.notifications_button.setObjectName('quiet')
+        self.notifications_button.setAccessibleName('Notifications')
+        self.notifications_button.setToolTip('Recent Loom uploads and local copy cleanup')
+        self.notifications_button.clicked.connect(self.open_notifications)
+        header.addWidget(self.notifications_button)
+        self.update_notifications_button()
         self.discard_button = QPushButton('Discard')
         self.discard_button.setObjectName('quiet')
         self.discard_button.setToolTip('Stop and delete this recording without saving it')
@@ -2978,6 +2996,15 @@ class Window(QMainWindow):
         titles.setChecked(self.prefs.value('loom_auto_titles', False, type=bool))
         titles.setEnabled(not read_only)
         layout.addWidget(titles)
+        delete_local = QCheckBox('Delete local copy after a verified Loom upload')
+        delete_local.setChecked(self.prefs.value(loom_cleanup.PREFERENCE, True, type=bool))
+        delete_local.setEnabled(not read_only)
+        layout.addWidget(delete_local)
+        delete_note = label('Permanent deletion, not Trash. Untangle deletes only after Loom reports the same video '
+            'available and finished processing, and the local file is unchanged since upload. '
+            'Otherwise the file is kept and a notification says why. The Loom link stays in Recordings.', 'muted')
+        delete_note.setWordWrap(True)
+        layout.addWidget(delete_note)
         title_status = label('Enabled here: Untangle sends no title override. Loom controls AI titles and requires a transcript of at least 30 seconds. Automatic titles for imported videos are not confirmed; the CLI cannot read or enable this Loom setting.', 'muted')
         title_status.setWordWrap(True)
         layout.addWidget(title_status)
@@ -3009,6 +3036,7 @@ class Window(QMainWindow):
             self.upload_this_take.setChecked(auto.isChecked())
             self.prefs.setValue('visibility', visibility.currentData())
             self.prefs.setValue('loom_auto_titles', titles.isChecked())
+            self.prefs.setValue(loom_cleanup.PREFERENCE, delete_local.isChecked())
         self._sharing_dialog = None
         dialog.deleteLater()
 
@@ -3032,6 +3060,7 @@ class Window(QMainWindow):
             if current != entry or not current:
                 return
             result = parse_video_info(out, code, err)
+            promoted = False
             if result.get('status') == 'deleted':
                 if not self.save_upload_metadata(path, status='deleted', url='', error=''):
                     if self.recordings:
@@ -3045,10 +3074,12 @@ class Window(QMainWindow):
                 changes = {key: result[key] for key in ('title', 'remote_id') if result.get(key)}
                 if result.get('url'):
                     changes['url'] = result['url']
-                if result.get('is_complete') is True:
+                if video_playable(result):
                     changes['status'] = 'uploaded'
                 if self.save_upload_metadata(path, **changes):
-                    message = 'Loom link verified. The upstream title is refreshed. This CLI may not report processing completion.'
+                    message = 'Loom link verified. The upstream title is refreshed.'
+                    # Processing finished since upload: the same verification now applies.
+                    promoted = entry.get('status') == 'processing' and changes.get('status') == 'uploaded'
                 else:
                     message = 'Loom link verified, but its title could not be saved locally. The previous saved link and title are unchanged.'
             else:
@@ -3056,6 +3087,8 @@ class Window(QMainWindow):
             if self.recordings:
                 self.recordings.update_actions()
                 self.recordings.message.setText(message)
+            if promoted:
+                self.consider_local_cleanup(path, self.upload_store.file_identity(path), remote=result)
         self.loom_probe(['loom', 'video', 'get', identifier, '-o', 'json', '--output-summary', 'none'], checked)
 
     def connect_loom(self):
@@ -3149,6 +3182,8 @@ class Window(QMainWindow):
         path = getattr(self, '_upload_file', None)
         if self._upload_active or not path:
             return
+        if getattr(self, '_upload_local_deleted', False) and not path.exists():
+            return  # The local copy was deleted after verification; the Loom link stays usable.
         if (not path.is_file() or (getattr(self, '_upload_identity', None) is not None
                 and self.upload_store.file_identity(path) != self._upload_identity)):
             self._upload_url = None
@@ -3233,6 +3268,7 @@ class Window(QMainWindow):
             self.notice('The local recording is missing or unreadable.')
             return
         self._upload_identity = identity
+        self._upload_local_deleted = False
         self._upload_fallback_state = None
         self._upload_cli = cli
         self._upload_file = self.last_file.absolute()
@@ -3523,12 +3559,172 @@ class Window(QMainWindow):
                                  retry=state in ('failed', 'uncertain') and not getattr(self, '_upload_url', None))
         if not (self.busy or self.recording or self.counting):
             self.notice(text)
+        if source_matches and state in ('uploaded', 'processing') and getattr(self, '_upload_url', None):
+            if getattr(self, '_upload_metadata_warning', ''):
+                # The saved status may be stale, so the copy cannot be verified against it.
+                self.local_cleanup_kept(self._upload_file, 'metadata', self._upload_url)
+            else:
+                self.consider_local_cleanup(self._upload_file, self._upload_identity)
         if self.recordings:
             self.recordings.update_actions()
         if getattr(self, '_sharing_dialog', None) is not None:
             self._show_loom_account()
         if self.quit_after_save and not (self.busy or self.recording or self.counting):
             self.close()
+
+    def local_copy_busy_reason(self, path):
+        """Why the local file must stay for now; '' when nothing holds it."""
+        path = Path(path)
+        if self.recording or self.counting or self.busy:
+            return 'recording'
+        if self._upload_active and Path(path).resolve() == self._upload_file.resolve():
+            return 'upload'
+        if self.recordings is not None:
+            source = self.recordings.player.source()
+            if not source.isEmpty() and Path(source.toLocalFile()).resolve() == path.resolve():
+                return 'playback'
+        return loom_cleanup.review_reason(path)
+
+    @observed("app.local_cleanup")
+    def consider_local_cleanup(self, path, identity, remote=None):
+        """After a Loom upload: delete the local file only when the copy is verified."""
+        path = Path(path)
+        enabled = self.prefs.value(loom_cleanup.PREFERENCE, True, type=bool)
+        local = loom_cleanup.local_duration(path) if remote is not None and path.is_file() else None
+        reason = loom_cleanup.decide(enabled=enabled, row=self.upload_store.get(path),
+                                     upload_identity=identity,
+                                     current_identity=self.upload_store.file_identity(path), remote=remote,
+                                     local_duration=local)
+        if reason == 'check_remote' or (reason == 'verified' and remote is not None):
+            reason = self.local_copy_busy_reason(path) or reason
+        if reason in loom_cleanup.TRANSIENT:
+            self.defer_local_cleanup(path, identity, reason)
+        elif reason == 'verified':
+            self.delete_verified_local(path, identity)
+        elif reason == 'check_remote':
+            self.verify_loom_copy(path, identity)
+        else:
+            self.local_cleanup_kept(path, reason)
+
+    def verify_loom_copy(self, path, identity):
+        entry = self.upload_store.get(path)
+        try:
+            args = video_info_args(entry.get('remote_id') or '')
+        except ValueError:
+            self.local_cleanup_kept(path, 'no_link')
+            return
+        diagnostic_event('loom.local_cleanup', outcome='verifying')
+        def checked(out, code, err):
+            if self._closing:
+                return
+            if not path.exists():
+                diagnostic_event('loom.local_cleanup', outcome='gone')
+                self._loom_cleanup_attempts.pop(path, None)
+                return
+            # A rename, forget or new upload since the probe makes this result stale.
+            if self.upload_store.get(path) != entry:
+                self.local_cleanup_kept(path, 'changed')
+                return
+            self.consider_local_cleanup(path, identity, remote=parse_video_info(out, code, err))
+        # Without a CLI, loom_probe reports an unknown result, which keeps the file.
+        self.loom_probe(args, checked, timeout=20000)
+
+    def defer_local_cleanup(self, path, identity, reason):
+        attempts = self._loom_cleanup_attempts.get(path, 0) + 1
+        if attempts > 40:  # About 20 minutes of retries, then keep the file and say why.
+            self.local_cleanup_kept(path, reason)
+            return
+        diagnostic_event('loom.local_cleanup', outcome='deferred', category=reason)
+        self._loom_cleanup_attempts[path] = attempts
+        self._loom_cleanup_pending[path] = identity
+        self._loom_cleanup_timer.start()
+
+    def retry_local_cleanups(self):
+        pending, self._loom_cleanup_pending = self._loom_cleanup_pending, {}
+        for path, identity in pending.items():
+            if self._closing:
+                return
+            self.consider_local_cleanup(path, identity)
+        if not self._loom_cleanup_pending:
+            self._loom_cleanup_timer.stop()
+
+    def delete_verified_local(self, path, identity):
+        self._loom_cleanup_attempts.pop(path, None)
+        state = self.upload_store.get(path)
+        deleted_at = time.time()
+        # Mark first: if the marker cannot be saved, the link would vanish with the file.
+        try:
+            self.upload_store.update(path, expected_identity=identity, local_copy='deleted',
+                                     local_deleted_at=deleted_at)
+        except (OSError, ValueError) as exc:
+            diagnostic_failure('loom.local_cleanup.metadata_failed', exc)
+            self.local_cleanup_kept(path, 'metadata')
+            return
+        try:
+            loom_cleanup.unlink_unchanged(path, identity, lambda target: bool(self.local_copy_busy_reason(target)))
+        except OSError as exc:
+            diagnostic_failure('loom.local_cleanup.delete_failed', exc)
+            try:
+                self.upload_store.update(path, expected_identity=identity, local_copy='', local_deleted_at=None)
+            except (OSError, ValueError) as revert:
+                diagnostic_failure('loom.local_cleanup.revert_failed', revert)
+            self.local_cleanup_kept(path, 'delete_failed')
+            return
+        diagnostic_event('loom.local_cleanup', outcome='deleted')
+        try:
+            self.upload_store.retire_deleted(path, deleted_at)
+        except OSError as exc:
+            # The marked row still works until another file takes this path.
+            diagnostic_failure('loom.local_cleanup.retire_failed', exc)
+        url = valid_share_url(state.get('url'))
+        if path == getattr(self, '_upload_file', None):
+            self._upload_local_deleted = True
+            if self.upload_panel.isVisible() and not self._upload_active:
+                self.upload_detail.setText(self.upload_detail.text() + ' Local copy deleted after Loom verified it.')
+        self.recording_deleted(str(path))
+        if self.recordings is not None:
+            self.recordings.forget_local(path)
+        title = state.get('title') or recording_title(path)
+        warnings = ' '.join(str(state[field]) for field in ('visibility_warning', 'title_warning') if state.get(field))
+        self.notify('deleted', f'Uploaded to Loom — {title} · local copy deleted',
+                    ('Loom reported the same video available and finished processing. ' + warnings).strip(), url)
+
+    def local_cleanup_kept(self, path, reason, url=''):
+        self._loom_cleanup_attempts.pop(path, None)
+        diagnostic_event('loom.local_cleanup', outcome='kept', category=reason)
+        state = self.upload_store.get(path)
+        title = state.get('title') or recording_title(path)
+        url = valid_share_url(url) or valid_share_url(state.get('url'))
+        if reason == 'disabled':
+            self.notify('kept', f'Uploaded to Loom — {title}',
+                        'Local copy kept. Automatic deletion is off in Sharing.', url)
+            return
+        self.notify('kept', f'Uploaded, local copy kept: {loom_cleanup.REASONS.get(reason, reason)}',
+                    f'{title} stays on this computer.', url)
+
+    def notify(self, kind, title, detail='', url=''):
+        try:
+            self.notification_log.add(kind, title, detail, url)
+        except (OSError, ValueError) as exc:
+            diagnostic_failure('notifications.add_failed', exc)
+        self.update_notifications_button()
+        if self.notification_panel is not None and self.notification_panel.isVisible():
+            self.notification_panel.rebuild()
+        tray = getattr(self, 'tray', None)
+        if tray is not None and tray.isVisible() and QSystemTrayIcon.supportsMessages():
+            tray.showMessage('Untangle', title, QSystemTrayIcon.Information, 8000)
+
+    def update_notifications_button(self):
+        unread = self.notification_log.unread()
+        self.notifications_button.setText(notification_button_text(unread))
+        self.notifications_button.setAccessibleName(
+            f'Notifications, {unread} unread' if unread else 'Notifications')
+
+    def open_notifications(self):
+        if self.notification_panel is None:
+            self.notification_panel = NotificationPanel(self.notification_log, self)
+            self.notification_panel.changed.connect(self.update_notifications_button)
+        self.notification_panel.open_panel()
 
     def set_details_visible(self, visible):
         # Disclosure is visual only; audio ownership follows the recorder lifecycle.
@@ -3860,6 +4056,11 @@ class Window(QMainWindow):
             process.waitForFinished(1000)
         self.loom_probes.clear()
         self.upload_timer.stop()
+        self._loom_cleanup_timer.stop()
+        self._loom_cleanup_pending.clear()
+        self._loom_cleanup_attempts.clear()
+        if self.notification_panel is not None:
+            self.notification_panel.close()
         self._audio_generation += 1
         if self.audio_worker:
             self.audio_worker.wait()

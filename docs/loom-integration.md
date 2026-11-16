@@ -34,8 +34,7 @@ establish no speed improvement. Timings exclude filenames, links and output.
 New uploads default to Anyone with the link. Saved private/workspace choices
 still apply; changing the preference does not alter existing Loom videos.
 
-Video-get did not request deletion flags or `isComplete`; missing completion
-remains unknown. Null/404, private/forbidden, archived and network failures cannot
+Video-get did not request deletion flags or `isComplete`. Null/404, private/forbidden, archived and network failures cannot
 prove deletion. Keep links. Only explicit deletion evidence permits
 `UploadStore.mark_remote_deleted`; the synthetic future `DELETED` payload is not
 a claim that today's CLI emits it. Never probe destructively.
@@ -66,7 +65,15 @@ files and expose errors; failed reads must not erase links.
 Records bind to device, inode, size and modification time. Missing folders never
 prune history. Transfer completion must still match the original identity before
 attaching metadata or copying links, including after sharing. Rename metadata only
-after successful local rename; remove it after local deletion or explicit Forget.
+after successful local rename; remove it after manual local deletion or explicit Forget.
+Verified-upload cleanup ([loom_cleanup.py](../src/untangle/loom_cleanup.py)) instead
+marks the row `local_copy: deleted` before unlinking and keeps it, so the link survives
+the file. If the marker cannot be saved the file is kept; if the unlink fails the marker
+is reverted. Loom offers no checksum. Cleanup needs a fresh video-get of the same
+video that is playable and whose `playableDuration` matches the local ffprobe duration
+within 1 s or 1%. The installed CLI (checked 16 November 2026) omits `isComplete` from
+video-get but returns `playableDuration`; an explicit `isComplete: false` still blocks.
+Unplayable results retry for about 20 minutes, then keep the file.
 Interrupted uploading/processing becomes uncertain with known links retained:
 check Loom before retrying to avoid duplicates. See
 [test_upload_store.py](../tests/test_upload_store.py) and
