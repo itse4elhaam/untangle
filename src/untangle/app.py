@@ -3130,6 +3130,8 @@ class Window(QMainWindow):
         self.upload_heading.setText(heading)
         self._upload_detail = detail
         self.upload_detail.setText(detail)
+        self.upload_detail.setVisible(active or retry or not getattr(self, '_upload_url', None)
+                                      or bool(getattr(self, '_upload_metadata_warning', '')))
         self.upload_progress.setVisible(active)
         self.upload_progress.setRange(0, 0 if percent is None else 100)
         if percent is not None:
@@ -3137,7 +3139,7 @@ class Window(QMainWindow):
         url = valid_share_url(getattr(self, '_upload_url', ''))
         self.upload_link.setText(url)
         self.update_audience_status()
-        self.upload_link.setVisible(bool(url))
+        self.upload_link.hide()
         for button in (self.upload_open, self.upload_copy):
             button.setVisible(bool(url))
             button.setEnabled(bool(url) and not active)
@@ -3155,7 +3157,7 @@ class Window(QMainWindow):
                     and not self._upload_active and not getattr(self, '_upload_metadata_warning', ''))
         status = 'command accepted; review current permissions in Loom' if verified else 'UNVERIFIED: review permissions before sending'
         self.upload_audience.setText(f'Audience: {audience} · {status}')
-        self.upload_audience.setVisible(bool(getattr(self, '_upload_url', None)))
+        self.upload_audience.hide()
 
     def update_upload_elapsed(self):
         if not self._upload_active:
@@ -3176,7 +3178,7 @@ class Window(QMainWindow):
         if url:
             QApplication.clipboard().setText(url)
             self.update_audience_status()
-            self.upload_detail.setText('Loom link copied. ' + self.upload_audience.text())
+            self.upload_heading.setText('Loom link copied')
 
     def refresh_upload_link(self):
         path = getattr(self, '_upload_file', None)
