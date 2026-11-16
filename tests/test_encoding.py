@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from unittest.mock import Mock, patch
 
-from untangle.engine import Engine, EngineError
+from untangle.engine import COMPACT_CRF, Engine, EngineError
 
 
 class EncodingTests(unittest.TestCase):
@@ -38,12 +38,13 @@ class EncodingTests(unittest.TestCase):
 
     def test_encoder_quality_modes_use_obs27_options_and_keep_aac(self):
         cpu = self.encoder_settings('obs_x264', compact=True)
-        self.assertEqual((cpu['rate_control'], cpu['crf']), ('CRF', 18))
+        self.assertEqual((cpu['rate_control'], cpu['crf'], cpu['keyint_sec']), ('CRF', 23, 5))
         self.assertEqual(cpu['preset'], 'veryfast')
         hardware = self.encoder_settings('ffmpeg_vaapi', compact=True)
-        self.assertEqual((hardware['rate_control'], hardware['qp']), ('CQP', 18))
+        self.assertEqual((hardware['rate_control'], hardware['qp'], hardware['keyint_sec']), ('CQP', 24, 5))
+        self.assertEqual(hardware['bf'], 0)
         fallback = self.encoder_settings('ffmpeg_vaapi', compact=True, constant_bitrate=True)
-        self.assertEqual(fallback['rate_control'], 'CBR')
+        self.assertEqual((fallback['rate_control'], fallback['keyint_sec']), ('CBR', 2))
         self.assertEqual(fallback['bitrate'], 6221)
 
     def test_unsupported_hardware_quality_mode_keeps_hardware_fallback(self):
@@ -79,7 +80,7 @@ class EncodingTests(unittest.TestCase):
             common = ['ffmpeg', '-hide_banner', '-nostdin', '-y', '-f', 'lavfi', '-i', source,
                       '-c:v', 'libx264', '-preset', 'veryfast', '-profile:v', 'high', '-g', '60', '-threads', '1']
             quality, cbr = root / 'quality.mkv', root / 'cbr.mkv'
-            run([*common, '-crf', '18', str(quality)])
+            run([*common, '-crf', str(COMPACT_CRF), str(quality)])
             run([*common, '-b:v', '6000k', '-minrate', '6000k', '-maxrate', '6000k',
                  '-bufsize', '6000k', '-x264-params', 'nal-hrd=cbr:filler=1', str(cbr)])
             self.assertLess(quality.stat().st_size, cbr.stat().st_size / 2)

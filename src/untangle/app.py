@@ -682,10 +682,10 @@ class Window(QMainWindow):
         self.quality.addItem('1080p · 30 fps', (1920, 1080))
         quality_row.addWidget(self.quality)
         controls.addLayout(quality_row)
-        self.compact_recordings = QCheckBox('Smaller camera recording files')
-        self.compact_recordings.setChecked(self.prefs.value('compact_camera_recordings', False, type=bool))
-        self.compact_recordings.setToolTip('Optional compression for camera-only recordings. Fine detail may change. Turn off to include your screen. Screen recordings always use the original recording settings.')
-        self.compact_recordings.toggled.connect(lambda value: self.prefs.setValue('compact_camera_recordings', value))
+        self.compact_recordings = QCheckBox('Smaller recording files')
+        self.compact_recordings.setChecked(self.prefs.value('compact_recordings', True, type=bool))
+        self.compact_recordings.setToolTip('Quality-based compression for faster Loom uploads, usually several times smaller. Text stays sharp; fine camera texture can soften slightly. Turn off to record at the original fixed bitrate.')
+        self.compact_recordings.toggled.connect(lambda value: self.prefs.setValue('compact_recordings', value))
         controls.addWidget(self.compact_recordings)
         content.addWidget(self.controls_panel, 0, 0)
 
@@ -1626,9 +1626,6 @@ class Window(QMainWindow):
     def toggle_presentation(self):
         if self.wayland_session():
             return
-        if self.recording and getattr(self, '_recording_compact', False):
-            self.notice('Screen presentation requires the original recording mode. Turn off Smaller camera recording files before starting a new recording.')
-            return
         if not self.recording or self.busy or not self.camera.currentData():
             return
         self.presentation_target = 0. if self.presentation_target else 1.
@@ -1999,7 +1996,7 @@ class Window(QMainWindow):
             self.recording_error = ''
             self.recording_error_baseline = len(self.engine.errors)
             self.presentation_amount = self.presentation_target = self.presentation_committed = 1. if self.mode == 'camera' else 0.
-            self._recording_compact = self.mode == 'camera' and self.compact_recordings.isChecked()
+            self._recording_compact = self.compact_recordings.isChecked()
             if self.live_controls_safe():
                 self.recording_controls.update_state(state='starting', elapsed='--:--',
                     target=self.capture_target_label(), microphone='Starting this take', hide_allowed=False)
@@ -2017,8 +2014,8 @@ class Window(QMainWindow):
             self.library_button.setEnabled(True)
             self.sharing_button.setEnabled(True)
             self.upload_library.setEnabled(True)
-            self.presentation_button.setEnabled(not self.wayland_session() and bool(self.camera.currentData()) and not self._recording_compact)
-            self.tray_presentation.setEnabled(not self.wayland_session() and bool(self.camera.currentData()) and not self._recording_compact)
+            self.presentation_button.setEnabled(not self.wayland_session() and bool(self.camera.currentData()))
+            self.tray_presentation.setEnabled(not self.wayland_session() and bool(self.camera.currentData()))
             self._audio_warning_since = None
             self.bubble.recording = True
             self.zoom_button.setEnabled(not self.wayland_session() and self.mode == 'screen')

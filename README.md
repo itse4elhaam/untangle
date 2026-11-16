@@ -10,7 +10,7 @@ Untangle is a native Linux screen and camera recorder built with Qt and OBS. Rec
 
 Choose Camera or Screen, select your devices, check the microphone, and use **Start recording** in the bottom bar. Camera mode offers landscape, social canvases, source-size output and zoom. Recordings lets you review saved videos, rename them, recover MKVs, and share through Loom or Google Drive.
 
-Recording starts in MKV for interruption recovery; FFmpeg prepares MP4 without re-encoding after stopping. Optional smaller camera files trade some detail for size. Screen encoding stays unchanged.
+Recording starts in MKV for interruption recovery; FFmpeg prepares MP4 without re-encoding after stopping. Recordings use quality-based compression by default for faster uploads; Settings can restore the original fixed bitrate.
 
 [Using Untangle](docs/usage.md) covers controls, audio, sharing and recovery.
 
