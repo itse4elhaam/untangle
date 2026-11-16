@@ -282,6 +282,8 @@ class AppChecks(unittest.TestCase):
         self.assertFalse(self.window.busy)
         self.assertIn('syntax could not be verified', self.window.status.text())
         self.window._upload_url = 'https://www.loom.com/share/abc123'
+        self.window._upload_active = True  # Production only routes errors from an active upload.
+        self.window._upload_pending = {'sharing'}
         self.window.upload_process_error(QProcess.FailedToStart)
         self.assertFalse(self.window.busy)
         self.assertIn('sharing command could not start', self.window.status.text())

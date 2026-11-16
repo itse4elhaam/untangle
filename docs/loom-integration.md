@@ -22,7 +22,10 @@ affecting other products on that profile; no Loom-only disconnect was found.
 Probe upload/rename help rather than assuming flags. The inspected uploader used
 a positional file, lacked upload visibility, and preserved the original extension
 even with a title override. The app therefore corrects differing titles after
-publication and applies sharing separately when needed. Failed rename/sharing
+publication and applies sharing separately when needed. The upload returns no
+sharing state, so that call cannot be skipped. Rename help is read during the
+transfer; rename and sharing then run at the same time, and the link is copied
+as soon as sharing is confirmed, without waiting for the title. Failed rename/sharing
 must retain the link and warning. See the [changelog](https://developer.atlassian.com/cloud/twg-cli/changelog/)
 for publication-success/visibility-failure exit code 3.
 
