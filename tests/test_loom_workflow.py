@@ -123,6 +123,8 @@ class LoomWorkflowChecks(unittest.TestCase):
         self.addCleanup(app_fixture.AppChecks.tearDown, self)
         self.window.timer.stop()
         self.window.configure_timer.stop()
+        # These checks cover upload states; test_loom_cleanup.py covers local deletion.
+        self.window.prefs.setValue('loom_delete_verified_local', False)
         self.path = self.root / 'Local walkthrough.mp4'
         self.path.write_bytes(b'Synthetic metadata only; not playable media.')
         self.window.set_last(self.path)

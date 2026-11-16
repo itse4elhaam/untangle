@@ -9,6 +9,7 @@ from .naming import has_automatic_name, recording_title, recording_files, rename
 from .naming_dialog import prompt_recording_name
 from .upload_store import UploadStore
 from .loom import valid_share_url
+from .loom_cleanup import unlink_unchanged
 
 from PySide6.QtCore import Qt, QUrl, Signal, QSize, QSignalBlocker, QProcess, QTimer, QEvent
 from PySide6.QtGui import QAction, QDesktopServices, QIcon, QPixmap, QShortcut, QKeySequence, QPalette
@@ -327,6 +328,16 @@ class Recordings(QWidget):
         tools_menu.aboutToShow.connect(sync_tools)
         self.library_tools.setMenu(tools_menu)
         library_layout.addWidget(self.library_tools)
+        # Recordings whose local copy Untangle deleted after a verified Loom upload.
+        self.loom_only = QToolButton()
+        self.loom_only.setObjectName('loomOnly')
+        self.loom_only.setPopupMode(QToolButton.InstantPopup)
+        self.loom_only.setToolTip('Local copies deleted after a verified Loom upload. Their links stay here.')
+        self.loom_only_menu = QMenu(self.loom_only)
+        self.loom_only_menu.aboutToShow.connect(self.build_loom_only_menu)
+        self.loom_only.setMenu(self.loom_only_menu)
+        self.loom_only.hide()
+        library_layout.addWidget(self.loom_only)
         self.drive = QPushButton('Upload selected to Google Drive…')
         self.drive.clicked.connect(self.open_drive)
         self.drive_exclude = QPushButton('Do not upload to Google Drive')
@@ -440,6 +451,7 @@ class Recordings(QWidget):
             self.files.addItem(item)
             self.add_row_actions(item, path)
         self.start_thumbnail()
+        self.update_loom_only()
         self.filter_files(self.search.text())
         for index in range(self.files.count()):
             item = self.files.item(index)
@@ -450,6 +462,47 @@ class Recordings(QWidget):
         else:
             if selected != Path('.') and not selected.is_file():
                 self.message.setText('This recording is missing. Refresh the list.')
+
+    def remote_only(self):
+        if self.upload_store is None:
+            return []
+        return [row for row in self.upload_store.remote_only() if self.loom_url(row)]
+
+    def update_loom_only(self):
+        count = len(self.remote_only())
+        self.loom_only.setText(f'On Loom only ({count})')
+        self.loom_only.setAccessibleName(f'On Loom only, {count} recordings')
+        self.loom_only.setVisible(bool(count))
+
+    def build_loom_only_menu(self):
+        self.loom_only_menu.clear()
+        for menu in getattr(self, '_loom_only_menus', []):
+            menu.deleteLater()
+        self._loom_only_menus = []
+        for row in self.remote_only()[:30]:
+            url = self.loom_url(row)
+            title = row.get('title') or recording_title(row['path'])
+            menu = QMenu(title.replace('&', '&&'), self.loom_only_menu)
+            self._loom_only_menus.append(menu)
+            self.loom_only_menu.addMenu(menu)
+            menu.setToolTip(row['path'])
+            menu.addAction('Open in Loom ↗', lambda *_, url=url: QDesktopServices.openUrl(QUrl(url)))
+            menu.addAction('Copy Loom link', lambda *_, url=url: self.copy_loom_link(url))
+
+    def copy_loom_link(self, url):
+        QApplication.clipboard().setText(url)
+        self.message.setText('Loom link copied. Review permissions in Loom before sharing.')
+
+    def forget_local(self, path):
+        """Drop one deleted file's row without refreshing, so other playback continues."""
+        path = Path(path)
+        for index in range(self.files.count()):
+            if Path(self.files.item(index).data(Qt.UserRole)) == path:
+                self.files.takeItem(index)
+                break
+        self.update_loom_only()
+        self.filter_files(self.search.text())
+        self.message.setText(f'Deleted the local copy of {recording_title(path)}. It is on Loom; find its link under On Loom only.')
 
     def filter_files(self, text):
         visible = 0
@@ -903,10 +956,7 @@ class Recordings(QWidget):
         deleted, failures, metadata_errors = [], [], []
         for path in paths:
             try:
-                if (self.deletion_blocked(path) or path.is_symlink()
-                        or UploadStore.file_identity(path) != identities[path]):
-                    raise OSError('The recording changed or is in use.')
-                path.unlink()
+                unlink_unchanged(path, identities[path], self.deletion_blocked)
             except OSError as exc:
                 failures.append((path, exc))
                 continue

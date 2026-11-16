@@ -66,7 +66,12 @@ files and expose errors; failed reads must not erase links.
 Records bind to device, inode, size and modification time. Missing folders never
 prune history. Transfer completion must still match the original identity before
 attaching metadata or copying links, including after sharing. Rename metadata only
-after successful local rename; remove it after local deletion or explicit Forget.
+after successful local rename; remove it after manual local deletion or explicit Forget.
+Verified-upload cleanup ([loom_cleanup.py](../src/untangle/loom_cleanup.py)) instead
+marks the row `local_copy: deleted` before unlinking and keeps it, so the link survives
+the file. If the marker cannot be saved the file is kept; if the unlink fails the marker
+is reverted. Cleanup requires an explicit `isComplete: true` from video-get, so a CLI
+that omits completion never deletes anything.
 Interrupted uploading/processing becomes uncertain with known links retained:
 check Loom before retrying to avoid duplicates. See
 [test_upload_store.py](../tests/test_upload_store.py) and
