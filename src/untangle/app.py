@@ -3344,7 +3344,7 @@ class Window(QMainWindow):
         process.errorOccurred.connect(lambda error: self.upload_process_error(error)
             if self._upload_process is process and self._upload_active else None)
         if not stream:
-            timer = QTimer(self)
+            timer = QTimer(process)
             timer.setSingleShot(True)
             def expired():
                 if self._upload_process is process and self._upload_active:
@@ -3631,6 +3631,15 @@ class Window(QMainWindow):
             timing['elapsed_ms'] = max(0, round((time.monotonic() - self._upload_started) * 1000))
         diagnostic_event('upload.result', outcome=state, **timing)
         self._upload_active = False
+        # A title callback can end the workflow while sharing is still running.
+        process = self._upload_process
+        if process is not None:
+            for timer in process.findChildren(QTimer):
+                timer.stop()
+                timer.deleteLater()
+            if process.state() != QProcess.NotRunning:
+                process.kill()
+                process.waitForFinished(1000)
         self._upload_setting_title = False
         self._upload_pending = set()
         self._title_waiting = False

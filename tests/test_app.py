@@ -246,27 +246,26 @@ class AppChecks(unittest.TestCase):
             process.assert_not_called()
 
     def test_loom_help_and_upload_snapshot_and_visibility_failure(self):
+        from test_loom_workflow import InertProcess
         path = self.root / 'local video.mp4'
         path.write_bytes(b'private video')
         self.window.set_last(path)
         self.window.prefs.setValue('visibility', 'owner')
         qt.clipboard().setText('unchanged')
-        with patch.object(self.window, 'find_cli', return_value='/fake/twg'), patch.object(glint, 'QProcess') as process_type:
-            process_type.NormalExit = QProcess.NormalExit
-            process = process_type.return_value
+        with patch.object(self.window, 'find_cli', return_value='/fake/twg'), patch.object(glint, 'QProcess', InertProcess):
             self.window.upload()
-            self.assertEqual(process.setArguments.call_args.args[0], ['loom', 'video', 'upload', '--help'])
-            process.readAllStandardOutput.return_value = b'Usage: twg loom video upload [options] <file>'
-            process.readAllStandardError.return_value = b''
-            self.window.upload_help(0, QProcess.NormalExit)
-            self.assertEqual(process.setArguments.call_args.args[0], ['loom', 'video', 'upload', str(path), '-o', 'json', '--output-summary', 'none'])
+            process = self.window._upload_process
+            self.assertEqual(process.arguments, ['loom', 'video', 'upload', '--help'])
+            process.finish('Usage: twg loom video upload [options] <file>')
+            process = self.window._upload_process
+            self.assertEqual(process.arguments, ['loom', 'video', 'upload', str(path), '-o', 'json', '--output-summary', 'none'])
             self.window.prefs.setValue('visibility', 'public')
-            process.readAllStandardOutput.return_value = b'{"url":"https://www.loom.com/share/abc123"}'
-            self.window.upload_done(0, QProcess.NormalExit)
-            self.assertEqual(process.setArguments.call_args.args[0][-4:], ['-o', 'json', '--output-summary', 'none'])
-            self.assertIn('owner', process.setArguments.call_args.args[0])
+            process.finish('{"url":"https://www.loom.com/share/abc123"}')
+            process = self.window._upload_process
+            self.assertEqual(process.arguments[-4:], ['-o', 'json', '--output-summary', 'none'])
+            self.assertIn('owner', process.arguments)
             self.assertEqual(qt.clipboard().text(), 'unchanged')
-            self.window.visibility_done(1, QProcess.NormalExit)
+            process.finish(code=1)
             self.assertEqual(qt.clipboard().text(), 'unchanged')
             self.assertFalse(self.window.busy)
             self.assertEqual(path.read_bytes(), b'private video')

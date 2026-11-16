@@ -489,6 +489,25 @@ class LoomWorkflowChecks(unittest.TestCase):
         self.assertIsNone(self.window._upload_url)
         self.assertIn('changed during upload', self.window.status.text())
 
+    def test_replaced_source_stops_parallel_sharing_and_ignores_late_success(self):
+        for phase in ('help', 'rename'):
+            with self.subTest(phase=phase):
+                self.window.prefs.setValue('loom_auto_titles', False)
+                self.begin_upload(HELP).finish(video_response(name=self.path.name))
+                sharing = self.window._upload_process
+                if phase == 'rename':
+                    self.window._title_process.finish('  --title <title> New title')
+                self.replace_source()
+                self.window._title_process.finish('  --title <title> New title')
+                self.assertTrue(sharing.killed)
+                self.assertFalse([timer for timer in self.window.findChildren(QTimer)
+                                  if timer.isActive() and timer.interval() == 20000])
+                self.assert_unlocked()
+                sharing.finish('{}')
+                self.assertEqual(qt.clipboard().text(), 'unchanged')
+                self.assertEqual(self.window.upload_store.get(self.path), {})
+                self.assertIn('changed during upload', self.window.status.text())
+
     def test_successful_help_is_reused_until_cli_is_replaced(self):
         cli = self.root / 'twg'
         cli.write_bytes(b'synthetic cli, never executed')
