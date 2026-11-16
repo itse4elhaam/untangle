@@ -34,22 +34,24 @@ class ArchiveTests(unittest.TestCase):
             video.write_bytes(b'different recording')
             self.assertEqual(cleanup_candidates(root, root, now + RETENTION), [])
 
-    def test_remote_copy_must_exist_match_and_not_be_trashed(self):
+    def test_remote_copy_must_exist_and_match_size_and_md5(self):
         with tempfile.TemporaryDirectory() as directory:
             video = Path(directory) / 'test.mp4'
             video.write_bytes(b'recording')
-            row = {'remote_id': 'remote', 'checksum': checksum(video)}
+            row = {'remote_id': 'remote', 'checksum': checksum(video), 'folder': 'folder'}
             client = Mock()
-            response = client.service.return_value.files.return_value.get.return_value.execute
-            response.return_value = {'size': str(video.stat().st_size),
-                                     'md5Checksum': row['checksum'], 'trashed': False}
+            client.stat.return_value = {'ID': 'remote', 'Size': video.stat().st_size,
+                                        'Hashes': {'md5': row['checksum']}}
             self.assertTrue(verified_drive(video, row, client))
-            response.return_value['trashed'] = True
+            self.assertFalse(verified_drive(video, {**row, 'folder': None}, client))
+            client.stat.return_value['Size'] += 1
             self.assertFalse(verified_drive(video, row, client))
-            response.return_value['trashed'] = False
-            response.return_value['md5Checksum'] = 'wrong'
+            client.stat.return_value.update(Size=video.stat().st_size, Hashes={'md5': 'wrong'})
             self.assertFalse(verified_drive(video, row, client))
-            response.side_effect = OSError('offline')
+            # Trashed or deleted copies are absent from rclone listings.
+            client.stat.return_value = None
+            self.assertFalse(verified_drive(video, row, client))
+            client.stat.side_effect = OSError('offline')
             with patch('untangle.archive.DriveClient', return_value=client), \
                     patch('untangle.archive.UploadStore') as store:
                 store.return_value.get.return_value = row
@@ -63,33 +65,52 @@ class ArchiveTests(unittest.TestCase):
             self.assertEqual(cleanup_candidates(root, root), [])
             self.assertFalse(has_remote_copy(video, state=root))
 
-    def test_interrupted_upload_reuses_reserved_id_and_verifies_before_retention(self):
-        import sys
+    def test_interrupted_upload_keeps_destination_and_verifies_before_retention(self):
+        from untangle import rclone
         from untangle.archive import run
+        from test_drive import FakeDrive
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             video = root / 'test.mp4'
             video.write_bytes(b'recording')
-            configure(True, 'chosen', root)
+            configure(True, 'chosen', root, remote='gdrive:')
             store = UploadStore(root / 'archive-uploads.json')
             store.update(video, observed_at=time.time() - 600)
-            client = Mock()
-            files = client.service.return_value.files.return_value
-            files.generateIds.return_value.execute.return_value = {'ids': ['reserved']}
-            missing = Exception('not found')
-            missing.resp = Mock(status=404)
-            metadata = {'size': str(video.stat().st_size), 'md5Checksum': checksum(video), 'trashed': False}
-            files.get.return_value.execute.side_effect = [missing, missing, metadata, metadata, metadata]
-            files.create.return_value.next_chunk.side_effect = [OSError('interrupted'), (None, {'id': 'reserved'})]
-            with patch('untangle.archive.DriveClient', return_value=client), \
-                    patch.dict(sys.modules, {'googleapiclient.http': Mock()}), \
+            drive = FakeDrive()
+            interrupted = [rclone.RcloneTimeout()]
+            def flaky(args, **kwargs):
+                if args[0] == 'copyto' and interrupted:
+                    drive.calls.append(list(args))
+                    raise interrupted.pop()
+                return drive(args, **kwargs)
+            with patch('untangle.rclone.run', side_effect=flaky), \
                     patch.dict('os.environ', {'XDG_RUNTIME_DIR': str(root)}):
                 run(root, root)
                 self.assertNotIn('verified_at', UploadStore(root / 'archive-uploads.json').get(video))
+                # A destination change does not move a pending upload.
+                configure(True, 'elsewhere', root, remote='gdrive:')
                 run(root, root)
                 self.assertIn('verified_at', UploadStore(root / 'archive-uploads.json').get(video))
                 run(root, root)
-            self.assertEqual(files.generateIds.call_count, 1)
-            self.assertEqual(files.create.call_count, 2)
-            self.assertTrue(all(call.kwargs['body']['id'] == 'reserved'
-                                for call in files.create.call_args_list))
+            copies = drive.copies()
+            self.assertEqual(len(copies), 2)
+            self.assertTrue(all(call[call.index('--drive-root-folder-id') + 1] == 'chosen'
+                                for call in copies))
+            self.assertEqual(UploadStore(root / 'archive-uploads.json').get(video)['remote_id'], 'file-1')
+
+    def test_disabled_or_remote_less_archive_never_uploads(self):
+        from untangle.archive import run
+        from untangle import rclone
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'test.mp4').write_bytes(b'recording')
+            with patch('untangle.rclone.run') as call, \
+                    patch.dict('os.environ', {'XDG_RUNTIME_DIR': str(root)}):
+                configure(False, 'chosen', root, remote='gdrive:')
+                run(root, root)
+                configure(True, 'chosen', root)
+                with patch('untangle.rclone.drive_remote', return_value=None), \
+                        patch('untangle.rclone.executable', return_value=None):
+                    run(root, root)
+            call.assert_not_called()
+            self.assertEqual(UploadStore(root / 'archive-uploads.json').get(root / 'test.mp4'), {})

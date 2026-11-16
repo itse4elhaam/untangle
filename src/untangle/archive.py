@@ -7,7 +7,9 @@ import os
 from pathlib import Path
 import time
 
+from .diagnostics import event, failure as diagnostic_failure
 from .drive import DriveClient
+from .rclone import RcloneCancelled
 from .naming import recording_files
 from .upload_store import UploadStore
 
@@ -39,29 +41,32 @@ def config(state=STATE):
         return {}
 
 
-def configure(enabled, folder, state=STATE):
+def configure(enabled, folder, state=STATE, remote=None):
+    """Save the folder ID and rclone remote. Configs saved before rclone have no remote."""
     if enabled and not folder:
         raise ValueError('Choose a destination folder first.')
+    options = {'enabled': bool(enabled), 'folder': folder}
+    if remote:
+        options['remote'] = remote
     with archive_lock(state):
-        DriveClient(state).save_private(state / 'archive.json', json.dumps(
-            {'enabled': bool(enabled), 'folder': folder}))
+        DriveClient(state).save_private(state / 'archive.json', json.dumps(options))
 
 
 def verified_drive(path, row, client):
-    if not row.get('remote_id') or not row.get('checksum'):
+    """True only when the recorded Drive file exists untrashed with this file's size and MD5.
+
+    Missing remote files return False; rclone failures raise so callers fail closed.
+    """
+    if not row.get('remote_id') or not row.get('checksum') or not row.get('folder'):
         return False
     identity = UploadStore.file_identity(path)
     if identity is None or checksum(path) != row['checksum']:
         return False
-    try:
-        remote = client.service().files().get(fileId=row['remote_id'],
-            fields='id,size,md5Checksum,trashed', supportsAllDrives=True).execute()
-    except Exception as exc:
-        if getattr(getattr(exc, 'resp', None), 'status', None) == 404:
-            return False
-        raise
-    return (remote.get('trashed') is False and str(remote.get('size')) == str(identity['size'])
-            and remote.get('md5Checksum') == row['checksum']
+    remote = client.stat(row)
+    if remote is None:
+        return False
+    md5 = str((remote.get('Hashes') or {}).get('md5', '')).lower()
+    return (str(remote.get('Size')) == str(identity['size']) and md5 == row['checksum']
             and UploadStore.file_identity(path) == identity)
 
 
@@ -97,8 +102,7 @@ def cleanup_candidates(directory, state=STATE, now=None):
 
 
 def upload_recording(path, folder, store, client, progress=lambda message: None):
-    """Reserve before transfer, then verify before establishing retention."""
-    from googleapiclient.http import MediaFileUpload
+    """Record the destination before transfer, then verify before establishing retention."""
     identity = store.file_identity(path)
     if identity is None or path.is_symlink():
         raise OSError('The recording is missing or is a symbolic link.')
@@ -106,27 +110,28 @@ def upload_recording(path, folder, store, client, progress=lambda message: None)
     digest = checksum(path)
     if store.file_identity(path) != identity:
         raise OSError('The recording changed.')
-    service = client.service()
-    remote_id = row.get('remote_id')
-    if not remote_id:
-        remote_id = service.files().generateIds(count=1, space='drive').execute()['ids'][0]
-        store.update(path, expected_identity=identity, remote_id=remote_id,
-                     checksum=digest, folder=folder)
-    if not verified_drive(path, store.get(path), client):
-        media = MediaFileUpload(str(path), resumable=True, chunksize=8 * 1024 * 1024)
-        request = service.files().create(body={'id': remote_id, 'name': path.name,
-            'parents': [store.get(path)['folder']]}, media_body=media,
-            fields='id', supportsAllDrives=True)
-        response = None
-        while response is None:
-            status, response = request.next_chunk(num_retries=3)
-            if status:
-                progress(f'{path.name}: {status.progress():.0%}')
-    if not verified_drive(path, store.get(path), client):
+    if not row.get('folder'):
+        # Retries keep the original destination, even after the chosen folder changes.
+        store.update(path, expected_identity=identity, checksum=digest, folder=folder,
+                     remote=client.resolve_remote(), name=path.name)
+    row = store.get(path)
+    if not verified_drive(path, row, client):
+        name = row.get('name') or path.name
+        remote = row.get('remote') or client.resolve_remote()
+        client.copy(path, row['folder'], name, progress, remote)
+        copies = [entry for entry in client.files(row['folder'], remote) or ()
+                  if entry.get('Name') == name]
+        if len(copies) != 1 or not copies[0].get('ID'):
+            raise OSError('The Drive copy could not be identified.')
+        # Rows from the Google API client hold a reserved ID that rclone cannot reuse.
+        store.update(path, expected_identity=identity, remote_id=copies[0]['ID'],
+                     remote=remote, name=name)
+    row = store.get(path)
+    if not verified_drive(path, row, client):
         raise OSError('The Drive copy could not be verified.')
     store.update(path, expected_identity=identity,
                  verified_at=row.get('verified_at', time.time()))
-    return remote_id
+    return row['remote_id']
 
 
 def upload_paths(paths, folder, client, progress):
@@ -140,6 +145,9 @@ def upload_paths(paths, folder, client, progress):
             raise OSError(store.error)
         for target in paths:
             path = Path(target)
+            if client.cancelled.is_set():
+                outcomes.append({'name': path.name, 'status': 'cancelled'})
+                continue
             try:
                 if policy.blocked(path):
                     outcomes.append({'name': path.name, 'status': 'excluded'})
@@ -149,9 +157,13 @@ def upload_paths(paths, folder, client, progress):
                 remote_id = upload_recording(path, folder, store, client, progress)
                 outcomes.append({'name': path.name, 'status': 'uploaded', 'remote_id': remote_id})
                 progress(f'Uploaded and verified {path.name}')
-            except Exception:
+            except Exception as exc:
+                diagnostic_failure('archive.upload_paths.file_failed', exc)
                 outcomes.append({'name': path.name, 'status': 'unconfirmed'})
-                progress(f'{path.name}: failed or unconfirmed. Check Drive before retrying.')
+                if isinstance(exc, RcloneCancelled):
+                    progress(f'{path.name}: cancelled. Check Drive before retrying.')
+                else:
+                    progress(f'{path.name}: failed or unconfirmed. Check Drive before retrying.')
     return outcomes
 
 
@@ -164,10 +176,17 @@ def run(directory=None, state=STATE):
     with archive_lock(state):
         options = config(state)
         if not options.get('enabled') or not options.get('folder'):
+            event('archive.run', outcome='disabled')
             return
         from .drive_policy import DrivePolicy
         policy = DrivePolicy(state)
-        client = DriveClient(state)
+        # Configs saved before rclone have no remote; the default Drive remote is used.
+        client = DriveClient(state, options.get('remote'))
+        try:
+            client.resolve_remote()
+        except Exception as exc:
+            diagnostic_failure('archive.run.no_remote', exc)
+            return
         store = UploadStore(state / 'archive-uploads.json')
         if store.error:
             raise OSError(store.error)
@@ -183,11 +202,15 @@ def run(directory=None, state=STATE):
                 if time.time() - row['observed_at'] < 300:
                     continue
                 upload_recording(path, options['folder'], store, client)
-            except Exception:
+            except Exception as exc:
                 # One failed upload must not prevent other recordings from being archived.
-                # Do not log HTTP exceptions, which can contain tokens.
+                # Log only the exception type: rclone messages can contain names and accounts.
+                diagnostic_failure('archive.run.file_failed', exc)
                 continue
 
 
 if __name__ == '__main__':
+    from .diagnostics import install
+    # Separate from the app's log so two processes never rotate the same file.
+    install(Path.home() / '.local/state/glint/archive')
     run()

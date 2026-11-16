@@ -190,47 +190,35 @@ finish() {
 # Replace the example below. Set the two totals to match the stages you write.
 # ──────────────────────────────────────────────────────────────────────────
 
-TOTAL_STAGES=10
-TOTAL_MINUTES=35
+TOTAL_STAGES=7
+TOTAL_MINUTES=22
 
-# This wizard guides manual actions. It never launches Untangle, authenticates,
-# installs packages, uploads files, or runs systemctl itself.
+# This wizard guides manual actions. It never launches Untangle, runs rclone config,
+# authenticates, installs packages, uploads files, or runs systemctl itself.
 [[ -t 0 ]] || { echo 'Run this wizard interactively in a terminal.' >&2; exit 1; }
 umask 077
 repo_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-progress_dir="$HOME/.local/state/glint/drive-setup"
-[[ ! -L "$progress_dir" ]] || { echo 'Refusing a symlinked progress directory.' >&2; exit 1; }
-mkdir -p "$progress_dir"
-chmod 700 "$progress_dir"
-ENV_FILE="$progress_dir/progress.env"
-[[ ! -L "$ENV_FILE" ]] || { echo 'Refusing a symlinked progress file.' >&2; exit 1; }
-touch "$ENV_FILE"
-chmod 600 "$ENV_FILE"
 manual_done() {
     confirm "${1:-Finished this manual step? Stop here if it is incomplete.}" || exit 0
 }
 banner "Untangle Google Drive setup and recovery"
-say "Re-runs keep your project ID and private client path. Never paste JSON, tokens or passwords."
+say "Untangle uploads with rclone, through a Google Drive remote you configure yourself."
+say "Never paste rclone.conf contents, tokens or passwords anywhere."
 say "Read alongside: $repo_dir/docs/google-drive.md"
-say "Stages: prerequisites; project/API; consent; Desktop JSON; private config; sign-in; destination; opt-in; scheduler; verification/recovery."
 manual_done
 
 stage "Check prerequisites" 3
 missing=0
-for executable in python3 uv obs ffmpeg v4l2-ctl pactl busctl systemctl xdg-open; do
+for executable in python3 uv rclone systemctl; do
     if ! command -v "$executable" >/dev/null 2>&1; then
         warn "Missing $executable. Manual next step after approving package installation:"
         case "$executable" in
             python3) say 'sudo apt install python3 python3-venv' ;;
             uv) say 'If pipx is installed: pipx install uv. Otherwise follow https://docs.astral.sh/uv/getting-started/installation/' ;;
-            obs) say 'Run ./scripts/install.sh --check --json (add --wayland for Wayland). OBS 27 supports X11; OBS 30-33 supports X11/Wayland. Follow docs/linux-support.md before installing.' ;;
-            ffmpeg) say 'sudo apt install ffmpeg' ;;
-            v4l2-ctl) say 'sudo apt install v4l-utils' ;;
-            pactl) say 'sudo apt install pulseaudio-utils' ;;
-            busctl|systemctl) say 'sudo apt install systemd' ;;
-            xdg-open) say 'sudo apt install xdg-utils' ;;
+            rclone) say 'sudo apt install rclone, or follow https://rclone.org/install/ for a current release.' ;;
+            systemctl) say 'sudo apt install systemd' ;;
         esac
-        say 'These package commands are for Debian/Ubuntu; use equivalent packages on other distributions.' 
+        say 'These package commands are for Debian/Ubuntu; use equivalent packages on other distributions.'
         missing=1
     fi
 done
@@ -238,100 +226,59 @@ if [[ "$missing" == 1 ]]; then
     say "Install the missing prerequisites manually using the guide, then rerun this wizard. Nothing was installed."
     exit 1
 fi
-runtime="$HOME/.local/share/glint/venv/bin/python"
-if [[ ! -x "$runtime" ]]; then
+if [[ ! -x "$HOME/.local/share/glint/venv/bin/python" ]]; then
     say "Next manual step, only after approving installation from this reviewed checkout:"
     printf '  cd -- %q && ./scripts/install.sh\n' "$repo_dir"
     exit 1
 fi
-if ! "$runtime" -c 'import googleapiclient.discovery, google_auth_oauthlib.flow, google.auth' >/dev/null 2>&1; then
-    say "Google libraries are missing. Next manual step: approve and rerun ./scripts/install.sh from this checkout, then rerun this wizard."
+manual_done
+
+stage "Add an rclone Google Drive remote" 6
+say "Skip this stage if a Drive remote already exists. In another terminal, run:"
+say "  rclone config"
+step "Choose n (new remote), name it (for example gdrive), and choose the storage type drive."
+step "Leave client_id/client_secret blank unless you have your own, choose scope 1 (full access), and accept auto config."
+step "Sign in with the Google account that should hold the recordings, then quit rclone config."
+say "Configured remotes (read from your local rclone config only):"
+remotes="$(rclone listremotes --long --ask-password=false 2>/dev/null | awk '$2 == "drive" {print "  " $1}' || true)"
+if [[ -z "$remotes" ]]; then
+    warn "No remote of type drive found yet. Finish rclone config, then rerun this wizard."
     exit 1
 fi
-say "You also need a Google account, internet, a local browser and a working systemd user session."
-say "If the installed app predates this guide, approve installation of the reviewed checkout separately."
+printf '%s\n' "$remotes"
+say "Untangle uses UNTANGLE_DRIVE_REMOTE when set, otherwise the remote chosen in the Drive dialog."
 manual_done
 
-stage "Google Cloud project and Drive API" 4
-open_url "https://console.cloud.google.com/projectcreate"
-step "Create a project, or select an existing project in the project selector. Copy its project ID, not its display name or number."
-ask GOOGLE_CLOUD_PROJECT "Project ID:"
-[[ "$GOOGLE_CLOUD_PROJECT" =~ ^[a-z][a-z0-9-]{4,28}[a-z0-9]$ ]] || { warn 'Enter a valid Google Cloud project ID and rerun.'; exit 1; }
-write_env GOOGLE_CLOUD_PROJECT "$GOOGLE_CLOUD_PROJECT"
-open_url "https://console.cloud.google.com/apis/library/drive.googleapis.com?project=$GOOGLE_CLOUD_PROJECT"
-step "Enable the Google Drive API for this project. If already enabled, continue."
-manual_done
-
-stage "Consent and test users" 5
-open_url "https://console.cloud.google.com/auth/branding?project=$GOOGLE_CLOUD_PROJECT"
-step "Google Auth platform > Branding. If unconfigured, Get Started: app name, support email, Audience, contact email, policy review, Create."
-step "Choose External for a personal Google account. Internal requires a Google Cloud organization and its members."
-step "Audience > Test users > Add users: add the exact Google account you will use; Save."
-step "Data Access > Add or Remove Scopes: add https://www.googleapis.com/auth/drive and Save."
-warn "Untangle currently requests full Drive access. External Testing grants, including offline tokens, expire after 7 days."
-say "For long-term use, review Google's production/verification requirements in the guide. Publishing is a separate decision."
-manual_done
-
-stage "Download Desktop OAuth client" 3
-open_url "https://console.cloud.google.com/auth/clients?project=$GOOGLE_CLOUD_PROJECT"
-step "Clients > Create Client > Desktop app. Name it, then Create and download its JSON. Keep the download private."
-step "Do not use a web client, service account or API key. Do not paste credential contents here."
-say "If JSON was lost, use Clients to manage/create a replacement Desktop client and download its JSON at creation."
-manual_done
-
-stage "Private local configuration" 3
-step "Save the downloaded JSON outside this repository, in a private directory. See exact mkdir/chmod instructions in the guide."
-ask_secret PRIVATE_CLIENT_PATH "Absolute path to private downloaded JSON, input hidden:"
-[[ "$PRIVATE_CLIENT_PATH" == /* && -f "$PRIVATE_CLIENT_PATH" && -r "$PRIVATE_CLIENT_PATH" ]] || { warn 'Next step: save the Desktop JSON locally and rerun with its readable absolute path.'; exit 1; }
-# Only the path is persisted. JSON and token contents are never read or logged.
-write_env PRIVATE_CLIENT_PATH "$PRIVATE_CLIENT_PATH"
-say "In a separately authorized app session: Recordings > Google Drive > Set up Google OAuth client. Choose that file."
-say "This replaces the configured client and removes the previous local sign-in. Skip importing if the correct client is already configured."
-say "Untangle saves client.json and token.json in ~/.local/share/glint/google-drive, directory 700 and files 600."
-manual_done
-
-stage "Browser sign-in" 3
-step "In the Drive dialog, choose Sign in with Google. Use the test-user account and review the requested Drive access."
-say "The app uses a local 127.0.0.1 callback and waits up to 3 minutes. Keep the dialog open until it finishes."
-say "If consent is blocked, stop and follow recovery in the guide. Do not bypass organizational policy."
-manual_done
-
-stage "Choose destination" 2
-open_url "https://drive.google.com/drive/my-drive"
-step "Create or choose a folder in My Drive where this account can upload."
-step "In Untangle choose Load Drive folders, then your destination. Folder IDs distinguish duplicate names; My Drive is the root."
-say "If missing, refresh folders, check the Google account and folder permissions. Prefer My Drive for initial setup."
+stage "Choose destination" 3
+step "In a separately authorized app session: Recordings > Google Drive. Choose the remote, then Load Drive folders."
+say "Folders are listed four levels deep with their Drive IDs, which distinguish duplicate names."
+say "If loading fails, test the remote in a terminal: rclone lsd <remote>:"
 manual_done
 
 stage "Save explicit archive opt-in" 2
 step "For background archiving, check Archive automatically in the background, then Save archive destination and settings."
 say "Leave it unchecked for manual-only uploads. Saving settings does not activate the timer."
-say "Destination changes affect future uploads. Previously reserved uploads retain their original folder."
+say "Earlier uploads keep their original folder on retry."
 manual_done
 
 stage "Optional scheduler activation after approved installation" 3
-say "The scheduler uploads eligible local recordings. Close Untangle so it can run."
 say "Only after separately approving installation AND background uploads, run manually from this reviewed checkout:"
 printf '  cd -- %q && ./scripts/setup-archive.sh\n' "$repo_dir"
-say "This immediately enables the user timer. It uses this checkout's source and the installed private Python runtime. Keep this checkout in place."
-say "Inspect manually: systemctl --user status untangle-archive.timer"
-say "Inspect manually: systemctl --user cat untangle-archive.service"
-say "If you want manual-only uploads, skip activation. No lingering or system-wide service is needed."
+say "This immediately enables the user timer. Keep this checkout in place."
+say "An encrypted rclone config cannot be unlocked by the timer; it fails without uploading."
 manual_done "Have you either explicitly activated scheduling or chosen to leave it disabled?"
 
-stage "Verify, recover and disable" 7
-say "Use an existing disposable, non-sensitive video only after approving uploads. Do not record a new sample for this wizard."
-say "Manual upload: select it in Recordings, Google Drive > Upload selected recordings, confirm, then check Drive. Retrying makes another copy."
-say "Archive: it observes files unchanged across runs, at least 5 minutes apart. Timer starts after 5 minutes, then every 15 minutes while your session runs."
-say "Close Untangle; allow two timer runs and check the destination. See the guide for private verified_at metadata inspection."
-say "After 7 days from verified archive upload, open the library > Review archived recordings. Cancel must keep the local file."
-say "Confirm only for a disposable file; deletion requires a current verified Drive or completed Loom copy. Offline/uncertain checks block deletion."
-say "OAuth expired/revoked: stop timer, reopen this guide, check project/API/test user/Desktop client, then sign in again. Offline: restore network before retrying."
+stage "Verify" 2
+say "Use an existing disposable, non-sensitive video only after approving uploads."
+say "Manual upload: select it in Recordings, Google Drive > Upload selected recordings, confirm, then check Drive."
+say "A copy counts as uploaded only after its Drive size and MD5 match the local file."
+manual_done
+
+stage "Recover and disable" 3
+say "Expired sign-in: rclone config reconnect <remote>:  Then retry in Untangle."
 say "Disable manually: systemctl --user disable --now untangle-archive.timer"
 say "A running upload may finish. To stop it too: systemctl --user stop untangle-archive.service"
-say "Uncheck automatic archiving and Save. Forget Google sign-in removes local token only; client and upload history remain."
-open_url "https://myaccount.google.com/connections"
-say "To revoke remotely, select this project's connection and remove its access. See the guide for complete recovery and cleanup."
-manual_done "Have you reviewed verification and recovery, with any live checks left for separate approval?"
+say "Earlier Untangle OAuth files (client.json, token.json) are no longer used; see the guide to remove and revoke them."
+manual_done "Have you reviewed recovery, with any live checks left for separate approval?"
 SKIPPED+=("Live verification is manual; this wizard does not verify uploads or scheduler activation.")
 finish
