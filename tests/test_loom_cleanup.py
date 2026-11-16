@@ -22,13 +22,13 @@ qt = workflow.qt
 URL = workflow.URL
 IDENTITY = {'device': 1, 'inode': 2, 'size': 3, 'mtime_ns': 4}
 ROW = {'status': 'uploaded', 'url': URL, 'remote_id': 'abc123'}
-REMOTE = {'status': 'available', 'remote_id': 'abc123', 'url': URL, 'is_complete': True}
+REMOTE = {'status': 'available', 'remote_id': 'abc123', 'url': URL, 'is_complete': None, 'duration': 316.3}
 
 
 class DecisionChecks(unittest.TestCase):
     def decide(self, **changes):
         options = dict(enabled=True, row=ROW, upload_identity=IDENTITY,
-                       current_identity=IDENTITY, remote=REMOTE)
+                       current_identity=IDENTITY, remote=REMOTE, local_duration=316.0)
         options.update(changes)
         return loom_cleanup.decide(**options)
 
@@ -39,13 +39,14 @@ class DecisionChecks(unittest.TestCase):
     def test_every_missing_or_unknown_fact_keeps_the_file(self):
         cases = {
             'disabled': dict(enabled=False),
-            'processing': dict(row=dict(ROW, status='processing')),
             'not_uploaded': dict(row=dict(ROW, status='uncertain')),
             'no_link': dict(row=dict(ROW, url='https://example.invalid/share/abc123')),
             'changed': dict(current_identity=dict(IDENTITY, size=99)),
             'remote_unverified': dict(remote=dict(REMOTE, status='unknown')),
             'remote_mismatch': dict(remote=dict(REMOTE, remote_id='other999', url='')),
-            'remote_incomplete': dict(remote=dict(REMOTE, is_complete=None)),
+            'remote_incomplete': dict(remote=dict(REMOTE, duration=None)),
+            'local_unknown': dict(local_duration=None),
+            'duration_mismatch': dict(local_duration=300.0),
         }
         for reason, changes in cases.items():
             with self.subTest(reason=reason):
@@ -53,6 +54,10 @@ class DecisionChecks(unittest.TestCase):
                 self.assertIn(reason, loom_cleanup.REASONS)
         self.assertEqual(self.decide(row={}, current_identity=None), 'not_uploaded')
         self.assertEqual(self.decide(remote=dict(REMOTE, is_complete=False)), 'remote_incomplete')
+        # Uploads publish as processing; a fresh playable, length-matched probe still verifies.
+        self.assertEqual(self.decide(row=dict(ROW, status='processing'), remote=None), 'check_remote')
+        self.assertEqual(self.decide(row=dict(ROW, status='processing')), 'verified')
+        self.assertEqual(self.decide(remote=dict(REMOTE, is_complete=True)), 'verified')
         self.assertEqual(self.decide(remote=dict(REMOTE, url='https://www.loom.com/share/zzz')), 'remote_mismatch')
 
 
@@ -164,6 +169,9 @@ class LoomCleanupWorkflowChecks(unittest.TestCase):
     def setUp(self):
         workflow.LoomWorkflowChecks.setUp(self)
         self.window.prefs.setValue(loom_cleanup.PREFERENCE, True)
+        duration = patch.object(loom_cleanup, 'local_duration', return_value=316.0)
+        duration.start()
+        self.addCleanup(duration.stop)
         self.reviews = self.root / 'reviews'
         review_root = patch.dict(os.environ, {'UNTANGLE_REVIEW_ROOT': str(self.reviews)})
         review_root.start()
@@ -196,7 +204,7 @@ class LoomCleanupWorkflowChecks(unittest.TestCase):
         with patch.object(QSystemTrayIcon, 'supportsMessages', return_value=True), \
                 patch.object(self.window.tray, 'isVisible', return_value=True), \
                 patch.object(self.window.tray, 'showMessage') as balloon:
-            self.cleanup_probe().finish(workflow.video_response(isComplete=True))
+            self.cleanup_probe().finish(workflow.video_response(isComplete=None, playableDuration=316.3))
         self.assertFalse(self.path.exists())
         entry = self.notifications()[0]
         self.assertEqual(entry['kind'], 'deleted')
@@ -226,7 +234,7 @@ class LoomCleanupWorkflowChecks(unittest.TestCase):
 
     def test_opening_panel_marks_read_and_survives_restart(self):
         self.publish(isComplete=True)
-        self.cleanup_probe().finish(workflow.video_response(isComplete=True))
+        self.cleanup_probe().finish(workflow.video_response(isComplete=None, playableDuration=316.3))
         self.window.open_notifications()
         panel = self.window.notification_panel
         self.assertEqual(self.window.notifications_button.text(), 'Notifications')
@@ -249,13 +257,21 @@ class LoomCleanupWorkflowChecks(unittest.TestCase):
     def test_remote_mismatch_keeps_file(self):
         self.publish(isComplete=True)
         self.cleanup_probe().finish(workflow.video_response(
-            id='other999', url='https://www.loom.com/share/other999', isComplete=True))
+            id='other999', url='https://www.loom.com/share/other999', isComplete=None, playableDuration=316.3))
         self.assert_kept('remote_mismatch')
 
-    def test_unknown_completion_keeps_file(self):
+    def test_unplayable_video_keeps_file_and_retries(self):
         self.publish(isComplete=True)
-        self.cleanup_probe().finish(workflow.video_response(isComplete=None))
-        self.assert_kept('remote_incomplete')
+        self.cleanup_probe().finish(workflow.video_response(isComplete=None, playableDuration=None))
+        self.assertTrue(self.path.is_file())
+        self.assertFalse(self.notifications())
+        self.assertIn(self.path.absolute(), self.window._loom_cleanup_pending)
+        self.assertTrue(self.window._loom_cleanup_timer.isActive())
+
+    def test_length_mismatch_keeps_file(self):
+        self.publish(isComplete=True)
+        self.cleanup_probe().finish(workflow.video_response(isComplete=None, playableDuration=120.0))
+        self.assert_kept('duration_mismatch')
 
     def test_failed_probe_keeps_file(self):
         self.publish(isComplete=True)
@@ -267,7 +283,7 @@ class LoomCleanupWorkflowChecks(unittest.TestCase):
         probe = self.cleanup_probe()
         with self.path.open('ab') as stream:
             stream.write(b' edited')
-        probe.finish(workflow.video_response(isComplete=True))
+        probe.finish(workflow.video_response(isComplete=None, playableDuration=316.3))
         self.assert_kept('changed')
 
     def test_frame_review_registration_keeps_file(self):
@@ -275,7 +291,7 @@ class LoomCleanupWorkflowChecks(unittest.TestCase):
         folder = self.reviews / 'walkthrough'
         folder.mkdir(parents=True)
         (folder / 'review.json').write_text(json.dumps({'versions': [{'path': str(self.path)}]}))
-        self.cleanup_probe().finish(workflow.video_response(isComplete=True))
+        self.cleanup_probe().finish(workflow.video_response(isComplete=None, playableDuration=316.3))
         self.assert_kept('review')
 
     def test_busy_recording_defers_then_deletes_when_idle(self):
@@ -283,7 +299,7 @@ class LoomCleanupWorkflowChecks(unittest.TestCase):
         probe = self.cleanup_probe()
         self.window.recording = True
         try:
-            probe.finish(workflow.video_response(isComplete=True))
+            probe.finish(workflow.video_response(isComplete=None, playableDuration=316.3))
             self.assertTrue(self.path.is_file())
             self.assertIn(self.path.absolute(), self.window._loom_cleanup_pending)
             self.assertTrue(self.window._loom_cleanup_timer.isActive())
@@ -294,7 +310,7 @@ class LoomCleanupWorkflowChecks(unittest.TestCase):
         finally:
             self.window.recording = False
         self.window.retry_local_cleanups()
-        self.cleanup_probe().finish(workflow.video_response(isComplete=True))
+        self.cleanup_probe().finish(workflow.video_response(isComplete=None, playableDuration=316.3))
         self.assertFalse(self.path.exists())
         self.assertFalse(self.window._loom_cleanup_timer.isActive())
 
@@ -303,7 +319,7 @@ class LoomCleanupWorkflowChecks(unittest.TestCase):
         self.publish(isComplete=True)
         probe = self.cleanup_probe()
         with patch.object(self.window, 'local_copy_busy_reason', return_value='playback'):
-            probe.finish(workflow.video_response(isComplete=True))
+            probe.finish(workflow.video_response(isComplete=None, playableDuration=316.3))
             for _ in range(45):
                 self.window.retry_local_cleanups()
         self.assert_kept('playback')
@@ -325,10 +341,13 @@ class LoomCleanupWorkflowChecks(unittest.TestCase):
         self.assertTrue(self.path.is_file())
         self.assertIn('Automatic deletion is off', self.notifications()[0]['detail'])
 
-    def test_processing_upload_keeps_file_without_probe(self):
+    def test_processing_upload_deletes_once_loom_reports_a_matching_length(self):
+        # Real CLI shape: upload says isComplete false; video-get omits isComplete but has playableDuration.
         self.publish()
-        self.assertFalse(self.window.loom_probes)
-        self.assert_kept('processing')
+        self.assertEqual(self.window.upload_store.get(self.path)['status'], 'processing')
+        self.cleanup_probe().finish(workflow.video_response(isComplete=None, playableDuration=316.3))
+        self.assertFalse(self.path.exists())
+        self.assertEqual(self.notifications()[0]['kind'], 'deleted')
 
     def test_delete_failure_restores_metadata_and_keeps_file(self):
         self.publish(isComplete=True)
@@ -338,7 +357,7 @@ class LoomCleanupWorkflowChecks(unittest.TestCase):
                 raise PermissionError('protected')
             return original(path, *args, **kwargs)
         with patch.object(Path, 'unlink', protected):
-            self.cleanup_probe().finish(workflow.video_response(isComplete=True))
+            self.cleanup_probe().finish(workflow.video_response(isComplete=None, playableDuration=316.3))
         self.assert_kept('delete_failed')
         self.assertEqual(self.window.upload_store.get(self.path)['local_copy'], '')
 
@@ -357,8 +376,10 @@ class LoomCleanupWorkflowChecks(unittest.TestCase):
     def test_processing_promoted_by_link_check_deletes_and_keeps_message(self):
         page = self.open_library()
         self.publish()
+        self.cleanup_probe().finish(workflow.video_response(isComplete=None, playableDuration=None))
+        self.window.loom_probes.clear()
         self.window.check_loom_video(self.path.absolute())
-        self.cleanup_probe().finish(workflow.video_response(isComplete=True))
+        self.cleanup_probe().finish(workflow.video_response(isComplete=None, playableDuration=316.3))
         self.assertFalse(self.path.exists())
         self.assertIn('Deleted the local copy', page.message.text())
         self.assertEqual(self.notifications()[0]['kind'], 'deleted')

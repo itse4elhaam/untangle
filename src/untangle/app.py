@@ -30,7 +30,7 @@ from .upload_store import UploadStore
 from . import loom_cleanup
 from .notifications import NotificationLog
 from .notification_panel import NotificationPanel, button_text as notification_button_text
-from .loom import (parse_account_status, parse_video_info, parse_upload_result,
+from .loom import (video_playable, parse_account_status, parse_video_info, parse_upload_result,
                    parse_upload_progress, valid_share_url, video_id, CliHelpCache,
                    rename_title_args, supports_option, video_info_args)
 from .audio_devices import AudioDevices, AudioDeviceError
@@ -3074,10 +3074,10 @@ class Window(QMainWindow):
                 changes = {key: result[key] for key in ('title', 'remote_id') if result.get(key)}
                 if result.get('url'):
                     changes['url'] = result['url']
-                if result.get('is_complete') is True:
+                if video_playable(result):
                     changes['status'] = 'uploaded'
                 if self.save_upload_metadata(path, **changes):
-                    message = 'Loom link verified. The upstream title is refreshed. This CLI may not report processing completion.'
+                    message = 'Loom link verified. The upstream title is refreshed.'
                     # Processing finished since upload: the same verification now applies.
                     promoted = entry.get('status') == 'processing' and changes.get('status') == 'uploaded'
                 else:
@@ -3590,9 +3590,11 @@ class Window(QMainWindow):
         """After a Loom upload: delete the local file only when the copy is verified."""
         path = Path(path)
         enabled = self.prefs.value(loom_cleanup.PREFERENCE, True, type=bool)
+        local = loom_cleanup.local_duration(path) if remote is not None and path.is_file() else None
         reason = loom_cleanup.decide(enabled=enabled, row=self.upload_store.get(path),
                                      upload_identity=identity,
-                                     current_identity=self.upload_store.file_identity(path), remote=remote)
+                                     current_identity=self.upload_store.file_identity(path), remote=remote,
+                                     local_duration=local)
         if reason == 'check_remote' or (reason == 'verified' and remote is not None):
             reason = self.local_copy_busy_reason(path) or reason
         if reason in loom_cleanup.TRANSIENT:

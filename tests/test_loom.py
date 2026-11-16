@@ -61,6 +61,20 @@ class LoomParserTests(unittest.TestCase):
         video['isComplete'] = 'true'
         self.assertIsNone(parse_video_info({'data': video})['is_complete'])
 
+    def test_playable_duration_marks_a_processed_video(self):
+        from untangle.loom import video_playable
+        # Installed video-get omits isComplete; playableDuration appears once Loom can play it.
+        video = {'id': 'abc123', 'url': 'https://www.loom.com/share/abc123', 'playableDuration': 316.3}
+        info = parse_video_info({'data': video})
+        self.assertEqual(info['duration'], 316.3)
+        self.assertTrue(video_playable(info))
+        for bad in (None, 0, -1, True, '316'):
+            video['playableDuration'] = bad
+            self.assertIsNone(parse_video_info({'data': video})['duration'])
+            self.assertFalse(video_playable(parse_video_info({'data': video})))
+        video.update(isComplete=False, playableDuration=316.3)
+        self.assertFalse(video_playable(parse_video_info({'data': video})))
+
     def test_jsonl_and_malformed_input(self):
         video = {'data': {'video': {'id': 'abc123', 'name': 'Title',
                  'url': 'https://www.loom.com/share/abc123'}}}
