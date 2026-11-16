@@ -102,18 +102,22 @@ class FeedbackTests(unittest.TestCase):
             self.w.finish_save(path, '')
             upload.assert_not_called()
 
-    def test_cancel_keeps_take_override_without_changing_default(self):
+    def test_ticking_upload_is_remembered_for_later_takes(self):
         self.w.prefs.setValue('auto_upload', False)
         self.w.upload_this_take.setChecked(True)
+        self.assertTrue(self.w.prefs.value('auto_upload', type=bool))
         self.case.click(self.w.record_button)
         QTest.keyClick(self.w, Qt.Key_Escape)
         self.case.wait_for(lambda: not self.w.counting, 'Countdown did not cancel')
         self.assertTrue(self.w.upload_this_take.isChecked())
-        self.assertFalse(self.w.prefs.value('auto_upload', type=bool))
+        self.w.ready_after_save()
+        self.assertTrue(self.w.upload_this_take.isChecked())
 
-    def test_temporary_control_lock_preserves_current_take_upload_override(self):
+    def test_unticking_upload_keeps_later_takes_local(self):
         self.w.prefs.setValue('auto_upload', True)
+        self.w.upload_this_take.setChecked(True)
         self.w.upload_this_take.setChecked(False)
+        self.assertFalse(self.w.prefs.value('auto_upload', type=bool))
         self.w.lock_controls(True)
         self.w.lock_controls(False)
         self.assertFalse(self.w.upload_this_take.isChecked())
@@ -124,4 +128,12 @@ class FeedbackTests(unittest.TestCase):
                 patch.object(self.w, 'upload') as upload:
             self.w.finish_save(path, '')
             upload.assert_not_called()
-        self.assertTrue(self.w.upload_this_take.isChecked())
+        self.assertFalse(self.w.upload_this_take.isChecked())
+
+    def test_camera_take_warns_when_upload_is_on(self):
+        for mode, upload, warned in (('camera', True, True), ('camera', False, False), ('screen', True, False)):
+            with self.subTest(mode=mode, upload=upload):
+                self.w.mode = mode
+                self.w._take_auto_upload = upload
+                self.assertEqual('Upload to Loom is on for this camera take' in self.w.preflight_summary(), warned)
+        self.w._take_auto_upload = False
