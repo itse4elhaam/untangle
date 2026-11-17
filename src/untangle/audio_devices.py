@@ -594,6 +594,8 @@ class AudioDevices:
             self._write_record({'done': True})
         except OSError as exc:
             retired = exc
+            emit(self, 'intent.failed', level='warning', exception_type=type(exc).__name__,
+                 reason='retire_failed')
         try:
             self.intent_path.unlink(missing_ok=True)
         except OSError as exc:

@@ -649,6 +649,17 @@ class AudioDevicesTests(unittest.TestCase):
                 self.assertLogs('recit.audio', 'WARNING') as logs:
             self.assertTrue(devices.restore())
         self.assertIn('intent.stuck', ' '.join(logs.output))
+        # A retire failure alone is logged too; the delete still removes the record.
+        from untangle.audio_debug import AudioTrace
+        devices.audio_trace = AudioTrace()
+        devices.prepare(self.earbuds)
+        with patch('untangle.audio_devices.os.replace', side_effect=PermissionError('denied')), \
+                self.assertLogs('recit.audio', 'WARNING') as logs:
+            self.assertTrue(devices.restore())
+        output = ' '.join(logs.output)
+        self.assertIn('"reason":"retire_failed"', output)
+        self.assertNotIn('intent.stuck', output)
+        self.assertFalse(path.exists())
 
     def test_classification_and_resolution_share_one_source_listing(self):
         # Reconnect race: info names the earbud mic, the first listing omits
