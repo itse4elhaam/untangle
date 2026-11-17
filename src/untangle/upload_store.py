@@ -113,6 +113,31 @@ class UploadStore:
         uploads[new] = uploads.pop(old)
         self._save(uploads)
 
+    def remote_only(self):
+        """Rows whose local file Untangle deleted after a verified upload, newest first.
+
+        These rows are kept so the Loom link stays reachable without the file.
+        """
+        rows = []
+        for key, row in self._uploads.items():
+            path = row.get('path') or key
+            if row.get('local_copy') != 'deleted' or _identity(path) == row.get('identity'):
+                continue
+            rows.append(dict(deepcopy({k: v for k, v in row.items() if k != 'identity'}), path=path))
+        return sorted(rows, key=lambda row: row.get('local_deleted_at') or 0, reverse=True)
+
+    def retire_deleted(self, video_path, deleted_at):
+        """Call after unlinking a verified file. A unique key keeps its link when a
+        later recording is saved or renamed to the same path."""
+        key = _key(video_path)
+        row = self._uploads.get(key)
+        if row is None or row.get('local_copy') != 'deleted' or _identity(video_path) is not None:
+            return
+        uploads = deepcopy(self._uploads)
+        retired = dict(uploads.pop(key), path=key)
+        uploads[f'{key}#deleted-{deleted_at:.6f}'] = retired
+        self._save(uploads)
+
     def mark_remote_deleted(self, video_path):
         """Only call after explicit evidence of remote deletion, never a 404."""
         if not self.get(video_path):

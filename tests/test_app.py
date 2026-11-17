@@ -32,6 +32,8 @@ class AppChecks(unittest.TestCase):
         self.window = glint.Window()
         # Existing upload checks exercise the optional upstream-title path.
         self.window.prefs.setValue('loom_auto_titles', True)
+        # Upload checks keep the file; test_loom_cleanup.py covers verified deletion.
+        self.window.prefs.setValue('loom_delete_verified_local', False)
         self.window.engine = MagicMock()
         self.window.engine.verify_audio_route.side_effect = lambda **_: self.window.audio_devices.resolve(self.window.selected_source)
         self.window.engine.recording = False

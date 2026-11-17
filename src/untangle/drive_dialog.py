@@ -1,10 +1,11 @@
-"""Explicit Google authorization and selected-recording uploads."""
+"""Selected-recording uploads and archive settings through the user's rclone Drive remote."""
 from .widgets import ScrollComboBox
 from .diagnostics import observed, failure as diagnostic_failure
 from PySide6.QtCore import QThread, Signal, QSettings, Qt
-from PySide6.QtWidgets import (QDialog, QVBoxLayout, QLabel, QPushButton,
-                               QFileDialog, QMessageBox, QCheckBox, QScrollArea, QWidget)
+from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
+                               QMessageBox, QCheckBox, QScrollArea, QWidget)
 from .drive import DriveClient
+from .rclone import RcloneError, NoDriveRemote, preferred
 
 
 class DriveTask(QThread):
@@ -20,10 +21,14 @@ class DriveTask(QThread):
     def run(self):
         try:
             self.done.emit(self.operation(self.progress.emit))
-        except Exception:
-            # OAuth and HTTP exceptions can contain credentials or sensitive URLs.
+        except RcloneError as exc:
+            # Fixed messages only; rclone output stays in exc.detail and is never shown or logged.
+            diagnostic_failure('drive_dialog.rclone_failed', exc)
+            self.failed.emit(str(exc))
+        except Exception as exc:
+            diagnostic_failure('drive_dialog.failed', exc)
             self.failed.emit('Google Drive could not finish this action. Check your connection, '
-                             'folder permissions and OAuth setup, or sign in again. '
+                             'the rclone remote and folder permissions. '
                              'Some files may have uploaded; check Drive before retrying.')
 
 
@@ -43,9 +48,9 @@ class DriveDialog(QDialog):
         scroll.setWidget(content)
         outer.addWidget(scroll)
         layout = QVBoxLayout(content)
-        note = QLabel('Sign in with Google, choose a destination folder, then upload only the '
-                      'recordings you selected. Google will ask for Drive access to browse '
-                      'folders and upload files. Background archiving is optional.')
+        note = QLabel('Untangle uploads with rclone, using a Google Drive remote you set up '
+                      'yourself with "rclone config". Choose a remote and a destination folder, '
+                      'then upload only the recordings you selected. Background archiving is optional.')
         note.setWordWrap(True)
         layout.addWidget(note)
         from .drive_help import show_drive_setup_guide
@@ -53,13 +58,19 @@ class DriveDialog(QDialog):
         self.setup_guide.setAutoDefault(False)
         self.setup_guide.clicked.connect(lambda: show_drive_setup_guide(self))
         layout.addWidget(self.setup_guide)
-        self.configure = QPushButton('Set up Google OAuth client…')
-        self.configure.clicked.connect(self.configure_client)
-        layout.addWidget(self.configure)
-        self.login = QPushButton('Sign in with Google')
-        self.login.clicked.connect(lambda: self.start(lambda progress: self.client.login(), self.load_folders,
-            message='Waiting for Google sign-in in your browser…', completed='Google sign-in saved.'))
-        layout.addWidget(self.login)
+        layout.addWidget(QLabel('rclone remote'))
+        remote_row = QHBoxLayout()
+        self.remotes = ScrollComboBox()
+        from .archive import config
+        saved = config().get('remote')
+        if saved:
+            self.remotes.addItem(saved, saved)
+        self.remotes.currentIndexChanged.connect(self.remote_changed)
+        remote_row.addWidget(self.remotes, 1)
+        self.find_remotes = QPushButton('Find rclone remotes')
+        self.find_remotes.clicked.connect(self.load_remotes)
+        remote_row.addWidget(self.find_remotes)
+        layout.addLayout(remote_row)
         self.refresh = QPushButton('Load Drive folders')
         self.refresh.clicked.connect(self.load_folders)
         layout.addWidget(self.refresh)
@@ -88,34 +99,62 @@ class DriveDialog(QDialog):
         self.upload = QPushButton(f'Upload {len(paths)} selected recording(s)')
         self.upload.clicked.connect(self.upload_files)
         layout.addWidget(self.upload)
-        self.disconnect = QPushButton('Forget Google sign-in on this computer')
-        self.disconnect.clicked.connect(self.forget)
-        layout.addWidget(self.disconnect)
-        self.status = QLabel('Not connected. Set up a Desktop OAuth client, then sign in.'
-                             if not self.client.token_file.exists() else 'Sign-in saved. Load folders to continue.')
+        self.cancel_button = QPushButton('Cancel current action')
+        self.cancel_button.setAutoDefault(False)
+        self.cancel_button.setEnabled(False)
+        self.cancel_button.clicked.connect(self.cancel_task)
+        layout.addWidget(self.cancel_button)
+        legacy = self.client.legacy_sign_in()
+        if legacy:
+            # Never removed automatically; the guide explains removal and revocation.
+            old = QLabel('An earlier Untangle Google sign-in is still saved on this computer but is '
+                         'no longer used: ' + ', '.join(str(path) for path in legacy) + '. You can '
+                         'remove it and revoke its access as described in the setup guide.')
+            old.setTextFormat(Qt.PlainText)
+            old.setWordWrap(True)
+            layout.addWidget(old)
+        self.status = QLabel('Choose Load Drive folders. Untangle finds your rclone Drive remote '
+                             'if none is chosen.')
         self.status.setTextFormat(Qt.PlainText)
         self.status.setWordWrap(True)
         layout.addWidget(self.status)
-        self.controls = [self.archive_refresh, self.archive_enabled, self.archive_save, self.configure, self.login, self.refresh, self.folders, self.upload, self.disconnect]
+        self.controls = [self.archive_refresh, self.archive_enabled, self.archive_save, self.remotes,
+                         self.find_remotes, self.refresh, self.folders, self.upload]
         self.upload.setEnabled(False)
 
-    @observed("drive_dialog.configure_client")
-    def configure_client(self):
-        path, _ = QFileDialog.getOpenFileName(self, 'Choose Google Desktop OAuth client JSON', '', 'JSON (*.json)')
-        if path:
-            try:
-                self.client.configure(path)
-                self.folders.clear()
-                self.upload.setEnabled(False)
-                self.status.setText('Client configured. Sign in with Google to continue.')
-            except (ValueError, OSError):
-                self.status.setText('Could not read a valid Desktop OAuth client JSON.')
+    def remote_changed(self, _=None):
+        if self.task is None:
+            self.folders.clear()
+            self.upload.setEnabled(False)
+
+    @observed("drive_dialog.load_remotes")
+    def load_remotes(self, _=None):
+        self.start(lambda progress: self.client.remotes(), self.show_remotes,
+                   message='Looking for rclone Google Drive remotes…', completed='rclone remotes found.')
+
+    def show_remotes(self, remotes, chosen=None):
+        if not remotes:
+            self.status.setText(str(NoDriveRemote()))
+            return
+        current = chosen or self.remotes.currentData()
+        self.remotes.blockSignals(True)
+        self.remotes.clear()
+        for name in remotes:
+            self.remotes.addItem(name, name)
+        index = self.remotes.findData(current)
+        self.remotes.setCurrentIndex(index if index >= 0 else self.remotes.findData(preferred(remotes)))
+        self.remotes.blockSignals(False)
+        if self.remotes.currentData() != current:
+            self.remote_changed()
+        self.status.setText('Choose a remote, then Load Drive folders.')
 
     def start(self, operation, done=None, *, message='Working…', completed='Action finished.'):
         if self.task is not None:
             return
         for control in self.controls:
             control.setEnabled(False)
+        self.client.cancelled.clear()
+        self.cancel_button.setEnabled(True)
         self.status.setText(message)
         task = DriveTask(operation, self)
         self.task = task
@@ -132,30 +171,60 @@ class DriveDialog(QDialog):
         self.task = None
         for control in self.controls:
             control.setEnabled(True)
+        self.cancel_button.setEnabled(False)
         self.upload.setEnabled(bool(self.paths) and self.folders.count() > 0)
         task.deleteLater()
         if success and done:
             done(task.result)
 
+    def cancel_task(self):
+        if self.task is not None:
+            self.client.cancel()
+            self.status.setText('Cancelling… rclone stops after its current step.')
+
     @observed("drive_dialog.load_folders")
     def load_folders(self, _=None):
-        self.start(lambda progress: self.client.folders(), self.show_folders,
-                   message='Loading Google Drive folders…')
+        # Read widgets here: the worker thread must not touch Qt.
+        remote = self.remotes.currentData()
+        def operation(progress):
+            found = None
+            if remote:
+                self.client.remote = remote
+            else:
+                found = self.client.remotes()
+                if not found:
+                    raise NoDriveRemote()
+                self.client.remote = preferred(found)
+            return found, self.client.remote, self.client.folders()
+        self.start(operation, self.show_loaded, message='Loading Google Drive folders with rclone…')
+
+    def show_loaded(self, result):
+        found, remote, folders = result
+        if found:
+            self.show_remotes(found, remote)
+        self.show_folders(folders)
 
     def show_folders(self, folders):
         self.folders.clear()
-        for name, identifier in sorted(folders):
+        top, rest = folders[:1], sorted(folders[1:], key=lambda item: item[0].lower())
+        for name, identifier in top + rest:
             self.folders.addItem(f'{name} ({identifier})', identifier)
         from .archive import config
-        index = self.folders.findData(config().get('folder') or self.settings.value('drive/folder', 'root'))
-        self.folders.setCurrentIndex(max(index, 0))
+        saved = config().get('folder') or self.settings.value('drive/folder', 'root')
+        if saved and self.folders.findData(saved) < 0:
+            # Deep or shared-with-me folders are not listed; never fall back to My Drive silently.
+            self.folders.addItem(f'Saved destination ({saved})', saved)
+        self.folders.setCurrentIndex(max(self.folders.findData(saved), 0))
         self.upload.setEnabled(bool(self.paths) and bool(folders))
         self.status.setText('Choose a folder for the selected recordings.')
 
     def save_archive(self):
         from .archive import configure
         try:
-            configure(self.archive_enabled.isChecked(), self.folders.currentData())
+            if self.archive_enabled.isChecked() and not self.remotes.currentData():
+                raise ValueError('Choose an rclone remote and load its folders first.')
+            configure(self.archive_enabled.isChecked(), self.folders.currentData(),
+                      remote=self.remotes.currentData())
             self.settings.setValue('drive/folder', self.folders.currentData())
             self.status.setText('Archive settings saved. This does not start or enable the scheduler. See the setup guide.')
             from .archive_status import archive_status
@@ -176,6 +245,7 @@ class DriveDialog(QDialog):
             return
         self.settings.setValue('drive/folder', folder)
         destination = self.folders.currentText()
+        self.client.remote = self.remotes.currentData() or self.client.remote
         self.start(lambda progress: self.client.upload(self.paths, folder, progress),
                    lambda outcomes: self.show_upload_results(outcomes, destination),
                    message=f'Uploading selected recordings to {destination}…')
@@ -193,24 +263,18 @@ class DriveDialog(QDialog):
         for row in outcomes:
             result = ('Uploaded and verified' if row.get('status') == 'uploaded' else
                       'Skipped: Do not upload to Google Drive' if row.get('status') == 'excluded' else
+                      'Not started: cancelled' if row.get('status') == 'cancelled' else
                       'Failed or unconfirmed; check Drive before retrying')
             lines.append(f'{row["name"]}: {result}')
         lines.append('Copies are checksum-verified. Cleanup is offered after 7 days. '
                      'Retries reuse the saved archive copy in its original destination.')
         self.status.setText('\n'.join(lines))
 
-    @observed("drive_dialog.forget")
-    def forget(self):
-        self.client.disconnect()
-        self.folders.clear()
-        self.upload.setEnabled(False)
-        self.status.setText('Local Google sign-in removed. You can revoke Untangle access in your Google account.')
-
     def reject(self):
         if self.task is None:
             super().reject()
         else:
-            self.status.setText('Wait for the current operation to finish. Google sign-in times out after three minutes.')
+            self.status.setText('Wait for the current operation to finish, or choose Cancel current action.')
 
     def closeEvent(self, event):
         if self.task is not None:

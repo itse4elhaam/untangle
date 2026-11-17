@@ -202,7 +202,7 @@ def parse_video_info(stdout, exit_code=0, stderr=''):
     unknown. In particular a NOT_FOUND error does not establish deletion.
     """
     result = {'status': 'unknown', 'url': '', 'title': '', 'remote_id': '',
-              'visibility': '', 'is_complete': None}
+              'visibility': '', 'is_complete': None, 'duration': None}
     if exit_code != 0:
         return result
     for record in reversed(_records(stdout)):
@@ -217,12 +217,22 @@ def parse_video_info(stdout, exit_code=0, stderr=''):
         result.update(fields)
         if isinstance(data.get('isComplete'), bool):
             result['is_complete'] = data['isComplete']
+        duration = data.get('playableDuration')
+        if isinstance(duration, (int, float)) and not isinstance(duration, bool) and 0 < duration < 1e7:
+            result['duration'] = float(duration)
         if data.get('status') == 'DELETED':
             result.update(status='deleted', url='')
         elif data.get('isArchived') is not True and data.get('status') not in ('PRIVATE', 'UNAUTHORIZED', 'NOT_FOUND', 'ARCHIVED'):
             result['status'] = 'available'
         break
     return result
+
+
+def video_playable(info):
+    """Today's video-get omits isComplete; a playable duration only exists once Loom can play it."""
+    if info.get('is_complete') is not None:
+        return info['is_complete'] is True
+    return bool(info.get('duration'))
 
 
 def parse_upload_result(stdout, exit_code=0, stderr=''):

@@ -78,7 +78,8 @@ class FollowThroughTests(unittest.TestCase):
     def test_app_quit_waits_for_drive_worker(self):
         from untangle.drive_dialog import DriveDialog
         from unittest.mock import Mock
-        with patch('untangle.drive_dialog.DriveClient'):
+        with patch('untangle.drive_dialog.DriveClient') as client:
+            client.return_value.legacy_sign_in.return_value = []
             dialog = DriveDialog([], self.w)
         task = Mock()
         task._quit_when_finished = False
