@@ -54,20 +54,22 @@ Before switching, Untangle records its intent in
 the switch (`intent.failed`), unless the earbuds are already hands-free with a
 mic (`profile.kept`). After restoring or skipping, it marks the record
 `{"done": true}` (or empties it in place when that write fails) and then removes
-it, so a failed removal never replays the restore. It never reads, empties or
-writes the record through a symlink or a hard link. `intent.stuck` means the
-record could be neither retired nor removed: it is logged once at ERROR, with no
-on-screen warning, and the 3-second retry and exit keep trying; `intent.cleared`
-means a retry succeeded. Untangle then marks that exact intent as finished in
+it, so a failed removal never replays the restore. It never reads or writes the
+record through a symlink, and never empties a file another name links to.
+`intent.stuck` means the record could be neither retired nor removed: it is
+logged once at ERROR, with no on-screen warning, and the 3-second retry and exit
+keep trying; `intent.cleared` means a retry succeeded. When the record is stuck,
+Untangle also marks that exact intent as finished in
 `~/.config/TrueDevs/glint-bluetooth-retired.json`; the next launch skips it
 (`recovery.skipped`, `retired`) and only cleans up. `intent.unretired` at exit
 means the marker could not be saved either, so the next launch may replay that
 restore. If it persists, make the state directory writable. On
 launch, `recovery.adopted` means a crashed take's restore was taken over and
 follows the same `restore.*` rules and 3-second retry; `recovery.restored` means
-its earbuds were put back. `recovery.deferred` (`read_failed`) keeps a record it
-could not read and retries; meanwhile earbud switches are refused, except earbuds
-already in a hands-free profile with a mic, which are used as they are. Only
+its earbuds were put back. `recovery.deferred` (`read_failed`, or
+`marker_read_failed` for that marker) keeps a record it could not check and
+retries; meanwhile earbud switches are refused, except earbuds already in a
+hands-free profile with a mic, which are used as they are. Only
 `recovery.skipped` (`unreadable` contents, or a card or profile Untangle would
 never switch) or `restore.skipped` drops the record. If you can't fix its
 permissions, or those earbuds are gone, quit Untangle, delete

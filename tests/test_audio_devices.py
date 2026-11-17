@@ -1178,5 +1178,125 @@ class AudioDevicesTests(unittest.TestCase):
         self.assertFalse(any(c[0] == 'set-card-profile' for c in self.calls))
 
 
+    def cards_time_out(self, *args):
+        if args[-1] == 'cards':
+            raise AudioDeviceError('pactl list cards timed out')
+        return self.command(*args)
+
+    def test_card_lookup_failure_still_lists_other_microphones(self):
+        # Main lists every input without reading cards; a card timeout must not hide them.
+        self.data['sources'].append(dict(name='dji_receiver', index=5, description='DJI receiver'))
+        self.devices.command = self.cards_time_out
+        listed = self.devices.microphones()
+        self.assertIn(('DJI receiver', 'dji_receiver'), listed)
+        self.assertIn(('brio (system default)', 'brio'), listed)
+        self.assertFalse(any(source.startswith('earbuds:') for _, source in listed))
+        self.assertFalse(any(c[0] == 'set-card-profile' for c in self.calls))
+
+    def test_card_lookup_failure_omits_only_earbud_inputs_and_logs_it(self):
+        self.data['sources'] += [self.mic, dict(name='dji_receiver', index=5, description='DJI receiver')]
+        self.devices.command = self.cards_time_out
+        with self.assertLogs('recit.audio', 'WARNING') as logs:
+            listed = self.devices.microphones()
+        self.assertEqual(listed, [('brio (system default)', 'brio'), ('DJI receiver', 'dji_receiver')])
+        self.assertTrue(any('devices.cards_unavailable' in line for line in logs.output))
+
+    def test_release_of_the_current_owner_survives_a_later_stale_release(self):
+        devices, _ = self.intent_devices()
+        devices.prepare(self.earbuds)
+        stale = devices.hold_capture(self.card['name'])
+        devices.release_capture(stale)
+        current = devices.hold_capture(self.card['name'])
+        entered, resume = threading.Event(), threading.Event()
+        def holder():
+            with devices._locked():
+                entered.set()
+                resume.wait(2)
+        thread = threading.Thread(target=holder, daemon=True)
+        thread.start()
+        try:
+            self.assertTrue(entered.wait(1))
+            devices.release_capture(current)
+            devices.release_capture(stale)  # Must not overwrite the pending release.
+        finally:
+            resume.set()
+            thread.join(2)
+        self.assertIsNone(devices._capture_owner)
+        self.assertTrue(devices.restore())
+        self.assertEqual(self.card['active_profile'], 'a2dp-sink')
+
+    def test_unreadable_marker_keeps_the_record_pending_and_never_replays(self):
+        from untangle.audio_devices import read_regular
+        self.skip_root()
+        devices, path = self.intent_devices()
+        devices, marker = self.marked_devices(path)
+        self.stuck_after_restore(devices, path)
+        path.parent.chmod(0o700)
+        self.card['active_profile'] = 'headset-head-unit-msbc'  # Chosen after quitting.
+        later, _ = self.marked_devices(path, marker)
+        def marker_fails(target):
+            if Path(target) == marker:
+                raise OSError(errno.EIO, 'Input/output error')
+            return read_regular(target)
+        self.calls.clear()
+        with patch('untangle.audio_devices.read_regular', marker_fails):
+            self.assertFalse(later.recover())
+            self.assertFalse(later.restore())  # The retry still cannot check it.
+            self.card['active_profile'] = 'a2dp-sink'  # A switch is refused, naming the marker.
+            with self.assertRaisesRegex(AudioDeviceError, str(marker)):
+                later.prepare(self.earbuds)
+            self.card['active_profile'] = 'headset-head-unit-msbc'
+        self.assertTrue(later.record_unread)
+        self.assertIsNone(later.lease)
+        self.assertTrue(path.exists() and marker.exists())
+        self.assertTrue(later.restore())  # Readable again: skipped as retired.
+        self.assertEqual([c for c in self.calls if c[0] == 'set-card-profile'], [])
+        self.assertEqual(self.card['active_profile'], 'headset-head-unit-msbc')
+        self.assertFalse(later.record_unread)
+        self.assertFalse(path.exists())
+
+    def test_recovery_retry_logs_under_its_own_trace_not_a_later_check(self):
+        from untangle.audio_debug import AudioTrace
+        from untangle.audio_devices import read_regular
+        devices, path = self.stale_intent()
+        def intent_fails(target):
+            if Path(target) == path:
+                raise OSError(errno.EIO, 'Input/output error')
+            return read_regular(target)
+        with patch('untangle.audio_devices.read_regular', intent_fails), self.assertLogs('recit.audio'):
+            self.assertFalse(devices.recover())
+        self.assertTrue(devices.record_unread)
+        check = devices.audio_trace = AudioTrace('check')
+        with self.assertLogs('recit.audio') as logs:
+            self.assertTrue(devices.restore())
+        events = [json.loads(line.split('recit.audio ', 1)[1]) for line in logs.output]
+        adopted = next(e for e in events if e['event'] == 'recovery.adopted')
+        self.assertEqual(adopted['purpose'], 'recovery')
+        self.assertNotEqual(adopted['session'], check.session)
+        self.assertFalse(any(e['session'] == check.session for e in events))
+        self.assertIs(devices.audio_trace, check)
+        self.assertEqual(self.card['active_profile'], 'a2dp-sink')
+
+    def test_take_retrying_an_unread_recovery_adopts_it_under_the_recovery_trace(self):
+        from untangle.audio_debug import AudioTrace
+        from untangle.audio_devices import read_regular
+        devices, path = self.stale_intent()
+        def intent_fails(target):
+            if Path(target) == path:
+                raise OSError(errno.EIO, 'Input/output error')
+            return read_regular(target)
+        with patch('untangle.audio_devices.read_regular', intent_fails), self.assertLogs('recit.audio'):
+            self.assertFalse(devices.recover())
+        take = devices.audio_trace = AudioTrace('record')
+        with self.assertLogs('recit.audio') as logs:
+            devices.prepare(self.earbuds)
+        events = [json.loads(line.split('recit.audio ', 1)[1]) for line in logs.output]
+        adopted = next(e for e in events if e['event'] == 'recovery.adopted')
+        self.assertEqual(adopted['purpose'], 'recovery')
+        self.assertNotEqual(adopted['session'], take.session)
+        selected = next(e for e in events if e['event'] == 'profile.selected')
+        self.assertEqual(selected['session'], take.session)
+        self.assertIs(devices.audio_trace, take)
+
 if __name__ == '__main__':
     unittest.main()

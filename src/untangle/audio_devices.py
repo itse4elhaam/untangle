@@ -14,7 +14,8 @@ place, before it is removed, so a failed removal can never replay an old
 restore. When the record can be neither retired nor removed, a marker naming
 that exact intent is saved in a second store (retired_path) so the next launch
 skips it, and every restore() retries the cleanup (the app's 3-second retry and
-exit). Record files are never opened through a symlink or another file's link.
+exit). Records are never read or written through a symlink, and the in-place
+emptying fallback never touches a file another name links to.
 """
 from contextlib import contextmanager
 import errno
@@ -248,6 +249,7 @@ class AudioDevices:
         # A record exists but could not be read; keep it and retry (app tick).
         self.record_unread = False
         self._read_error = None
+        self._unread_path = self.intent_path
         # A finished record could be neither retired nor removed; restore() retries.
         self.cleanup_pending = False
         self.source_label = None
@@ -255,7 +257,8 @@ class AudioDevices:
         self._capture_owner = None
         self._capture_card = None
         self._release_lock = threading.Lock()
-        self._release_pending = None
+        self._release_pending = set()
+        self._recovery_trace = None  # Launch recovery's trace, kept across read retries.
 
     @property
     def audio_trace(self):
@@ -307,19 +310,19 @@ class AudioDevices:
         unlocks. Holding the fence that long only defers a restore.
         """
         with self._release_lock:
-            self._release_pending = owner
+            self._release_pending.add(owner)
         self._drain_release()
 
     def _apply_release(self):
         """Apply a pending release. Caller holds the capture lock."""
         with self._release_lock:
-            owner, self._release_pending = self._release_pending, None
-        if owner is not None and owner is self._capture_owner:
+            owners, self._release_pending = self._release_pending, set()
+        if self._capture_owner is not None and self._capture_owner in owners:
             self._capture_owner = self._capture_card = None
 
     def _drain_release(self):
         # Set after the holder's last check: whoever gets the lock applies it.
-        while self._release_pending is not None and self._capture_lock.acquire(blocking=False):
+        while self._release_pending and self._capture_lock.acquire(blocking=False):
             try:
                 self._apply_release()
             finally:
@@ -367,8 +370,19 @@ class AudioDevices:
     def microphones(self):
         """Inputs plus one stable entry per connected earbud card, even in A2DP."""
         default = self.read('info').get('default_source_name')
+        try:
+            listed = self.read('cards')
+        except AudioDeviceError as exc:
+            # Earbud entries need card discovery; other inputs never do.
+            trace = self.audio_trace
+            (trace if isinstance(trace, AudioTrace) else AudioTrace('devices')).event(
+                'devices.cards_unavailable', level='warning', reason='card_lookup_failed',
+                exception_type=type(exc).__name__)
+            return [(s.get('description', s['name']) + (' (system default)' if s['name'] == default else ''),
+                     s['name'])
+                    for s in self.read('sources') if is_microphone(s) and not is_bluetooth(s) and connected(s)]
         cards = []
-        for card in self.read('cards'):
+        for card in listed:
             if card['name'].startswith('bluez_card.') and handsfree_profile(card):
                 try:
                     if connected(card):
@@ -474,7 +488,8 @@ class AudioDevices:
                 raise AudioDeviceError('Bluetooth headset disconnected while preparing its microphone.')
         with self._locked():
             if not self.lease and self.record_unread and not self.cleanup_pending:
-                self._adopt_intent()
+                with self._bound_trace(self._recovery_trace or self.audio_trace):
+                    self._adopt_intent()  # Launch recovery's retry: its trace, not this take's.
         # One restore is tracked at a time. Another pair still owed a restore,
         # or an unread record, only blocks earbuds that would need a switch.
         owned = self.lease if self.lease and self.lease[0] == name else None
@@ -504,7 +519,7 @@ class AudioDevices:
                 detail = (f' ({type(error).__name__}: {reason})' if reason
                           else f' ({type(error).__name__})' if error else '')
                 raise AudioDeviceError(f'Cannot read the earbud restore record{detail}, so Untangle did '
-                                       f'not switch the earbuds. Check that {self.intent_path} is '
+                                       f'not switch the earbuds. Check that {self._unread_path} is '
                                        "readable, or choose another microphone. If you can't fix its "
                                        'permissions, quit Untangle, delete '
                                        '~/.local/state/glint/bluetooth-profile.json, then relaunch.')
@@ -560,7 +575,12 @@ class AudioDevices:
             # A later capture (a Quick check, a take) can begin before a deferred
             # restore. Keep restoration evidence with the session that changed
             # it, bound to this thread; other operations keep their own trace.
-            trace = self._lease_trace if self.lease and self._lease_trace is not None else self.audio_trace
+            if self.lease and self._lease_trace is not None:
+                trace = self._lease_trace
+            elif not self.lease and self.record_unread and self._recovery_trace is not None:
+                trace = self._recovery_trace  # A launch recovery retry, not a later check.
+            else:
+                trace = self.audio_trace
             with self._bound_trace(trace):
                 deadline = self.clock() + (2 if exiting else 0)
                 while True:
@@ -791,11 +811,18 @@ class AudioDevices:
         self._retired_saved = True
 
     def _retired_key(self):
+        """The marked intent, or None without a usable marker. Raises OSError.
+
+        A missing or malformed marker lets recovery proceed; a marker that
+        could not be read raises, so the caller keeps the record pending.
+        """
         if not self.retired_path:
             return None
         try:
             marker = json.loads(read_regular(self.retired_path) or 'null')
-        except (OSError, ValueError):
+        except FileNotFoundError:
+            return None
+        except ValueError:
             return None  # No usable marker: recovery proceeds as before.
         return marker.get('retired') if isinstance(marker, dict) else None
 
@@ -825,6 +852,7 @@ class AudioDevices:
         status, value = self._read_intent()
         self.record_unread = status == 'unread'
         self._read_error = value if status == 'unread' else None
+        self._unread_path = self.intent_path
         if status == 'unread':
             emit(self, 'recovery.deferred', level='warning', every=5, reason='read_failed',
                  exception_type=type(value).__name__)
@@ -843,7 +871,16 @@ class AudioDevices:
             return False
         record = value
         self._record_key = [record.get(key) for key in _INTENT_KEY]
-        if self._record_key == self._retired_key():
+        try:
+            retired = self._retired_key()
+        except OSError as exc:
+            # It may mark this intent finished: never replay it unread, retry.
+            self.record_unread, self._read_error = True, exc
+            self._unread_path = self.retired_path
+            emit(self, 'recovery.deferred', level='warning', every=5, reason='marker_read_failed',
+                 card=record['card'], exception_type=type(exc).__name__)
+            return False
+        if self._record_key == retired:
             # Restored before; only its cleanup failed. Never replay it.
             emit(self, 'recovery.skipped', card=record['card'], reason='retired')
             self._retired_saved = True
@@ -880,7 +917,8 @@ class AudioDevices:
         """
         if not self.intent_path or self.lease:
             return False
-        with self._bound_trace(AudioTrace('recovery')), self._locked():
+        self._recovery_trace = AudioTrace('recovery')
+        with self._bound_trace(self._recovery_trace), self._locked():
             if not self._adopt_intent():
                 return False
             return self._restore_idle() == 'restored'
