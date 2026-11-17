@@ -21,6 +21,7 @@ class AudioReadinessTests(unittest.TestCase):
         self.window.audio_devices = MagicMock()
         self.window.audio_devices.lease = None
         self.window.audio_devices.record_unread = False
+        self.window.audio_devices.cleanup_pending = False
         self.window.audio_devices.resolve.return_value = 'exact-mic'
         self.obs = MagicMock()
         self.meter = MicrophoneTelemetry(self.obs, 42, 'exact-mic')

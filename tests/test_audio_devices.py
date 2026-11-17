@@ -641,25 +641,154 @@ class AudioDevicesTests(unittest.TestCase):
         self.assertFalse(later.recover())
         self.assertFalse(path.exists())
 
-    def test_retire_and_unlink_both_failing_is_logged_loudly(self):
+    def blocked_record_writes(self, path, truncate=False):
+        """Patch the atomic retire, the in-place truncation and the delete to fail."""
+        import contextlib, os
+        open_file = os.open
+        def deny_truncate(target, *args, **kwargs):
+            if Path(target) == path:
+                raise PermissionError('denied')
+            return open_file(target, *args, **kwargs)
+        stack = contextlib.ExitStack()
+        stack.enter_context(patch('untangle.audio_devices.os.replace', side_effect=PermissionError('denied')))
+        stack.enter_context(patch.object(Path, 'unlink', side_effect=PermissionError('denied')))
+        if not truncate:
+            stack.enter_context(patch('untangle.audio_devices.os.open', deny_truncate))
+        return stack
+
+    def test_retire_and_unlink_both_failing_is_logged_loudly_and_retried(self):
         devices, path = self.intent_devices()
         devices.prepare(self.earbuds)
-        with patch('untangle.audio_devices.os.replace', side_effect=PermissionError('denied')), \
-                patch.object(Path, 'unlink', side_effect=PermissionError('denied')), \
-                self.assertLogs('recit.audio', 'WARNING') as logs:
+        with self.blocked_record_writes(path), self.assertLogs('recit.audio', 'ERROR') as logs:
             self.assertTrue(devices.restore())
-        self.assertIn('intent.stuck', ' '.join(logs.output))
-        # A retire failure alone is logged too; the delete still removes the record.
+            self.assertTrue(devices.cleanup_pending)
+            devices.restore()  # A retry that fails again does not log ERROR again.
+        self.assertEqual(sum('intent.stuck' in line for line in logs.output), 1)
+        self.assertEqual(self.card['active_profile'], 'a2dp-sink')
+        self.assertTrue(path.exists())
+        devices.restore()  # The app's next retry, once storage works again.
+        self.assertFalse(devices.cleanup_pending)
+        self.assertFalse(path.exists())
+        # The user then picks hands-free themselves; a later launch leaves it.
+        self.card['active_profile'] = 'headset-head-unit-msbc'
+        later = AudioDevices(self.command, lambda: self.now, self.sleep, intent_path=path)
+        self.assertFalse(later.recover())
+        self.assertEqual(self.card['active_profile'], 'headset-head-unit-msbc')
+
+    def test_failed_retire_falls_back_to_truncating_the_record_in_place(self):
         from untangle.audio_debug import AudioTrace
+        devices, path = self.intent_devices()
         devices.audio_trace = AudioTrace()
         devices.prepare(self.earbuds)
-        with patch('untangle.audio_devices.os.replace', side_effect=PermissionError('denied')), \
-                self.assertLogs('recit.audio', 'WARNING') as logs:
+        with self.blocked_record_writes(path, truncate=True), self.assertLogs('recit.audio', 'WARNING') as logs:
             self.assertTrue(devices.restore())
         output = ' '.join(logs.output)
         self.assertIn('"reason":"retire_failed"', output)
         self.assertNotIn('intent.stuck', output)
+        self.assertFalse(devices.cleanup_pending)
+        self.assertEqual(path.read_text(), '')  # Empty reads as done.
+        self.card['active_profile'] = 'headset-head-unit-msbc'
+        later = AudioDevices(self.command, lambda: self.now, self.sleep, intent_path=path)
+        self.assertFalse(later.recover())
+        self.assertEqual(self.card['active_profile'], 'headset-head-unit-msbc')
         self.assertFalse(path.exists())
+        # A failed retire alone is logged; the delete still removes the record.
+        devices.prepare(self.earbuds)
+        with patch('untangle.audio_devices.os.replace', side_effect=PermissionError('denied')):
+            self.assertTrue(devices.restore())
+        self.assertFalse(path.exists())
+
+    def test_unwritable_state_directory_never_replays_a_finished_restore(self):
+        import os
+        if os.geteuid() == 0:
+            self.skipTest('root ignores directory permissions')
+        for file_mode, stuck in ((0o600, False), (0o400, True)):
+            with self.subTest(file_mode=oct(file_mode)):
+                self.card['active_profile'] = 'a2dp-sink'
+                devices, path = self.intent_devices()
+                devices.prepare(self.earbuds)
+                self.addCleanup(path.parent.chmod, 0o700)
+                path.chmod(file_mode)
+                path.parent.chmod(0o500)
+                if stuck:
+                    with self.assertLogs('recit.audio', 'ERROR') as logs:
+                        self.assertTrue(devices.restore())
+                    self.assertIn('intent.stuck', ' '.join(logs.output))
+                else:
+                    self.assertTrue(devices.restore())
+                    self.assertEqual(path.read_text(), '')
+                self.assertEqual(devices.cleanup_pending, stuck)
+                self.assertEqual(self.card['active_profile'], 'a2dp-sink')
+                path.parent.chmod(0o700)
+                devices.restore()
+                self.assertFalse(devices.cleanup_pending)
+                self.card['active_profile'] = 'headset-head-unit-msbc'
+                later = AudioDevices(self.command, lambda: self.now, self.sleep, intent_path=path)
+                self.assertFalse(later.recover())
+                self.assertEqual(self.card['active_profile'], 'headset-head-unit-msbc')
+                self.assertFalse(path.exists())
+
+    def test_second_pair_never_cancels_the_first_pairs_late_switch_grace(self):
+        devices, path = self.intent_devices()
+        other = dict(self.card, name='bluez_card.other', index=19,
+                     active_profile='headset-head-unit-cvsd')
+        self.data['cards'].append(other)
+        self.data['sources'].append(dict(name='bluez_input.other.0', index=55, card=19))
+        delayed = []
+        def timeout(*args):
+            if args[:3] == ('set-card-profile', 'bluez_card.test', 'headset-head-unit-msbc'):
+                delayed.append(args)
+                raise AudioDeviceError('simulated pactl timeout')
+            return self.command(*args)
+        devices.command = timeout
+        with self.assertRaisesRegex(AudioDeviceError, 'timeout'):
+            devices.prepare(self.earbuds)
+        self.assertFalse(devices.restore())  # Still a2dp: the switch may land.
+        self.assertEqual(devices.prepare('earbuds:bluez_card.other'), 'bluez_input.other.0')
+        self.now += 3
+        self.assertFalse(devices.restore())  # The first pair's grace still holds.
+        self.assertTrue(path.exists())
+        self.command(*delayed[0])  # The late switch lands.
+        self.assertTrue(devices.restore())
+        self.assertEqual(self.card['active_profile'], 'a2dp-sink')
+        self.assertEqual(other['active_profile'], 'headset-head-unit-cvsd')
+        self.assertFalse(path.exists())
+
+    def unreadable(self, path):
+        read_text = Path.read_text
+        def fail(target, *args, **kwargs):
+            if target == path:
+                raise PermissionError('denied')
+            return read_text(target, *args, **kwargs)
+        return patch.object(Path, 'read_text', fail)
+
+    def test_unread_record_allows_earbuds_already_usable_in_handsfree(self):
+        devices, path = self.stale_intent()
+        self.card['active_profile'] = 'headset-head-unit-cvsd'  # mSBC is advertised too.
+        with self.unreadable(path):
+            self.assertFalse(devices.recover())
+            self.assertEqual(devices.prepare(self.earbuds), self.mic['name'])
+            self.assertFalse(any(c[0] == 'set-card-profile' for c in self.calls))
+            self.assertIsNone(devices.lease)
+            # A take that needs a switch stays refused, with the read error and a way out.
+            self.card['active_profile'] = 'a2dp-sink'
+            with self.assertRaises(AudioDeviceError) as raised:
+                devices.prepare(self.earbuds)
+        message = str(raised.exception)
+        self.assertIn('did not switch', message)
+        self.assertIn('(PermissionError: denied)', message)
+        self.assertIn("If you can't fix its permissions, quit Untangle, delete "
+                      '~/.local/state/glint/bluetooth-profile.json, then relaunch.', message)
+        self.assertFalse(any(c[0] == 'set-card-profile' for c in self.calls))
+        self.assertTrue(path.is_file())
+
+    def test_exit_does_not_wait_on_an_unread_record(self):
+        devices, path = self.stale_intent()
+        with self.unreadable(path):
+            self.assertFalse(devices.recover())
+            self.assertFalse(devices.restore(exiting=True))
+        self.assertEqual(self.now, 0)
+        self.assertTrue(path.is_file())
 
     def test_classification_and_resolution_share_one_source_listing(self):
         # Reconnect race: info names the earbud mic, the first listing omits

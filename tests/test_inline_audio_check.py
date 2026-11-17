@@ -160,7 +160,8 @@ class InlineAudioCheckTests(unittest.TestCase):
         self.assertEqual(order, ['release', 'play'])  # No Bluetooth wait before Play.
         dialog.done_button.click()
         self.assertFalse(dialog.path.parent.exists())
-        self.devices.release_capture.assert_called_once_with(self.devices.hold_capture.return_value)
+        self.devices.hold_capture.assert_not_called()  # Quick check never fences restores.
+        self.devices.release_capture.assert_not_called()
 
     def test_change_microphone_waits_for_preparation_and_release(self):
         dialog = self.dialog
@@ -176,7 +177,8 @@ class InlineAudioCheckTests(unittest.TestCase):
         gate.set()
         self.wait()
         self.engine.end_audio_check.assert_called_once()
-        self.devices.release_capture.assert_called_once_with(self.devices.hold_capture.return_value)
+        self.devices.hold_capture.assert_not_called()  # Quick check never fences restores.
+        self.devices.release_capture.assert_not_called()
         self.devices.restore.assert_not_called()
         self.sample.save.assert_not_called()
         dialog.player.play.assert_not_called()

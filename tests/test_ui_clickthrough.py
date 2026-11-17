@@ -25,6 +25,7 @@ class ClearlineClickthrough(unittest.TestCase):
         devices = MagicMock()
         devices.lease = None
         devices.record_unread = False
+        devices.cleanup_pending = False
         devices.prepare.return_value = 'test-microphone'
         devices.resolve.return_value = 'test-microphone'
         for replacement in (

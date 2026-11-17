@@ -2512,8 +2512,9 @@ class Window(QMainWindow):
                 or (self.audio_worker and self.audio_worker.isRunning())):
             return
         self._audio_retry_at = time.monotonic() + 3
-        # An unread record is retried too: it may still owe a restore.
-        if self.audio_devices.lease or self.audio_devices.record_unread:
+        # An unread record may still owe a restore; a stuck finished one needs cleanup.
+        if (self.audio_devices.lease or self.audio_devices.record_unread
+                or self.audio_devices.cleanup_pending):
             self.run_audio(self.audio_devices.restore, lambda result, error: None)
 
     def audio_checked(self, source, error):

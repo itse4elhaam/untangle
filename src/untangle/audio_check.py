@@ -112,7 +112,6 @@ class AudioCheck(QDialog):
         self.closing = False
         self.failed_capture = False
         self.sample = None
-        self.capture_owner = None
         self.pending_finish = None
         self.temp = tempfile.TemporaryDirectory(prefix='recit-audio-check-')
         self.path = Path(self.temp.name) / 'microphone.wav'
@@ -258,8 +257,8 @@ class AudioCheck(QDialog):
         emit(self, 'session.start', selection=self.selection, processing=self.processing)
         self.status.setText('Preparing microphone…')
         self.device.setText('Microphone: verifying actual capture source…')
-        # The check never switches earbuds or opens a Bluetooth mic.
-        self.capture_owner = self.devices.hold_capture(None)
+        # The check never switches earbuds or opens a Bluetooth mic, so it
+        # never fences or waits on an earbud restore.
         def prepare():
             try:
                 source = self.devices.prepare(self.selection, switch_profile=False)
@@ -339,8 +338,6 @@ class AudioCheck(QDialog):
             if isinstance(trace, AudioTrace) and self.sample:
                 trace.telemetry('check', self.engine.audio_status(), outcome='finished')
             self.engine.end_audio_check()
-            self.devices.release_capture(self.capture_owner)
-            self.capture_owner = None
             # The check never switches earbuds, so it never restores them: an
             # earlier earbud take's restore is the app's retry, never a wait here.
             peak, sample_error = None, route_error

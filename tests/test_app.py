@@ -20,6 +20,7 @@ class AppChecks(unittest.TestCase):
         devices = MagicMock()
         devices.lease = None
         devices.record_unread = False
+        devices.cleanup_pending = False
         devices.prepare.return_value = 'test-microphone'
         self.patches = [patch.object(glint, 'AudioDevices', return_value=devices),
             patch.object(glint.Window, 'initialize'), patch.object(glint.Hotkeys, 'start'),

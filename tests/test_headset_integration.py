@@ -21,6 +21,7 @@ class HeadsetIntegrationTests(unittest.TestCase):
         self.window.audio_devices = MagicMock()
         self.window.audio_devices.lease = None
         self.window.audio_devices.record_unread = False
+        self.window.audio_devices.cleanup_pending = False
         self.window.audio_devices.prepare.return_value = 'bluez_input.exact'
         self.window.engine.recording = False
         self.window.audio_devices.resolve.return_value = 'bluez_input.exact'
@@ -125,6 +126,14 @@ class HeadsetIntegrationTests(unittest.TestCase):
         self.window.retry_audio_restore()
         devices.restore.assert_not_called()
         devices.record_unread = True  # A read error at launch kept the record.
+        self.window.retry_audio_restore()
+        self.window.audio_worker.wait()
+        test_app.qt.processEvents()
+        devices.restore.assert_called_once()
+
+    def test_pending_record_cleanup_is_retried_without_a_lease(self):
+        devices = self.window.audio_devices
+        devices.cleanup_pending = True  # A finished record could not be retired yet.
         self.window.retry_audio_restore()
         self.window.audio_worker.wait()
         test_app.qt.processEvents()

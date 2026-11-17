@@ -17,6 +17,7 @@ class IdleAudioTests(unittest.TestCase):
         w.audio_devices = MagicMock()
         w.audio_devices.lease = None
         w.audio_devices.record_unread = False
+        w.audio_devices.cleanup_pending = False
         w.audio_devices.prepare.return_value = 'bluez.exact'
         w.audio_devices.source_label = 'OnePlus Buds 4'
         w.engine.verify_audio_route.side_effect = None
