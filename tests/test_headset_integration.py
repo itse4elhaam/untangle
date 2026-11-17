@@ -20,6 +20,7 @@ class HeadsetIntegrationTests(unittest.TestCase):
         self.window = self.fixture.window
         self.window.audio_devices = MagicMock()
         self.window.audio_devices.lease = None
+        self.window.audio_devices.record_unread = False
         self.window.audio_devices.prepare.return_value = 'bluez_input.exact'
         self.window.engine.recording = False
         self.window.audio_devices.resolve.return_value = 'bluez_input.exact'
@@ -118,6 +119,16 @@ class HeadsetIntegrationTests(unittest.TestCase):
         self.window.audio_worker.wait()
         test_app.qt.processEvents()
         self.assertEqual(self.window.audio_devices.restore.call_count, 2)
+
+    def test_unread_restore_record_is_retried_without_a_lease(self):
+        devices = self.window.audio_devices
+        self.window.retry_audio_restore()
+        devices.restore.assert_not_called()
+        devices.record_unread = True  # A read error at launch kept the record.
+        self.window.retry_audio_restore()
+        self.window.audio_worker.wait()
+        test_app.qt.processEvents()
+        devices.restore.assert_called_once()
 
     def test_failed_engine_start_releases_audio(self):
         self.window.engine.start.side_effect = RuntimeError('encoder failed')

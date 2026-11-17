@@ -591,6 +591,143 @@ class AudioDevicesTests(unittest.TestCase):
         self.assertFalse(any(c[0] == 'set-card-profile' for c in self.calls))
         self.assertEqual(self.devices.lease, lease)
 
+    def test_valid_record_survives_a_transient_read_error_and_is_retried(self):
+        devices, path = self.stale_intent()
+        read_text = Path.read_text
+        def fail(target, *args, **kwargs):
+            if target == path:
+                raise OSError('transient I/O error')
+            return read_text(target, *args, **kwargs)
+        with patch.object(Path, 'read_text', fail):
+            self.assertFalse(devices.recover())
+            self.assertTrue(devices.record_unread)
+            self.assertFalse(devices.restore())  # Still unreadable: kept, and retried later.
+            # An unread record may name other earbuds: never overwrite it with a new switch.
+            self.card['active_profile'] = 'a2dp-sink'
+            with self.assertRaisesRegex(AudioDeviceError, 'did not switch'):
+                devices.prepare(self.earbuds)
+            self.card['active_profile'] = 'headset-head-unit-msbc'
+        self.assertTrue(path.exists(), 'valid intent was deleted after a read failure')
+        self.assertFalse(any(c[0] == 'set-card-profile' for c in self.calls))
+        self.assertTrue(devices.restore())  # The app's retry reads it now.
+        self.assertEqual(self.card['active_profile'], 'a2dp-sink')
+        self.assertFalse(path.exists())
+        self.assertFalse(devices.record_unread)
+
+    def test_completed_restore_with_unlink_error_never_replays(self):
+        devices, path = self.intent_devices()
+        devices.prepare(self.earbuds)
+        unlink = Path.unlink
+        def forbid(target, *args, **kwargs):
+            if target == path:
+                raise PermissionError('read-only state directory')
+            return unlink(target, *args, **kwargs)
+        with patch.object(Path, 'unlink', forbid):
+            self.assertTrue(devices.restore())
+        self.assertEqual(self.card['active_profile'], 'a2dp-sink')
+        self.assertIsNone(devices.lease)
+        self.assertEqual(json.loads(path.read_text()), {'done': True})
+        # The user then picks hands-free themselves; the next launch must leave it.
+        self.card['active_profile'] = 'headset-head-unit-msbc'
+        self.calls.clear()
+        later = AudioDevices(self.command, lambda: self.now, self.sleep, intent_path=path)
+        self.assertFalse(later.recover())
+        self.assertIsNone(later.lease)
+        self.assertEqual(self.card['active_profile'], 'headset-head-unit-msbc')
+        self.assertFalse(any(c[0] == 'set-card-profile' for c in self.calls))
+        self.assertFalse(path.exists())
+        # A truncated record is retired too.
+        path.write_text('')
+        self.assertFalse(later.recover())
+        self.assertFalse(path.exists())
+
+    def test_retire_and_unlink_both_failing_is_logged_loudly(self):
+        devices, path = self.intent_devices()
+        devices.prepare(self.earbuds)
+        with patch('untangle.audio_devices.os.replace', side_effect=PermissionError('denied')), \
+                patch.object(Path, 'unlink', side_effect=PermissionError('denied')), \
+                self.assertLogs('recit.audio', 'WARNING') as logs:
+            self.assertTrue(devices.restore())
+        self.assertIn('intent.stuck', ' '.join(logs.output))
+
+    def test_classification_and_resolution_share_one_source_listing(self):
+        # Reconnect race: info names the earbud mic, the first listing omits
+        # it and a second would include it. It must never be opened.
+        self.data['info']['default_source_name'] = self.mic['name']
+        self.card['active_profile'] = 'headset-head-unit-msbc'
+        def appears_after_first_listing(*args):
+            value = self.command(*args)
+            if args[-1] == 'sources' and self.mic not in self.data['sources']:
+                self.data['sources'].append(self.mic)
+            return value
+        self.devices.command = appears_after_first_listing
+        from untangle.audio_devices import EarbudMicDeferred
+        with self.assertRaises(EarbudMicDeferred):
+            self.devices.prepare('default', switch_profile=False)
+        self.assertEqual(sum(1 for c in self.calls if c[-1] == 'sources'), 1)
+        # Same race for a wired default that leaves: no second listing reached.
+        self.data['sources'] = [dict(name='buds.monitor', index=2)]
+        self.data['info']['default_source_name'] = 'brio'
+        self.calls.clear()
+        def wired_returns(*args):
+            value = self.command(*args)
+            if args[-1] == 'sources':
+                self.data['sources'].append(dict(name='brio', index=1))
+            return value
+        self.devices.command = wired_returns
+        with self.assertRaisesRegex(AudioDeviceError, 'unavailable'):
+            self.devices.prepare('default', switch_profile=False)
+        self.assertEqual(sum(1 for c in self.calls if c[-1] == 'sources'), 1)
+
+    def test_second_pair_already_on_cvsd_is_used_without_a_switch(self):
+        devices, path = self.stale_intent()
+        other = dict(self.card, name='bluez_card.other', index=19,
+                     active_profile='headset-head-unit-cvsd')
+        self.data['cards'] = [other]
+        self.data['sources'] = [dict(name='bluez_input.other.0', index=55, card=19)]
+        self.assertFalse(devices.recover())
+        self.assertEqual(devices.prepare('earbuds:bluez_card.other'), 'bluez_input.other.0')
+        self.assertFalse(any(c[0] == 'set-card-profile' for c in self.calls))
+        self.assertEqual(devices.lease[0], 'bluez_card.test')
+        self.assertTrue(path.is_file())
+        # A hands-free profile without a microphone is not usable as is.
+        other['profiles'] = dict(other['profiles'],
+                                 **{'headset-head-unit-cvsd': dict(sources=0, available=True)})
+        with self.assertRaisesRegex(AudioDeviceError, 'other earbuds'):
+            devices.prepare('earbuds:bluez_card.other')
+        self.assertEqual(other['active_profile'], 'headset-head-unit-cvsd')
+        self.assertFalse(any(c[0] == 'set-card-profile' for c in self.calls))
+
+    def test_refusal_says_how_to_clear_earbuds_that_are_gone(self):
+        devices, path = self.stale_intent()
+        self.data['cards'] = []
+        self.assertFalse(devices.recover())
+        self.data['cards'] = [dict(self.card, name='bluez_card.other', index=19, active_profile='a2dp-sink')]
+        with self.assertRaisesRegex(AudioDeviceError, 'If those earbuds are gone, quit Untangle, delete '
+                                    r'~/\.local/state/glint/bluetooth-profile\.json, then relaunch\.'):
+            devices.prepare('earbuds:bluez_card.other')
+
+    def test_recovery_rejects_records_for_non_bluetooth_cards_or_profiles(self):
+        for overrides in (dict(card='alsa_card.usb-DJI'), dict(target='a2dp-sink'),
+                          dict(target='off'), dict(card='bluez_card.')):
+            with self.subTest(**overrides):
+                devices, path = self.stale_intent(**overrides)
+                self.data['cards'] = [dict(self.card, name=overrides.get('card', self.card['name']))]
+                self.calls.clear()
+                with self.assertLogs('recit.audio') as logs:
+                    self.assertFalse(devices.recover())
+                self.assertIn('"reason":"unreadable"', ' '.join(logs.output))
+                self.assertIsNone(devices.lease)
+                self.assertFalse(path.exists())
+                self.assertFalse(any(c[0] == 'set-card-profile' for c in self.calls))
+        self.data['cards'] = [self.card]
+        for target in ('headset-head-unit', 'handsfree_head_unit'):
+            with self.subTest(target=target):
+                devices, path = self.stale_intent(target=target)
+                self.card['active_profile'] = target
+                self.assertTrue(devices.recover())
+                self.assertEqual(self.card['active_profile'], 'a2dp-sink')
+
     def load_recorded_headset(self):
         # pactl snapshot taken read-only on PipeWire 1.0.3; address sanitized.
         self.data = json.loads((Path(__file__).parent / 'fixtures/oneplus-a2dp.json').read_text())

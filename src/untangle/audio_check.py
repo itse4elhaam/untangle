@@ -8,7 +8,7 @@ import tempfile
 import time
 import wave
 from .audio_debug import AudioTrace, emit
-from .audio_devices import AudioDeviceError, EarbudMicDeferred
+from .audio_devices import EarbudMicDeferred
 from .microphone_meter import MicrophoneMeter
 
 from PySide6.QtCore import Qt, QThread, QTimer, QUrl, Signal
@@ -327,7 +327,7 @@ class AudioCheck(QDialog):
         self.meter.show_status(None, self.device.text(), enabled=bool(self.selection))
         self.meter.message.setText('Live input stopped. Review the sample result below.')
         emit(self, 'check.stopped', reason='cancelled' if self.closing else 'finished')
-        self.status.setText('Releasing microphone and restoring playback…')
+        self.status.setText('Releasing microphone…')
         def finish():
             route_error = ''
             if self.sample and not error and not self.closing:
@@ -341,12 +341,8 @@ class AudioCheck(QDialog):
             self.engine.end_audio_check()
             self.devices.release_capture(self.capture_owner)
             self.capture_owner = None
-            # The check never switches earbuds. An earlier earbud take's
-            # restore is best effort here; the app's retry owns it.
-            try:
-                self.devices.restore()
-            except AudioDeviceError as exc:
-                emit(self, 'check.restore_deferred', level='warning', exception_type=type(exc).__name__)
+            # The check never switches earbuds, so it never restores them: an
+            # earlier earbud take's restore is the app's retry, never a wait here.
             peak, sample_error = None, route_error
             if self.sample and not error and not route_error and not self.closing:
                 try:
@@ -392,17 +388,7 @@ class AudioCheck(QDialog):
     def prepare_playback(self):
         if self.worker or self.capturing:
             return
-        def restore():
-            try:
-                self.devices.restore()  # Best effort; never gates the sample.
-            except AudioDeviceError as exc:
-                emit(self, 'check.restore_deferred', level='warning', exception_type=type(exc).__name__)
-        def restored(value, error):
-            if self.closing:
-                self.complete_close()
-            else:
-                self.play_sample()
-        self.run_action(restore, restored)
+        self.play_sample()  # No Bluetooth call: the app's retry owns restores.
 
     def play_sample(self):
         self.player.setSource(QUrl.fromLocalFile(str(self.path)))

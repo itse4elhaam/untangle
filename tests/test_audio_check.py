@@ -100,7 +100,7 @@ class DialogChecks(unittest.TestCase):
         self.dialog.finish_capture()
         self.wait()
 
-    def test_prepare_capture_release_restore_then_explicit_play(self):
+    def test_prepare_capture_release_then_explicit_play(self):
         order = []
         self.engine.end_audio_check.side_effect = lambda: order.append('release')
         self.devices.restore.side_effect = lambda: order.append('restore') or True
@@ -108,11 +108,12 @@ class DialogChecks(unittest.TestCase):
         self.capture()
         self.devices.prepare.assert_called_once_with('default', switch_profile=False)
         self.engine.begin_audio_check.assert_called_once_with('exact.headset.source', True)
-        self.assertEqual(order, ['release', 'restore'])
+        self.assertEqual(order, ['release'])
         self.dialog.player.play.assert_not_called()
         self.dialog.prepare_playback()
         self.wait()
-        self.assertEqual(order, ['release', 'restore', 'restore', 'play'])
+        # The check never switches earbuds; the app's retry owns any restore.
+        self.assertEqual(order, ['release', 'play'])
         self.assertTrue(self.dialog.path.is_file())
         self.dialog.reject()
         self.assertFalse(self.dialog.path.exists())
@@ -143,29 +144,26 @@ class DialogChecks(unittest.TestCase):
         self.capture()
         self.assertNotEqual(self.dialog.audio_trace.session, trace.session)
 
-    def test_earlier_earbud_restore_never_blocks_the_sample(self):
-        # A previous earbud take is still waiting (card gone or busy). The
-        # app's retry owns that restore; the DJI sample is complete and plays.
+    def test_sample_save_and_play_never_wait_on_an_earlier_earbud_restore(self):
+        # A previous earbud take is still owed a restore and its Bluetooth
+        # calls hang. The app's retry owns it; the DJI sample saves and plays.
+        import threading
         from untangle.audio_devices import AudioDeviceError
-        for outcome in (False, AudioDeviceError('Cannot verify Bluetooth headset connection.')):
-            with self.subTest(outcome=outcome):
-                self.dialog.player.play.reset_mock()
-                sample = AudioSample(MagicMock(), 123)
-                feed(sample)
-                self.engine.begin_audio_check.return_value = sample
-                if isinstance(outcome, Exception):
-                    self.devices.restore.side_effect = outcome
-                else:
-                    self.devices.restore.side_effect = None
-                    self.devices.restore.return_value = outcome
-                self.capture()
-                self.assertFalse(self.dialog.failed_capture)
-                self.assertTrue(self.dialog.path.is_file())
-                self.assertNotIn('Another app', self.dialog.status.text())
-                self.assertIn('Play sample', self.dialog.status.text())
-                self.dialog.prepare_playback()
-                self.wait()
-                self.dialog.player.play.assert_called_once()
+        entered, release = threading.Event(), threading.Event()
+        def hanging_restore(*args, **kwargs):
+            entered.set()
+            release.wait(timeout=2)
+            raise AudioDeviceError('Audio server timed out')
+        self.devices.restore.side_effect = hanging_restore
+        self.addCleanup(release.set)
+        self.capture()
+        self.assertFalse(self.dialog.failed_capture)
+        self.assertTrue(self.dialog.path.is_file())
+        self.assertIn('Play sample', self.dialog.status.text())
+        self.dialog.prepare_playback()
+        self.dialog.player.play.assert_called_once()
+        self.assertFalse(entered.is_set())
+        self.devices.restore.assert_not_called()
 
     def test_dji_sample_plays_when_a_prior_earbud_take_left_its_card_disconnected(self):
         import test_audio_devices
@@ -183,6 +181,7 @@ class DialogChecks(unittest.TestCase):
         self.wait()
         self.dialog.player.play.assert_called_once()
         self.assertIsNotNone(pulse.devices.lease)  # Still owed; the app retries it.
+        self.assertFalse([c for c in pulse.calls if c[0] == 'set-card-profile' and c[2] == 'a2dp-sink'])
 
     def test_silence_guidance_without_automatic_playback(self):
         self.sample.blocks.clear()
@@ -249,13 +248,14 @@ class DialogChecks(unittest.TestCase):
         self.assertIsNone(pulse.devices.lease)
         self.assertFalse([c for c in pulse.calls if c[0] == 'set-card-profile'])
 
-    def test_prepare_error_releases_and_restores(self):
+    def test_prepare_error_releases_without_waiting_on_restore(self):
         self.devices.prepare.side_effect = RuntimeError('Headset disconnected')
         self.dialog.start_check()
         self.wait()
         self.assertIn('Headset disconnected', self.dialog.status.text())
         self.engine.end_audio_check.assert_called_once()
-        self.devices.restore.assert_called_once()
+        self.devices.release_capture.assert_called_once()
+        self.devices.restore.assert_not_called()  # The check never switches; the app retries.
         self.dialog.player.play.assert_not_called()
 
     def test_close_during_preparation_waits_and_never_plays(self):
@@ -268,7 +268,7 @@ class DialogChecks(unittest.TestCase):
         ready.set()
         self.wait()
         self.engine.end_audio_check.assert_called_once()
-        self.devices.restore.assert_called_once()
+        self.devices.restore.assert_not_called()
         self.dialog.player.play.assert_not_called()
         self.assertFalse(self.dialog.path.parent.exists())
 
@@ -289,6 +289,7 @@ class EntryChecks(unittest.TestCase):
         window = self.window
         window.audio_devices = MagicMock()
         window.audio_devices.lease = None
+        window.audio_devices.record_unread = False
         with patch('untangle.audio_check.AudioCheck') as dialog_type:
             for flag in ('recording', 'counting', 'busy', 'preparing_audio'):
                 setattr(window, flag, True)

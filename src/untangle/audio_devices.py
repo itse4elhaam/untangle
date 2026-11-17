@@ -8,7 +8,8 @@ restore(); it defers only while a client captures from the earbud mic.
 
 The switch intent is persisted before the request, and a failed write refuses
 the switch, so a crashed or killed Untangle can restore the earbuds on its next
-launch (recover()).
+launch (recover()). A finished record is retired as {"done": true} before it is
+removed, so a failed removal can never replay an old restore.
 """
 import json
 import os
@@ -23,6 +24,7 @@ from .audio_debug import AudioTrace, emit, traced
 EARBUDS = 'earbuds:'
 # A switch request that failed or timed out may still land on the server.
 SWITCH_GRACE = 15
+HANDSFREE = ('headset-head-unit', 'handsfree_head_unit')
 _ANY_CARD = object()
 
 
@@ -154,12 +156,16 @@ def switch_grace(record):
     return min(remaining, SWITCH_GRACE) if remaining > 0 else 0.
 
 
+def usable_handsfree(card, name):
+    profile = card.get('profiles', {}).get(name)
+    return (isinstance(name, str) and name.startswith(HANDSFREE) and isinstance(profile, dict)
+            and profile.get('available') not in (False, 'no') and bool(profile.get('sources', 0)))
+
+
 def handsfree_profile(card):
     candidates = []
     for name, profile in card.get('profiles', {}).items():
-        if not name.startswith(('headset-head-unit', 'handsfree_head_unit')):
-            continue
-        if profile.get('available') in (False, 'no') or not profile.get('sources', 0):
+        if not usable_handsfree(card, name):
             continue
         quality = 4 if 'lc3' in name else 3 if 'msbc' in name else 1 if 'cvsd' in name else 2
         candidates.append((quality, profile.get('priority', 0), name))
@@ -175,6 +181,8 @@ class AudioDevices:
         self._lease_trace = None
         self._unconfirmed_until = None
         self._recovered = False
+        # A record exists but could not be read; keep it and retry (app tick).
+        self.record_unread = False
         self.source_label = None
         self._capture_lock = threading.RLock()
         self._capture_owner = None
@@ -253,11 +261,12 @@ class AudioDevices:
                            EARBUDS + card['name']) for card in cards]
 
     @traced('resolve', every=5)
-    def resolve(self, selection='default'):
+    def resolve(self, selection='default', sources=None):
         if not selection:
             return None
         name = self.read('info').get('default_source_name') if selection == 'default' else selection
-        source = next((s for s in self.read('sources') if s['name'] == name and is_microphone(s)), None)
+        sources = self.read('sources') if sources is None else sources
+        source = next((s for s in sources if s['name'] == name and is_microphone(s)), None)
         if not source or not connected(source, self.audio_trace):
             emit(self, 'source.rejected', level='warning', source=name, reason='missing_or_disconnected')
             raise AudioDeviceError('Selected microphone is unavailable. Reconnect it or choose another microphone.')
@@ -294,28 +303,37 @@ class AudioDevices:
             return None
         name = earbud_card(selection)
         if name is None:
-            # Read the default once, then classify and open that exact source:
-            # a default changing in between must not reach OBS unchecked.
+            # Read the default and the sources once, then classify and open
+            # that exact source: a default or a reconnecting Bluetooth mic
+            # changing in between must not reach OBS unchecked.
             source = self.read('info').get('default_source_name') if selection == 'default' else selection
             if not source:
                 emit(self, 'source.rejected', level='warning', source=source, reason='no_default_input')
                 raise AudioDeviceError('Selected microphone is unavailable. Reconnect it or choose another microphone.')
-            if not switch_profile and self.bluetooth_input(source):
+            sources = self.read('sources')
+            if not switch_profile and self.bluetooth_input(source, sources):
                 emit(self, 'profile.deferred', reason='bluetooth_mic')
                 raise EarbudMicDeferred()
-            return self.resolve(source)
+            return self.resolve(source, sources=sources)
         if not switch_profile:
             emit(self, 'profile.deferred', card=name, reason='switch_on_record')
             raise EarbudMicDeferred()
         return self._prepare_earbuds(name, timeout)
 
-    def bluetooth_input(self, selection):
-        """Whether a selection uses a Bluetooth mic now. Reads only; untraced."""
+    def bluetooth_input(self, selection, sources=None):
+        """Whether a selection uses a Bluetooth mic now. Reads only; untraced.
+
+        A source not listed yet is judged by its name: a reconnecting earbud
+        mic can be the default before it is listed.
+        """
         if earbud_card(selection):
             return True
         name = self.read('info').get('default_source_name') if selection == 'default' else selection
-        source = next((s for s in self.read('sources') if s['name'] == name), None)
-        return bool(source and is_microphone(source) and is_bluetooth(source))
+        sources = self.read('sources') if sources is None else sources
+        source = next((s for s in sources if s['name'] == name), None)
+        if source is None:
+            return is_bluetooth({'name': name or ''})
+        return is_microphone(source) and is_bluetooth(source)
 
     def _card(self, name):
         return next((c for c in self.read('cards') if c['name'] == name), None)
@@ -333,6 +351,9 @@ class AudioDevices:
             card = self._card(name)
             if card is None:
                 raise AudioDeviceError('Bluetooth headset disconnected while preparing its microphone.')
+        with self._capture_lock:
+            if not self.lease and self.record_unread:
+                self._adopt_intent()
         # One restore is tracked at a time. Another pair still owed a restore
         # only blocks earbuds that would need a switch themselves.
         owned = self.lease if self.lease and self.lease[0] == name else None
@@ -340,6 +361,8 @@ class AudioDevices:
         if profile is None:
             raise AudioDeviceError('Earbuds have no available hands-free microphone. Choose another microphone.')
         active = card.get('active_profile')
+        if self.lease and not owned and active != profile and usable_handsfree(card, active):
+            profile = active  # Already hands-free with a mic: use it as is.
         emit(self, 'profile.selected', card=name, prior_profile=active,
              target_profile=profile, changed=active != profile)
         if active != profile:
@@ -348,7 +371,15 @@ class AudioDevices:
                      pending_card=self.lease[0])
                 raise AudioDeviceError('Untangle is still waiting to switch your other earbuds back to '
                                        'high-quality playback. Connect them once so Untangle can restore '
-                                       'them, then record with these earbuds.')
+                                       'them, then record with these earbuds. If those earbuds are gone, '
+                                       'quit Untangle, delete ~/.local/state/glint/bluetooth-profile.json, '
+                                       'then relaunch.')
+            if self.record_unread:
+                # It may name other earbuds; a new record would overwrite it.
+                emit(self, 'profile.refused', level='warning', card=name, reason='record_unread')
+                raise AudioDeviceError('Cannot read the earbud restore record, so Untangle did not switch '
+                                       f'the earbuds. Check that {self.intent_path} is readable, '
+                                       'or choose another microphone.')
             if owned and active != owned[1]:
                 raise AudioDeviceError('Headset profile changed outside Untangle. Choose a microphone again.')
             lease = owned or (name, active, profile)
@@ -409,6 +440,8 @@ class AudioDevices:
 
     @traced('restore', every=5)
     def _restore_traced(self):
+        if not self.lease and self.record_unread:
+            self._adopt_intent()  # Retry a record that could not be read yet.
         if self._fenced():
             emit(self, 'restore.deferred', every=5, reason='capture_owned')
             return False
@@ -420,11 +453,12 @@ class AudioDevices:
         Playback never defers: the record-start switch already interrupted it.
         Only a client capturing from the earbud mic does. A missing card keeps
         the lease, since it may return still in hands-free. Inspection
-        failures leave the lease intact. Returns 'restored', 'skipped',
-        'deferred' or 'idle' (nothing owned).
+        failures leave the lease intact, as does a record that could not be
+        read. Returns 'restored', 'skipped', 'deferred' or 'idle' (nothing
+        owned).
         """
         if not self.lease:
-            return 'idle'
+            return 'deferred' if self.record_unread else 'idle'
         name, previous, selected = self.lease
         card = self._card(name)
         if not card or not connected(card, self.audio_trace):
@@ -494,8 +528,10 @@ class AudioDevices:
         if not self.intent_path:
             return
         name, previous, target = lease
-        record = dict(card=name, previous=previous, target=target, pid=os.getpid(),
-                      boot=boot_id(), time=switched)
+        self._write_record(dict(card=name, previous=previous, target=target, pid=os.getpid(),
+                                boot=boot_id(), time=switched))
+
+    def _write_record(self, record):
         temporary = self.intent_path.with_name(self.intent_path.name + '.tmp')
         try:
             self.intent_path.parent.mkdir(parents=True, exist_ok=True)
@@ -509,26 +545,101 @@ class AudioDevices:
             raise
 
     def _read_intent(self):
-        """Return a valid recorded intent, else None (unreadable)."""
+        """Return ('missing' | 'unread' | 'invalid' | 'done', None) or ('valid', record).
+
+        'unread' means the file could not be read: keep it and retry. Only a
+        record that was read and found bad is 'invalid' and dropped.
+        """
+        if not self.intent_path:
+            return 'missing', None
         try:
-            record = json.loads(self.intent_path.read_text())
-            values = (record['card'], record['previous'], record['target'])
-            pid = record['pid']
-        except (OSError, ValueError, KeyError, TypeError):
-            return None
+            text = self.intent_path.read_text()
+        except FileNotFoundError:
+            return 'missing', None
+        except OSError as exc:
+            return 'unread', exc
+        except ValueError:
+            return 'invalid', None  # Not text.
+        try:
+            record = json.loads(text) if text.strip() else {'done': True}
+        except ValueError:
+            return 'invalid', None
+        if not isinstance(record, dict):
+            return 'invalid', None
+        if record.get('done') is True:
+            return 'done', None
+        values = tuple(record.get(key) for key in ('card', 'previous', 'target'))
+        pid = record.get('pid')
         if not all(isinstance(value, str) and value for value in values):
-            return None
+            return 'invalid', None
+        card, _, target = values
+        # Only ever restore a Bluetooth card Untangle switched to hands-free.
+        if (not card.startswith('bluez_card.') or card == 'bluez_card.'
+                or not target.startswith(HANDSFREE)):
+            return 'invalid', None
         if type(pid) is not int or not 0 < pid < 2 ** 31:
-            return None
-        return record
+            return 'invalid', None
+        return 'valid', record
 
     def _clear_intent(self):
+        """Retire the record durably, then remove it.
+
+        A launch ignores a done record, so a failed removal can never replay
+        a finished restore against a profile chosen later.
+        """
         if not self.intent_path:
             return
+        retired = None
+        try:
+            self._write_record({'done': True})
+        except OSError as exc:
+            retired = exc
         try:
             self.intent_path.unlink(missing_ok=True)
         except OSError as exc:
-            emit(self, 'intent.failed', level='warning', exception_type=type(exc).__name__)
+            if retired is None:
+                emit(self, 'intent.failed', level='warning', exception_type=type(exc).__name__)
+            else:
+                # The next launch may replay this restore. Log it even untraced.
+                trace = self.audio_trace if isinstance(self.audio_trace, AudioTrace) else AudioTrace('restore')
+                trace.event('intent.stuck', level='error', exception_type=type(exc).__name__,
+                            reason='retire_and_remove_failed')
+
+    def _adopt_intent(self):
+        """Take over a valid record as this process's lease. Caller holds the lock."""
+        status, value = self._read_intent()
+        self.record_unread = status == 'unread'
+        if status == 'unread':
+            emit(self, 'recovery.deferred', level='warning', every=5, reason='read_failed',
+                 exception_type=type(value).__name__)
+            return False
+        if status == 'missing':
+            return False
+        if status == 'invalid':
+            emit(self, 'recovery.skipped', reason='unreadable')
+            self._clear_intent()
+            return False
+        if status == 'done':
+            try:
+                self.intent_path.unlink(missing_ok=True)
+            except OSError as exc:
+                emit(self, 'intent.failed', level='warning', exception_type=type(exc).__name__)
+            return False
+        record = value
+        grace = switch_grace(record)
+        self.lease = (record['card'], record['previous'], record['target'])
+        self._lease_trace = self.audio_trace
+        self._recovered = True
+        self._unconfirmed_until = self.clock() + grace if grace else None
+        try:
+            self._write_intent(self.lease, record.get('time') if grace else None)
+        except OSError as exc:
+            # The old record stays: any pid in it is stale at next launch.
+            emit(self, 'intent.failed', level='warning', card=record['card'],
+                 exception_type=type(exc).__name__)
+        emit(self, 'recovery.adopted', card=record['card'], prior_profile=record['target'],
+             target_profile=record['previous'], grace_s=round(grace, 1))
+        return True
 
     def recover(self):
         """At launch, take over a restore a crashed or killed Untangle still owed.
@@ -538,33 +649,18 @@ class AudioDevices:
         process's lease, rewritten with this pid and the remaining late-switch
         grace, before any device call. A missing card, an app using the earbud
         mic, or an audio-server error therefore leaves it pending for the
-        app's restore retry. Only an unreadable record, a profile changed
-        outside Untangle, or a switch that never landed within its grace
-        drops it. Returns True if restored now.
+        app's restore retry. A record that cannot be read is kept, and
+        restore() retries reading it. Only invalid contents, a profile changed
+        outside Untangle, or a switch that never landed within its grace drop
+        it; a done record is just removed. Returns True if restored now.
         """
-        if not self.intent_path or self.lease or not self.intent_path.exists():
+        if not self.intent_path or self.lease:
             return False
         trace, self.audio_trace = self.audio_trace, AudioTrace('recovery')
         try:
             with self._capture_lock:
-                record = self._read_intent()
-                if record is None:
-                    emit(self, 'recovery.skipped', reason='unreadable')
-                    self._clear_intent()
+                if not self._adopt_intent():
                     return False
-                grace = switch_grace(record)
-                self.lease = (record['card'], record['previous'], record['target'])
-                self._lease_trace = self.audio_trace
-                self._recovered = True
-                self._unconfirmed_until = self.clock() + grace if grace else None
-                try:
-                    self._write_intent(self.lease, record.get('time') if grace else None)
-                except OSError as exc:
-                    # The old record stays: any pid in it is stale at next launch.
-                    emit(self, 'intent.failed', level='warning', card=record['card'],
-                         exception_type=type(exc).__name__)
-                emit(self, 'recovery.adopted', card=record['card'], prior_profile=record['target'],
-                     target_profile=record['previous'], grace_s=round(grace, 1))
                 return self._restore_idle() == 'restored'
         finally:
             self.audio_trace = trace

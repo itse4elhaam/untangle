@@ -16,6 +16,7 @@ class IdleAudioTests(unittest.TestCase):
         w.timer.stop()
         w.audio_devices = MagicMock()
         w.audio_devices.lease = None
+        w.audio_devices.record_unread = False
         w.audio_devices.prepare.return_value = 'bluez.exact'
         w.audio_devices.source_label = 'OnePlus Buds 4'
         w.engine.verify_audio_route.side_effect = None
@@ -112,6 +113,64 @@ class IdleAudioTests(unittest.TestCase):
     @staticmethod
     def switches(pulse):
         return [c[2] for c in pulse.calls if c[0] == 'set-card-profile']
+
+    def test_launch_recovery_keeps_a_missing_card_and_the_ui_tick_restores_it(self):
+        pulse = self.real_pulse()
+        devices, path = pulse.stale_intent()
+        w = self.w
+        w.audio_devices = devices
+        pulse.data['cards'] = []  # The earbuds are off at launch.
+        initialize = next(p for p in self.fixture.patches
+                          if getattr(p, 'attribute', None) == 'initialize').temp_original
+        w._audio_recovered = False
+        initialize(w)  # The real launch hook; the fixture engine makes it stop after recovery.
+        self.drain()
+        self.assertEqual(devices.lease, ('bluez_card.test', 'a2dp-sink', 'headset-head-unit-msbc'))
+        self.assertTrue(path.exists())
+        self.assertEqual(self.switches(pulse), [])
+        # They return still hands-free; the next restore retry puts them back.
+        pulse.data['cards'] = [pulse.card]
+        w._audio_retry_at = time.monotonic() - 1
+        for _ in range(3):  # Live levels may take a tick's audio worker first.
+            w.tick()
+            self.drain()
+        self.assertEqual(pulse.card['active_profile'], 'a2dp-sink')
+        self.assertEqual(self.switches(pulse), ['a2dp-sink'])
+        self.assertIsNone(devices.lease)
+        self.assertFalse(path.exists())
+
+    def test_adopted_restore_waits_for_an_unrelated_dji_take_to_end(self):
+        # Changing a profile mid-take risks the take and its desktop audio.
+        pulse = self.real_pulse()
+        devices, path = pulse.stale_intent()
+        w = self.w
+        w.audio_devices = devices
+        pulse.data['cards'] = []
+        self.assertFalse(devices.recover())
+        pulse.data['sources'].append(dict(name='dji_receiver', index=5))
+        pulse.data['info']['default_source_name'] = 'dji_receiver'
+        w.engine.audio_status.side_effect = lambda: dict(source=w.selected_source, packets=10,
+            nonzero_packets=10, packet_age=.01, state='signal', peak_db=-18.)
+        w.engine.verify_audio_route.return_value = 'dji_receiver'
+        w.counting = True
+        w.start()
+        self.drain()
+        try:
+            self.assertTrue(w.recording)
+            self.assertEqual(w.selected_source, 'dji_receiver')
+            pulse.data['cards'] = [pulse.card]
+            w._audio_retry_at = time.monotonic() - 1
+            w._recording_route_at = time.monotonic() + 1
+            w.tick()
+            self.drain()
+            self.assertEqual(pulse.card['active_profile'], 'headset-head-unit-msbc')
+            self.assertEqual(self.switches(pulse), [])
+        finally:
+            w.recording = False
+            w.release_audio()
+            self.drain()
+        self.assertEqual(pulse.card['active_profile'], 'a2dp-sink')
+        self.assertFalse(path.exists())
 
     def test_real_prepare_handoff_record_and_restore_share_idle_session(self):
         from test_audio_debug import records

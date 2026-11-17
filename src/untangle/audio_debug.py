@@ -52,7 +52,7 @@ class AudioTrace:
                     value = None
                 if value is None or isinstance(value, (str, bool, int, float)):
                     record[key] = value[:256] if isinstance(value, str) else value
-            logger.log(logging.WARNING if level == 'warning' else logging.INFO,
+            logger.log({'warning': logging.WARNING, 'error': logging.ERROR}.get(level, logging.INFO),
                        'recit.audio %s', json.dumps(record, separators=(',', ':'), allow_nan=False))
 
     def telemetry(self, phase, status, *, outcome=None):

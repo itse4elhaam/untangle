@@ -141,7 +141,7 @@ class InlineAudioCheckTests(unittest.TestCase):
         self.assertEqual(self.dialog.windowFlags() & Qt.WindowType_Mask, Qt.Widget)
         self.assertFalse(self.dialog.isModal())
 
-    def test_sample_restores_before_explicit_play_and_back_cleans_up(self):
+    def test_sample_releases_before_explicit_play_and_back_cleans_up(self):
         dialog = self.dialog
         order = []
         self.engine.end_audio_check.side_effect = lambda: order.append('release')
@@ -152,17 +152,17 @@ class InlineAudioCheckTests(unittest.TestCase):
         self.assertTrue(dialog.capturing)
         dialog.stop.click()
         self.wait()
-        self.assertEqual(order, ['release', 'restore'])
+        self.assertEqual(order, ['release'])
         self.assertTrue(dialog.play.isEnabled())
         dialog.player.play.assert_not_called()
         dialog.play.click()
         self.wait()
-        self.assertEqual(order, ['release', 'restore', 'restore', 'play'])
+        self.assertEqual(order, ['release', 'play'])  # No Bluetooth wait before Play.
         dialog.done_button.click()
         self.assertFalse(dialog.path.parent.exists())
         self.devices.release_capture.assert_called_once_with(self.devices.hold_capture.return_value)
 
-    def test_change_microphone_waits_for_preparation_and_restore(self):
+    def test_change_microphone_waits_for_preparation_and_release(self):
         dialog = self.dialog
         gate = threading.Event()
         self.gates.append(gate)
@@ -177,19 +177,19 @@ class InlineAudioCheckTests(unittest.TestCase):
         self.wait()
         self.engine.end_audio_check.assert_called_once()
         self.devices.release_capture.assert_called_once_with(self.devices.hold_capture.return_value)
-        self.devices.restore.assert_called_once()
+        self.devices.restore.assert_not_called()
         self.sample.save.assert_not_called()
         dialog.player.play.assert_not_called()
         rejected.assert_called_once()
         self.assertFalse(dialog.path.parent.exists())
 
-    def test_back_during_capture_retains_ownership_until_restore_finishes(self):
+    def test_back_during_capture_retains_ownership_until_release_finishes(self):
         dialog = self.dialog
         dialog.record.click()
         self.wait()
         gate = threading.Event()
         self.gates.append(gate)
-        self.devices.restore.side_effect = lambda **kwargs: gate.wait(3)
+        self.engine.end_audio_check.side_effect = lambda: gate.wait(3)
         rejected = MagicMock()
         dialog.rejected.connect(rejected)
         dialog.done_button.click()
