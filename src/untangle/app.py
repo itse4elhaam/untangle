@@ -33,7 +33,8 @@ from .notification_panel import NotificationPanel, button_text as notification_b
 from .loom import (video_playable, parse_account_status, parse_video_info, parse_upload_result,
                    parse_upload_progress, valid_share_url, video_id, CliHelpCache,
                    rename_title_args, supports_option, video_info_args)
-from .audio_devices import AudioDevices, AudioDeviceError, EarbudMicDeferred
+from .audio_devices import (AudioDevices, AudioDeviceError, EarbudMicDeferred,
+                            earbud_card, earbud_selection)
 from .audio_debug import AudioTrace, emit
 from .engine import recording_audio_warning
 from .composition import canvas_dimensions, camera_composition
@@ -187,6 +188,8 @@ class CanvasPreview(QFrame):
 
 class FinishWorker(QThread):
     finished_file = Signal(str, str)
+    # OBS stopped; capture can be released before slow saved-audio validation.
+    capture_stopped = Signal()
     def __init__(self, engine, path):
         super().__init__()
         self.engine, self.path = engine, path
@@ -195,7 +198,9 @@ class FinishWorker(QThread):
         started = time.monotonic()
         try:
             self.engine.stop()
-            if self.engine.audio_expected is True:
+            validate = self.engine.audio_expected is True  # Read before release can start.
+            self.capture_stopped.emit()
+            if validate:
                 warning = recording_audio_warning(self.path, self.audio_trace)
                 if warning:
                     self.engine.errors.append(warning)
@@ -242,7 +247,10 @@ class Window(QMainWindow):
             self.prefs.setValue('manual_titles_default_v1', True)
         self.engine = None
         self._framing_explicit = False
-        self.audio_devices = AudioDevices()
+        # Persisted switch intent lets the next launch restore earbuds after a crash.
+        self.audio_devices = AudioDevices(intent_path=STATE / 'bluetooth-profile.json')
+        self._audio_recovered = False
+        self._capture_released = False
         self.audio_worker = None
         self.idle_audio = IdleAudio(self)
         self.selected_source = None
@@ -1342,9 +1350,12 @@ class Window(QMainWindow):
                     widget.setCurrentIndex(index)
         if self.prefs.contains('microphone_id'):
             source = self.prefs.value('microphone_id') or None
+            # Old hands-free source ids vanish in A2DP; use their card's entry.
+            source = earbud_selection(source) or source
             index = self.microphone.findData(source)
             if index < 0:
-                self.microphone.addItem('Unavailable microphone: ' + source, source)
+                self.microphone.addItem('Unavailable microphone: '
+                    + ('Bluetooth earbuds' if earbud_card(source) else source), source)
                 index = self.microphone.count() - 1
             self.microphone.setCurrentIndex(index)
         self.size.setValue(int(self.prefs.value('size', 23)))
@@ -1391,6 +1402,10 @@ class Window(QMainWindow):
 
     @observed("app.initialize")
     def initialize(self):
+        if not self._closing and not self._audio_recovered:
+            # Once per launch, under the instance lock, before any capture.
+            self._audio_recovered = True
+            self.run_audio(self.audio_devices.recover, lambda result, error: None)
         if self._closing or self.in_library() or self.engine:
             return
         try:
@@ -1874,7 +1889,8 @@ class Window(QMainWindow):
             source = self.idle_audio.transfer()
             self.audio_prepared(source, '')
             return
-        self._capture_owner = self.audio_devices.hold_capture()
+        # Only the earbud entry can switch a card; other inputs never fence restores.
+        self._capture_owner = self.audio_devices.hold_capture(earbud_card(selection))
         self.run_audio(lambda: self.audio_devices.prepare(selection),
             lambda source, error: self.audio_prepared(source, error)
             if generation == self._audio_generation else None)
@@ -2004,6 +2020,7 @@ class Window(QMainWindow):
                 self.recording_controls.update_state(state='starting', elapsed='--:--',
                     target=self.capture_target_label(), microphone='Starting this take', hide_allowed=False)
                 self.place_recording_controls()  # Validate placement before any output starts.
+            self._capture_released = False
             self.engine.start(self.record_path, compact=self._recording_compact)
             encoder = self.engine.stats().get('encoder', '')
             self.encoder_label.setText('Intel hardware · H.264' if encoder == 'ffmpeg_vaapi' else 'CPU encoding · H.264')
@@ -2081,8 +2098,17 @@ class Window(QMainWindow):
         self.tray_discard.setEnabled(False)
         self.notice('Discarding your recording…' if self._discarding else 'Saving your recording…')
         self.worker = FinishWorker(self.engine, self.record_path)
+        self.worker.capture_stopped.connect(self.capture_stopped)
         self.worker.finished_file.connect(self.stopped)
         self.worker.start()
+
+    def capture_stopped(self):
+        """Release capture and restore earbuds as soon as OBS stops."""
+        if self._closing or not self.recording or self._capture_released or (
+                self.engine is not None and self.engine.recording):
+            return
+        self._capture_released = True
+        self.release_audio()
 
     @observed("app.stopped")
     def stopped(self, path, error):
@@ -2112,7 +2138,11 @@ class Window(QMainWindow):
         self.recording = False
         self.recording_controls.finish()
         self.tray_controls.setEnabled(False)
-        self.release_audio()
+        released, self._capture_released = self._capture_released, False
+        if released:
+            self.retry_audio_restore()
+        else:
+            self.release_audio()
         self.paused = False
         self.bubble.recording = False
         self.bubble.paused = False
@@ -2459,8 +2489,10 @@ class Window(QMainWindow):
         self.retry_audio_restore()
 
     def retry_audio_restore(self):
-        if (self.idle_audio.owner is not None or getattr(self, 'audio_check_dialog', None) or self._closing or self.recording or self.preparing_audio or
-                (self.audio_worker and self.audio_worker.isRunning())):
+        # Idle monitors and Quick check never switch a card, so they don't block restores.
+        if (self._closing or self.preparing_audio
+                or (self.recording and not self._capture_released)
+                or (self.audio_worker and self.audio_worker.isRunning())):
             return
         self._audio_retry_at = time.monotonic() + 3
         if self.audio_devices.lease:
@@ -2523,8 +2555,7 @@ class Window(QMainWindow):
                 self.microphone_meter.message.setText('Live monitoring off')
             elif self.idle_audio.deferred:
                 # Live levels would force hands-free playback; wait for recording.
-                label = friendly if isinstance(friendly, str) and friendly else self.microphone.currentText()
-                self.microphone_meter.show_status(None, label)
+                self.microphone_meter.show_status(None, self.microphone.currentText())
                 self.microphone_meter.message.setText(EarbudMicDeferred.message)
             elif self.idle_audio.error:
                 self.microphone_meter.message.setText('Monitor unavailable: ' + self.idle_audio.error)
@@ -2559,7 +2590,8 @@ class Window(QMainWindow):
             self.run_audio(self.engine.verify_audio_route,
                 lambda result, error: self.audio_checked(result, error)
                 if generation == self._audio_generation and self.selected_source == source else None)
-        elif not self.recording and audio_idle and time.monotonic() >= self._audio_retry_at:
+        elif ((not self.recording or self._capture_released) and audio_idle
+                and time.monotonic() >= self._audio_retry_at):
             self.retry_audio_restore()
         if self.recording and not self.busy:
             if self.mode == 'screen' and self.capture_kind.currentData() == 'window' and not self.window_catalog.geometry(self.capture_window.currentData()):

@@ -139,6 +139,21 @@ class HeadsetIntegrationTests(unittest.TestCase):
         self.window.close()
         self.assertEqual(order, ['close', 'restore'])
 
+
+    def test_launch_recovery_uses_state_dir_and_runs_once_before_capture(self):
+        self.assertEqual(app.AudioDevices.call_args.kwargs['intent_path'],
+                         self.fixture.root / 'bluetooth-profile.json')
+        initialize = self.fixture.patches[1]
+        initialize.stop()  # AppChecks patches initialize(); run the real one here.
+        try:
+            for _ in range(2):
+                self.window.initialize()  # The engine exists, so only recovery runs.
+                self.window.audio_worker.wait() if self.window.audio_worker else None
+                test_app.qt.processEvents()
+        finally:
+            initialize.start()
+        self.window.audio_devices.recover.assert_called_once_with()
+
     def test_audio_release_keeps_scene_and_rejects_active_recording(self):
         engine = Engine.__new__(Engine)
         engine._output = None
@@ -193,6 +208,12 @@ class HeadsetRoundtripTests(unittest.TestCase):
             self.events.append('record')
         self.window.engine.start.side_effect = record
         self.window.engine.stop.side_effect = lambda: self.events.append('stop')
+        # Only the explicit earbud entry switches profiles (Automatic never does).
+        self.earbuds = 'earbuds:bluez_card.test'
+        self.window.microphone.addItem('Buds microphone (switches on when recording starts)', self.earbuds)
+        self.window.microphone.setCurrentIndex(self.window.microphone.count() - 1)
+        self.window.configure_timer.stop()
+        self.window.configure()
 
     start_and_wait = HeadsetIntegrationTests.start_and_wait
     tearDown = HeadsetIntegrationTests.tearDown
@@ -265,22 +286,76 @@ class HeadsetRoundtripTests(unittest.TestCase):
         self.assertEqual(self.events, ['capture', 'release'])
         self.assertEqual(self.switches(), ['headset-head-unit-msbc', 'a2dp-sink'])
 
-    def test_busy_playback_defers_then_retries_and_external_change_wins(self):
+
+    def test_playback_never_defers_mic_capture_does_and_external_change_wins(self):
         self.start_and_wait()
-        self.pulse.data['sink-inputs'] = [dict(sink=43)]
+        self.pulse.data['sink-inputs'] = [dict(sink=43)]  # Music on the earbuds.
         self.finish()
+        self.assertEqual(self.pulse.card['active_profile'], 'a2dp-sink')
+        self.assertIsNone(self.pulse.devices.lease)
+        self.start_and_wait()
+        self.window.engine.release_audio.side_effect = lambda: self.events.append('release')
+        self.finish()  # Another app keeps capturing from the earbud mic.
         self.assertEqual(self.pulse.card['active_profile'], 'headset-head-unit-msbc')
         self.assertIsNotNone(self.pulse.devices.lease)
-        self.pulse.data['sink-inputs'] = []
+        self.pulse.data['source-outputs'] = []
         self.window.retry_audio_restore()
         self.drain()
         self.assertEqual(self.pulse.card['active_profile'], 'a2dp-sink')
+        self.window.engine.release_audio.side_effect = self.release_engine
         self.start_and_wait()
         self.pulse.card['active_profile'] = 'off'  # Another client changed it.
         self.finish()
         self.assertEqual(self.pulse.card['active_profile'], 'off')
         self.assertIsNone(self.pulse.devices.lease)
-        self.assertEqual(self.switches(), ['headset-head-unit-msbc', 'a2dp-sink', 'headset-head-unit-msbc'])
+        self.assertEqual(self.switches(), ['headset-head-unit-msbc', 'a2dp-sink'] * 2
+                         + ['headset-head-unit-msbc'])
+
+    def test_capture_is_released_before_saved_audio_validation(self):
+        import threading
+        self.start_and_wait()
+        self.window.engine.audio_expected = True
+        gate, seen = threading.Event(), []
+        def validate(path, trace=None):
+            gate.wait(3)
+            return ''
+        with patch.object(app, 'recording_audio_warning', validate):
+            self.window.stop()
+            deadline = time.monotonic() + 3
+            while time.monotonic() < deadline and self.pulse.card['active_profile'] != 'a2dp-sink':
+                test_app.qt.processEvents()
+                time.sleep(.005)
+            seen.append((self.pulse.card['active_profile'], self.window.recording))
+            gate.set()
+            self.wait_saved()
+        self.assertEqual(seen, [('a2dp-sink', True)])  # Restored while still validating.
+        self.assertEqual(self.events, ['capture', 'record', 'stop', 'release'])
+        self.assertEqual(self.switches(), ['headset-head-unit-msbc', 'a2dp-sink'])
+        self.assertFalse(self.window._capture_released)
+
+    def test_quit_mid_take_with_earbud_mic_restores_earbuds(self):
+        self.start_and_wait()
+        with patch.object(app.QMessageBox, 'question', return_value=app.QMessageBox.Save):
+            self.window.close()
+        self.assertTrue(self.window.quit_after_save)
+        self.assertTrue(self.window.worker.wait(3000))
+        deadline = time.monotonic() + 5
+        while not self.window._closing and time.monotonic() < deadline:
+            test_app.qt.processEvents()
+            time.sleep(.001)
+        self.assertTrue(self.window._closing)
+        self.assertIsNone(self.window.engine)
+        self.assertEqual(self.pulse.card['active_profile'], 'a2dp-sink')
+        self.assertIsNone(self.pulse.devices.lease)
+        self.assertEqual(self.switches(), ['headset-head-unit-msbc', 'a2dp-sink'])
+
+    def test_saved_handsfree_source_id_migrates_to_earbud_entry(self):
+        self.window.prefs.setValue('microphone_id', self.pulse.mic['name'])
+        self.window.microphone.setCurrentIndex(0)
+        self.window.restore_preferences()
+        self.assertEqual(self.window.microphone.currentData(), self.earbuds)
+        self.window.save_preferences()
+        self.assertEqual(self.window.prefs.value('microphone_id'), self.earbuds)
 
     def test_discard_restores_after_release(self):
         self.start_and_wait()
@@ -306,14 +381,44 @@ class HeadsetRoundtripTests(unittest.TestCase):
         self.assertIsNone(self.pulse.devices.lease)
         self.assertEqual(self.switches(), ['headset-head-unit-msbc'])
 
+
+    def drive_route_check(self):
+        # Ticks throttle route checks; drive the deadline, not a single tick.
+        deadline = time.monotonic() + 3
+        while 'Microphone disconnected' not in self.window.recording_error and time.monotonic() < deadline:
+            self.window._recording_route_at = 0
+            self.window.tick()
+            self.drain()
+        self.assertIn('Microphone disconnected', self.window.recording_error)
+
     def test_disconnect_stops_and_releases_then_can_record_again(self):
         self.start_and_wait()
+        self.window._recording_route_at = time.monotonic() + 60  # A tick just ran.
         self.pulse.data['sources'] = []
-        self.window.tick()
-        self.drain()
-        self.assertIn('Microphone disconnected', self.window.recording_error)
+        self.drive_route_check()
         self.wait_saved()
         self.assertEqual(self.pulse.card['active_profile'], 'a2dp-sink')
+        self.start_and_wait()
+        self.assertTrue(self.window.recording)
+        self.finish()
+
+    def test_card_removed_mid_take_keeps_restore_until_it_returns(self):
+        self.start_and_wait()
+        cards = self.pulse.data['cards']
+        self.pulse.data['cards'], self.pulse.data['sources'] = [], []
+        self.drive_route_check()
+        self.wait_saved()
+        # The earbuds may reconnect still in hands-free; keep the record.
+        self.assertIsNotNone(self.pulse.devices.lease)
+        self.window.retry_audio_restore()
+        self.drain()
+        self.assertIsNotNone(self.pulse.devices.lease)
+        self.pulse.data['cards'] = cards
+        self.pulse.data['sources'] = [self.pulse.mic]
+        self.window.retry_audio_restore()
+        self.drain()
+        self.assertEqual(self.pulse.card['active_profile'], 'a2dp-sink')
+        self.assertIsNone(self.pulse.devices.lease)
         self.start_and_wait()
         self.assertTrue(self.window.recording)
         self.finish()
@@ -322,8 +427,8 @@ class HeadsetRoundtripTests(unittest.TestCase):
         import threading
         entered, release = threading.Event(), threading.Event()
         original = self.pulse.devices.prepare
-        def prepare(selection):
-            result = original(selection)
+        def prepare(selection, **kwargs):
+            result = original(selection, **kwargs)
             entered.set()
             if not release.wait(3):
                 raise RuntimeError('test preparation timed out')

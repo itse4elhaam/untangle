@@ -51,7 +51,7 @@ class AudioDebugTests(unittest.TestCase):
                       packet_age=.01, state='signal', peak_db=-20., input_peak_db=-20.)
         with tempfile.TemporaryDirectory() as root, self.assertLogs('recit.audio') as logs:
             self.trace.event('session.start', selection='default')
-            source = self.devices.prepare()
+            source = self.devices.prepare(self.pulse.earbuds)
             engine._microphone_filters(123)
             self.trace.telemetry('readiness', status, outcome='ready')
             engine.start(Path(root) / 'synthetic.mkv')
@@ -91,7 +91,7 @@ class AudioDebugTests(unittest.TestCase):
         self.pulse.card['active_profile'] = 'headset-head-unit-msbc'
         self.pulse.data['sources'] = [self.pulse.mic]
         with self.assertLogs('recit.audio') as logs:
-            self.devices.prepare()
+            self.devices.prepare(self.pulse.earbuds)
         rows = records(logs)
         self.assertFalse(next(r for r in rows if r['event'] == 'profile.selected')['changed'])
         self.assertNotIn('profile.requested', [r['event'] for r in rows])
@@ -101,7 +101,7 @@ class AudioDebugTests(unittest.TestCase):
         self.pulse.publish = False
         with self.assertLogs('recit.audio') as logs:
             with self.assertRaises(AudioDeviceError):
-                self.devices.prepare(timeout=.2)
+                self.devices.prepare(self.pulse.earbuds, timeout=.2)
         rows = records(logs)
         timeout = next(r for r in rows if r['event'] == 'prepare.timeout')
         self.assertEqual(timeout['phase'], 'profile_source')
@@ -134,7 +134,7 @@ class AudioDebugTests(unittest.TestCase):
         self.assertEqual(rows[-1]['outcome'], 'timeout')
 
     def test_route_reports_actual_source_and_mismatch_with_same_session(self):
-        source = self.devices.prepare()
+        source = self.devices.prepare(self.pulse.earbuds)
         stream = dict(index=7356, source=42, properties={
             'application.process.id': str(os.getpid()), 'application.name': 'OBS', 'media.name': 'RecIt microphone'})
         self.pulse.data['source-outputs'] = [stream]
@@ -230,12 +230,12 @@ class AudioDebugTests(unittest.TestCase):
 
     def test_deferred_restore_keeps_profile_changing_session_after_new_capture(self):
         with self.assertLogs('recit.audio') as logs:
-            self.devices.prepare()
+            self.devices.prepare(self.pulse.earbuds)
             self.pulse.data['source-outputs'] = [dict(source=42)]
             self.assertFalse(self.devices.restore())
             newer = AudioTrace('idle')
             self.devices.audio_trace = newer
-            self.devices.prepare()
+            self.devices.prepare(self.pulse.earbuds)
             self.pulse.data['source-outputs'] = []
             self.assertTrue(self.devices.restore())
         rows = records(logs)

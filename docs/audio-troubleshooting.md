@@ -23,8 +23,10 @@ changed the profile. `elapsed_ms` is monotonic; `duration_ms` measures one opera
 
 Read selection/profile/source resolution first. Pulse source and BlueZ card are
 separate identities; `changed:false` means hands-free mode was already active.
-`profile.deferred` means live levels or Quick check found the earbud microphone
-and left the profile alone until recording or an explicit check switch.
+`profile.deferred` means live levels or Quick check found a Bluetooth
+microphone and left the profile alone; only recording with the earbud entry
+switches it. Rechecks while deferred log nothing; `idle.deferred` and
+`idle.resumed` mark the state changes.
 `connection.checked` separates live BlueZ connection evidence from potentially
 stale PipeWire properties. Source metadata reports mute, gain and input format;
 16000 Hz input is still bandwidth-limited even when OBS mixes at 48000 Hz.
@@ -37,10 +39,21 @@ and zero-only audio are different failures. JSON `null` means no finite dBFS
 value. Summaries are polled at most every five seconds, with explicit boundary
 results; native callbacks never log per-frame data.
 
-Finally inspect release/restoration and saved validation. `restore.deferred`
-means ownership/busy-stream protection; `restore.skipped` means the card vanished,
-disconnected or another app changed its profile. `restore.requested` proves only
-server acceptance, not completed hardware restoration. `saved_validation.result`
+Finally inspect release/restoration and saved validation. Capture is released,
+and restoration attempted, as soon as OBS stops, before saved validation.
+`restore.deferred` gives its `reason`: `earbud_mic_capturing` (another client
+records from the earbud mic), `capture_owned` (a new earbud take is preparing),
+`card_missing` (kept and retried until the earbuds return) or `switch_pending`
+(a timed-out switch may still land). Playback never defers. `restore.skipped`
+means another app changed the profile, even during inspection, or the switch
+never applied. `restore.requested` proves only server acceptance, not completed
+hardware restoration.
+
+Before switching, Untangle records its intent in
+`~/.local/state/glint/bluetooth-profile.json` and removes it after restoring or
+skipping. On launch, `recovery.restored` means a crashed take's earbuds were put
+back; `recovery.skipped` gives why not (`owner_alive`, `card_missing`,
+`profile_changed`, `earbud_mic_capturing` or `unreadable`) and drops the record. `saved_validation.result`
 distinguishes missing track, exact digital silence and nonzero decoded audio;
 `failed` means validation could not finish. Recording validation decodes stopped
 MKV before remux; Quick check validates its temporary sample.

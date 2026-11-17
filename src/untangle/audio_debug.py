@@ -24,7 +24,7 @@ _FIELDS = set('selection source card label prior_profile target_profile changed 
               'connection_signal connected stale_connection requested_source actual_source stream_index muted gain sample_specification '
               'obs_rate backend processing filter method threshold release_time packets '
               'nonzero_packets packet_age state peak_db input_peak_db signal clipping '
-              'frames exception_type duration_ms phase auto_headset switch_profile desktop_audio'.split())
+              'frames exception_type duration_ms phase switch_profile desktop_audio'.split())
 
 
 class AudioTrace:

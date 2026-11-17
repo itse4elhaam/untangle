@@ -173,26 +173,50 @@ class DialogChecks(unittest.TestCase):
         self.dialog.stop_check()
         self.dialog.player.stop.assert_called()
 
-    def test_earbud_mic_needs_explicit_switch_then_restores(self):
+
+    def test_earbud_mic_shows_deferred_explanation_and_retry_never_switches(self):
         from untangle.audio_devices import EarbudMicDeferred
-        self.devices.source_label = 'OnePlus Buds 4'
-        self.devices.prepare.side_effect = [EarbudMicDeferred(), 'exact.headset.source']
-        self.dialog.start_check()
-        self.wait()
-        self.engine.begin_audio_check.assert_not_called()
-        self.devices.prepare.assert_called_once_with('default', switch_profile=False)
-        self.assertIn('Earbud mic switches on when recording starts.', self.dialog.status.text())
-        self.assertIn('call quality', self.dialog.status.text())
-        self.assertEqual(self.dialog.record.text(), 'Switch earbuds and record')
-        self.assertTrue(self.dialog.record.isEnabled())
-        self.assertFalse(self.dialog.failed_capture)
-        self.devices.release_capture.assert_called_once()
-        self.devices.restore.reset_mock()
-        self.capture()
-        self.assertEqual(self.devices.prepare.call_args_list[-1].kwargs, dict(switch_profile=True))
-        self.engine.begin_audio_check.assert_called_once_with('exact.headset.source', True)
-        self.devices.restore.assert_called_once()
-        self.assertIn('Sample contains sound', self.dialog.status.text())
+        self.devices.prepare.side_effect = EarbudMicDeferred()
+        for _ in range(2):  # A later Retry gets the same answer; nothing is sticky.
+            self.dialog.start_check()
+            self.wait()
+            self.engine.begin_audio_check.assert_not_called()
+            self.assertIn('Earbud mic switches on when recording starts.', self.dialog.status.text())
+            self.assertIn('cannot test this microphone', self.dialog.status.text())
+            self.assertEqual(self.dialog.record.text(), 'Record sample')
+            self.assertTrue(self.dialog.record.isEnabled())
+            self.assertFalse(self.dialog.failed_capture)
+        self.assertEqual([c.kwargs for c in self.devices.prepare.call_args_list],
+                         [dict(switch_profile=False)] * 2)
+        self.devices.hold_capture.assert_called_with(None)
+        self.assertEqual(self.devices.release_capture.call_count, 2)
+
+    def test_dji_sample_with_fake_devices_never_touches_earbud_card(self):
+        # Earbuds are the default output; the DJI receiver is the chosen input.
+        from test_audio_devices import AudioDevicesTests
+        pulse = AudioDevicesTests()
+        pulse.setUp()
+        pulse.data['sources'].append(dict(name='dji_receiver', index=5))
+        for selection, default in (('dji_receiver', 'brio'), ('default', 'dji_receiver')):
+            with self.subTest(selection=selection):
+                pulse.data['info']['default_source_name'] = default
+                self.dialog.reject()
+                self.wait()
+                self.dialog.deleteLater()
+                self.dialog = AudioCheck(self.engine, pulse.devices, selection, True, 'DJI receiver')
+                self.engine.begin_audio_check.reset_mock()
+                sample = AudioSample(MagicMock(), 123)
+                feed(sample)
+                self.engine.begin_audio_check.return_value = sample
+                self.capture()
+                self.engine.begin_audio_check.assert_called_once_with('dji_receiver', True)
+                self.assertIn('Sample contains sound', self.dialog.status.text())
+                self.dialog.prepare_playback()
+                self.wait()
+                self.dialog.player.play.assert_called()
+        self.assertEqual(pulse.card['active_profile'], 'a2dp-sink')
+        self.assertIsNone(pulse.devices.lease)
+        self.assertFalse([c for c in pulse.calls if c[0] == 'set-card-profile'])
 
     def test_prepare_error_releases_and_restores(self):
         self.devices.prepare.side_effect = RuntimeError('Headset disconnected')
