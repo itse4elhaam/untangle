@@ -52,6 +52,8 @@ ROOT = Path(__file__).resolve().parents[2]
 ICON = ROOT / 'assets/untangle-mark.svg'
 VIDEOS = Path.home() / 'Videos/RecIt'
 STATE = Path.home() / '.local/state/glint'
+# A second store, outside STATE, for a stuck earbud restore record.
+RETIRED_RESTORE = Path.home() / '.config/TrueDevs/glint-bluetooth-retired.json'
 from .theme import stylesheet, apply_theme, load_fonts
 
 # Kept as a public constant for offscreen consumers of the recorder style.
@@ -248,7 +250,9 @@ class Window(QMainWindow):
         self.engine = None
         self._framing_explicit = False
         # Persisted switch intent lets the next launch restore earbuds after a crash.
-        self.audio_devices = AudioDevices(intent_path=STATE / 'bluetooth-profile.json')
+        self.audio_devices = AudioDevices(intent_path=STATE / 'bluetooth-profile.json',
+                                          retired_path=RETIRED_RESTORE)
+        self._audio_check_queued = None  # Status to put back once a queued check opens.
         self._audio_recovered = False
         self._capture_released = False
         self.audio_worker = None
@@ -1920,6 +1924,7 @@ class Window(QMainWindow):
             if self.audio_worker is worker:
                 self.audio_worker = None
             worker.deleteLater()
+            self.open_queued_audio_check()
             if generation != self._audio_generation and not self.preparing_audio and not self._closing:
                 self.retry_audio_restore()
         worker.finished.connect(finished)
@@ -2444,8 +2449,16 @@ class Window(QMainWindow):
 
     def open_audio_check(self):
         if (not self.engine or self.recording or self.counting or self.busy or
-                self.preparing_audio or self.in_library() or self._closing or
-                (self.audio_worker and self.audio_worker.isRunning())):
+                self.preparing_audio or self.in_library() or self._closing):
+            return
+        if self.audio_worker and self.audio_worker.isRunning():
+            # A background restore or live-level step: open the check once it ends.
+            if self._audio_check_queued is None:
+                devices = self.audio_devices
+                waiting = ('Finishing earbud restore…' if devices.lease or devices.record_unread
+                           or devices.cleanup_pending else 'Opening Quick audio check…')
+                self._audio_check_queued = (self.status.text(), self._status_detail, waiting)
+                self.notice(waiting)
             return
         from .audio_check import AudioCheck
         if self.settings_dialog.isVisible():
@@ -2493,6 +2506,19 @@ class Window(QMainWindow):
         self.notice('Audio check open. Close it to change the recording setup.')
         self.preview_column.insertWidget(self.preview_column.indexOf(self.details_toggle), dialog)
         dialog.show()
+
+    def open_queued_audio_check(self):
+        queued, self._audio_check_queued = self._audio_check_queued, None
+        if queued is None or self._closing:
+            return
+        status, detail, waiting = queued
+        if self.status.text() == waiting:
+            self.notice(status, detail=detail)
+        self.open_audio_check()
+        # A take started meanwhile keeps its own status; anything else says so.
+        if (getattr(self, 'audio_check_dialog', None) is None and self._audio_check_queued is None
+                and not (self.recording or self.counting or self.preparing_audio)):
+            self.notice('Quick audio check did not open. Try again when Untangle is ready.')
 
     def release_audio(self):
         self.idle_audio.stop()
@@ -4105,6 +4131,7 @@ class Window(QMainWindow):
             event.ignore()
             return
         self._closing = True
+        self._audio_check_queued = None
         if self._title_job is not None:
             job, self._title_job = self._title_job, None
             job.cancel()
@@ -4156,6 +4183,7 @@ class Window(QMainWindow):
             self.audio_devices.restore(exiting=True)
         except AudioDeviceError:
             pass  # Never force restoration while another client owns streams.
+        self.audio_devices.warn_unretired()  # One ERROR if a stuck record may replay.
         event.accept()
 
 

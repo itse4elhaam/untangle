@@ -426,6 +426,104 @@ class IdleAudioTests(unittest.TestCase):
         self.assertEqual(w.idle_audio.source, 'dji_receiver')
 
 
+    def parked_dji_restore(self, pulse):
+        """A recovered earbud restore parked in its profile write; DJI selected."""
+        from untangle.audio_devices import AudioDeviceError
+        w = self.w
+        w.live_microphone.setChecked(False)
+        pulse.data['sources'].append(dict(name='dji_receiver', index=5))
+        w.microphone.addItem('DJI receiver', 'dji_receiver')
+        w.microphone.setCurrentIndex(w.microphone.findData('dji_receiver'))
+        devices, _ = pulse.stale_intent()
+        w.audio_devices = devices
+        pulse.data['source-outputs'] = [dict(source=42)]
+        self.assertFalse(devices.recover())
+        pulse.data['source-outputs'] = []
+        entered, resume = threading.Event(), threading.Event()
+        def park(*args):
+            if args[0] == 'set-card-profile':
+                entered.set()
+                if not resume.wait(3):
+                    raise AudioDeviceError('test restore timed out')
+            return pulse.command(*args)
+        devices.command = park
+        self.addCleanup(resume.set)
+        w.retry_audio_restore()
+        self.assertTrue(entered.wait(1))
+        return resume
+
+    def test_quick_check_clicked_during_a_restore_opens_when_it_ends(self):
+        pulse = self.real_pulse()
+        w = self.w
+        w.notice('Ready to record')
+        resume = self.parked_dji_restore(pulse)
+        self.assertTrue(w.audio_check_button.isEnabled())
+        with patch('untangle.audio_check.QMediaPlayer'):
+            w.audio_check_button.click()
+            self.assertIsNone(getattr(w, 'audio_check_dialog', None))
+            self.assertEqual(w.status.text(), 'Finishing earbud restore…')
+            w.audio_check_button.click()  # A second click queues nothing more.
+            resume.set()
+            self.drain()
+            self.assertIsNotNone(w.audio_check_dialog)
+            self.assertEqual(pulse.card['active_profile'], 'a2dp-sink')
+            w.audio_check_dialog.reject()
+        self.assertEqual(w.status.text(), 'Ready to record')
+        self.drain()
+
+    def test_queued_quick_check_that_cannot_open_says_so(self):
+        pulse = self.real_pulse()
+        w = self.w
+        resume = self.parked_dji_restore(pulse)
+        with patch('untangle.audio_check.AudioCheck') as dialog_type:
+            w.audio_check_button.click()
+            w.open_recordings()  # The library cannot host the check.
+            resume.set()
+            self.drain()
+            dialog_type.assert_not_called()
+        self.assertIn('Quick audio check did not open', w.status.text())
+
+    def test_quick_check_clicked_during_a_live_level_step_opens_after_it(self):
+        gate = threading.Event()
+        self.addCleanup(gate.set)
+        self.w.audio_devices.prepare.side_effect = lambda *_, **__: gate.wait(2) and 'bluez.exact'
+        self.w.notice('Ready to record')
+        self.w.idle_audio.reconcile()  # The live monitor's prepare is running.
+        with patch('untangle.audio_check.QMediaPlayer'):
+            self.w.audio_check_button.click()
+            self.assertIsNone(getattr(self.w, 'audio_check_dialog', None))
+            self.assertEqual(self.w.status.text(), 'Opening Quick audio check…')
+            gate.set()
+            self.drain()
+            self.assertIsNotNone(self.w.audio_check_dialog)
+            self.w.audio_check_dialog.reject()
+        self.assertEqual(self.w.status.text(), 'Ready to record')
+        self.drain()
+
+    def test_close_drops_a_queued_quick_check(self):
+        pulse = self.real_pulse()
+        w = self.w
+        resume = self.parked_dji_restore(pulse)
+        with patch('untangle.audio_check.AudioCheck') as dialog_type:
+            w.audio_check_button.click()
+            resume.set()
+            w.close()
+            test_app.qt.processEvents()
+            dialog_type.assert_not_called()
+
+    def test_window_keeps_the_retirement_marker_outside_the_state_directory(self):
+        kwargs = test_app.glint.AudioDevices.call_args.kwargs
+        self.assertEqual(kwargs['intent_path'], self.fixture.root / 'bluetooth-profile.json')
+        marker = kwargs['retired_path']
+        self.assertNotEqual(marker.parent, kwargs['intent_path'].parent)
+        self.assertEqual(marker, test_app.glint.Path.home() / '.config/TrueDevs/glint-bluetooth-retired.json')
+
+    def test_close_reports_an_unretired_record(self):
+        self.w.close()
+        self.w.audio_devices.warn_unretired.assert_called_once_with()
+        restore = self.w.audio_devices.method_calls.index(call.restore(exiting=True))
+        self.assertLess(restore, self.w.audio_devices.method_calls.index(call.warn_unretired()))
+
     def test_open_quick_check_does_not_block_restore_of_previous_earbud_take(self):
         pulse = self.real_pulse()
         w = self.w

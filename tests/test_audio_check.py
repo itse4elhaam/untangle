@@ -308,6 +308,69 @@ class DialogChecks(unittest.TestCase):
         self.assertIn('off', self.dialog.status.text())
 
 
+class RestoreTraceChecks(unittest.TestCase):
+    """A Quick check during a background restore keeps each operation's own trace."""
+
+    def test_dji_check_and_parked_restore_log_to_their_own_sessions(self):
+        import json
+        import threading
+        import test_audio_devices
+        from untangle.audio_devices import AudioDeviceError
+        pulse = test_audio_devices.AudioDevicesTests()
+        pulse.setUp()
+        self.addCleanup(pulse.doCleanups)
+        devices, _ = pulse.stale_intent()
+        pulse.data['sources'].append(dict(name='dji_receiver', index=5))
+        pulse.data['info']['default_source_name'] = 'dji_receiver'
+        pulse.data['source-outputs'] = [dict(source=42)]
+        self.assertFalse(devices.recover())  # Deferred: the earbud mic is in use.
+        entered, resume = threading.Event(), threading.Event()
+        def park(*args):
+            if args[0] == 'set-card-profile':
+                entered.set()
+                if not resume.wait(3):
+                    raise AudioDeviceError('test restore timed out')
+            return pulse.command(*args)
+        devices.command = park
+        engine = MagicMock()
+        sample = AudioSample(MagicMock(), 123)
+        feed(sample)
+        engine.begin_audio_check.return_value = sample
+        engine.verify_audio_route.return_value = 'dji_receiver'
+        with patch('untangle.audio_check.QMediaPlayer'):
+            check = AudioCheck(engine, devices, 'default', True, 'Automatic microphone')
+        self.addCleanup(check.deleteLater)
+        self.addCleanup(check.reject)
+        pulse.data['source-outputs'] = []
+        retry = threading.Thread(target=devices.restore, daemon=True)
+        retry.start()
+        try:
+            self.assertTrue(entered.wait(1))
+            with self.assertLogs('recit.audio') as logs:
+                check.start_check()
+                deadline = time.monotonic() + 1
+                while check.worker and time.monotonic() < deadline:
+                    test_app.qt.processEvents()
+                    time.sleep(.001)
+                self.assertIsNone(check.worker)
+                self.assertTrue(retry.is_alive())
+                resume.set()
+                retry.join(1)
+        finally:
+            resume.set()
+            retry.join(1)
+        self.assertTrue(check.capturing)
+        engine.begin_audio_check.assert_called_once_with('dji_receiver', True)
+        events = [json.loads(line.split('recit.audio ', 1)[1]) for line in logs.output]
+        session = check.audio_trace.session
+        self.assertEqual(next(e['session'] for e in events if e['event'] == 'source.resolved'), session)
+        restore = [e for e in events if e['event'].startswith(('restore.', 'recovery.'))]
+        self.assertTrue(restore)
+        self.assertTrue(all(e['session'] != session for e in restore))
+        self.assertIs(devices.audio_trace, check.audio_trace)  # The restore left it alone.
+        self.assertEqual(pulse.card['active_profile'], 'a2dp-sink')
+
+
 class EntryChecks(unittest.TestCase):
     setUp = test_app.AppChecks.setUp
     tearDown = test_app.AppChecks.tearDown

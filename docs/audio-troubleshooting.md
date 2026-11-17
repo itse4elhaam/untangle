@@ -51,12 +51,18 @@ hardware restoration.
 
 Before switching, Untangle records its intent in
 `~/.local/state/glint/bluetooth-profile.json`; if that write fails it refuses
-the switch (`intent.failed`). After restoring or skipping, it marks the record
+the switch (`intent.failed`), unless the earbuds are already hands-free with a
+mic (`profile.kept`). After restoring or skipping, it marks the record
 `{"done": true}` (or empties it in place when that write fails) and then removes
-it, so a failed removal never replays the restore. `intent.stuck` means the
+it, so a failed removal never replays the restore. It never reads, empties or
+writes the record through a symlink or a hard link. `intent.stuck` means the
 record could be neither retired nor removed: it is logged once at ERROR, with no
 on-screen warning, and the 3-second retry and exit keep trying; `intent.cleared`
-means a retry succeeded. If it persists, make the state directory writable. On
+means a retry succeeded. Untangle then marks that exact intent as finished in
+`~/.config/TrueDevs/glint-bluetooth-retired.json`; the next launch skips it
+(`recovery.skipped`, `retired`) and only cleans up. `intent.unretired` at exit
+means the marker could not be saved either, so the next launch may replay that
+restore. If it persists, make the state directory writable. On
 launch, `recovery.adopted` means a crashed take's restore was taken over and
 follows the same `restore.*` rules and 3-second retry; `recovery.restored` means
 its earbuds were put back. `recovery.deferred` (`read_failed`) keeps a record it

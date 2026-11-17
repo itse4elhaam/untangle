@@ -1,10 +1,18 @@
+import errno
 import json
+import os
+import threading
+import time
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
 from untangle.audio_devices import AudioDeviceError, AudioDevices, handsfree_profile, on_card
+
+
+def denied(path):
+    return PermissionError(errno.EACCES, 'Permission denied', str(path))
 
 
 class AudioDevicesTests(unittest.TestCase):
@@ -593,12 +601,7 @@ class AudioDevicesTests(unittest.TestCase):
 
     def test_valid_record_survives_a_transient_read_error_and_is_retried(self):
         devices, path = self.stale_intent()
-        read_text = Path.read_text
-        def fail(target, *args, **kwargs):
-            if target == path:
-                raise OSError('transient I/O error')
-            return read_text(target, *args, **kwargs)
-        with patch.object(Path, 'read_text', fail):
+        with self.unreadable(path, OSError(errno.EIO, 'Input/output error', str(path))):
             self.assertFalse(devices.recover())
             self.assertTrue(devices.record_unread)
             self.assertFalse(devices.restore())  # Still unreadable: kept, and retried later.
@@ -645,13 +648,13 @@ class AudioDevicesTests(unittest.TestCase):
         """Patch the atomic retire, the in-place truncation and the delete to fail."""
         import contextlib, os
         open_file = os.open
-        def deny_truncate(target, *args, **kwargs):
-            if Path(target) == path:
-                raise PermissionError('denied')
-            return open_file(target, *args, **kwargs)
+        def deny_truncate(target, flags, *args, **kwargs):
+            if Path(target) == path and flags & os.O_ACCMODE != os.O_RDONLY:
+                raise denied(path)
+            return open_file(target, flags, *args, **kwargs)
         stack = contextlib.ExitStack()
-        stack.enter_context(patch('untangle.audio_devices.os.replace', side_effect=PermissionError('denied')))
-        stack.enter_context(patch.object(Path, 'unlink', side_effect=PermissionError('denied')))
+        stack.enter_context(patch('untangle.audio_devices.os.replace', side_effect=denied(path)))
+        stack.enter_context(patch.object(Path, 'unlink', side_effect=denied(path)))
         if not truncate:
             stack.enter_context(patch('untangle.audio_devices.os.open', deny_truncate))
         return stack
@@ -754,13 +757,15 @@ class AudioDevicesTests(unittest.TestCase):
         self.assertEqual(other['active_profile'], 'headset-head-unit-cvsd')
         self.assertFalse(path.exists())
 
-    def unreadable(self, path):
-        read_text = Path.read_text
-        def fail(target, *args, **kwargs):
-            if target == path:
-                raise PermissionError('denied')
-            return read_text(target, *args, **kwargs)
-        return patch.object(Path, 'read_text', fail)
+    def unreadable(self, path, error=None):
+        """Fail read-only opens of the record; writes and other files still work."""
+        error = error or denied(path)
+        open_file = os.open
+        def fail_open(target, flags, *args, **kwargs):
+            if Path(target) == path and flags & os.O_ACCMODE == os.O_RDONLY:
+                raise error
+            return open_file(target, flags, *args, **kwargs)
+        return patch('untangle.audio_devices.os.open', fail_open)
 
     def test_unread_record_allows_earbuds_already_usable_in_handsfree(self):
         devices, path = self.stale_intent()
@@ -776,7 +781,8 @@ class AudioDevicesTests(unittest.TestCase):
                 devices.prepare(self.earbuds)
         message = str(raised.exception)
         self.assertIn('did not switch', message)
-        self.assertIn('(PermissionError: denied)', message)
+        self.assertIn('(PermissionError: Permission denied)', message)
+        self.assertEqual(message.count(str(path)), 1)  # Named once, not twice.
         self.assertIn("If you can't fix its permissions, quit Untangle, delete "
                       '~/.local/state/glint/bluetooth-profile.json, then relaunch.', message)
         self.assertFalse(any(c[0] == 'set-card-profile' for c in self.calls))
@@ -867,6 +873,241 @@ class AudioDevicesTests(unittest.TestCase):
                 self.card['active_profile'] = target
                 self.assertTrue(devices.recover())
                 self.assertEqual(self.card['active_profile'], 'a2dp-sink')
+
+    # Round 5: record safety. Directory permissions need a non-root uid.
+    def skip_root(self):
+        if os.geteuid() == 0:
+            self.skipTest('root ignores directory permissions')
+
+    def marked_devices(self, path, marker=None):
+        marker = marker or path.parent.parent / 'config' / 'retired.json'
+        return AudioDevices(self.command, lambda: self.now, self.sleep, intent_path=path,
+                            retired_path=marker), marker
+
+    def stuck_after_restore(self, devices, path):
+        """Finish a restore while neither the record nor its directory is writable."""
+        devices.prepare(self.earbuds)
+        self.addCleanup(path.parent.chmod, 0o700)
+        path.chmod(0o400)
+        path.parent.chmod(0o500)
+        with self.assertLogs('recit.audio', 'ERROR') as logs:
+            self.assertTrue(devices.restore())
+            self.assertTrue(devices.restore(exiting=True))  # Quit.
+        self.assertTrue(devices.cleanup_pending)
+        self.assertEqual(self.card['active_profile'], 'a2dp-sink')
+        return logs
+
+    def test_truncate_fallback_never_follows_a_symlink_or_a_hard_link(self):
+        self.skip_root()
+        for kind in ('symlink', 'hardlink'):
+            with self.subTest(kind=kind):
+                self.card['active_profile'] = 'a2dp-sink'
+                devices, path = self.intent_devices()
+                devices.prepare(self.earbuds)
+                other = path.parent.parent / 'unrelated.txt'
+                if kind == 'symlink':
+                    other.write_text('user data')
+                    path.unlink()
+                    path.symlink_to(other)
+                else:
+                    os.link(path, other)
+                before = other.read_text()
+                self.addCleanup(path.parent.chmod, 0o700)
+                path.parent.chmod(0o500)  # The atomic retire and the removal both fail.
+                with self.assertLogs('recit.audio', 'ERROR'):
+                    self.assertTrue(devices.restore())
+                self.assertEqual(other.read_text(), before)
+                self.assertTrue(devices.cleanup_pending)  # Refused: cleanup still owed.
+                path.parent.chmod(0o700)
+                self.assertTrue(devices.restore())
+                self.assertFalse(devices.cleanup_pending)
+                self.assertFalse(path.exists() or path.is_symlink())
+                self.assertEqual(other.read_text(), before)
+
+    def test_a_symlinked_record_is_invalid_and_never_followed(self):
+        devices, path = self.stale_intent()
+        elsewhere = path.parent.parent / 'elsewhere.json'
+        path.rename(elsewhere)
+        path.symlink_to(elsewhere)
+        record = elsewhere.read_text()
+        self.assertFalse(devices.recover())
+        self.assertIsNone(devices.lease)
+        self.assertFalse(any(c[0] == 'set-card-profile' for c in self.calls))
+        self.assertEqual(self.card['active_profile'], 'headset-head-unit-msbc')
+        self.assertFalse(path.exists() or path.is_symlink())
+        self.assertEqual(elsewhere.read_text(), record)
+
+    def test_a_fifo_record_never_blocks_a_read_or_the_truncate_fallback(self):
+        devices, path = self.intent_devices()
+        path.parent.mkdir(parents=True)
+        os.mkfifo(path)
+        done = []
+        def recover():
+            done.append(devices.recover())  # Invalid: replaced by a retired record.
+            os.mkfifo(path)
+            done.append(devices._truncate_record())  # Refused: not a regular file.
+        worker = threading.Thread(target=recover, daemon=True)
+        worker.start()
+        worker.join(2)
+        self.assertFalse(worker.is_alive(), 'opening a FIFO record blocked')
+        self.assertEqual(done, [False, False])
+        self.assertIsNone(devices.lease)
+        self.assertFalse(any(c[0] == 'set-card-profile' for c in self.calls))
+
+    def test_a_planted_temporary_symlink_is_replaced_not_followed(self):
+        devices, path = self.intent_devices()
+        path.parent.mkdir(parents=True)
+        other = path.parent.parent / 'unrelated.txt'
+        other.write_text('user data')
+        path.with_name(path.name + '.tmp').symlink_to(other)
+        self.assertEqual(devices.prepare(self.earbuds), self.mic['name'])
+        self.assertEqual(other.read_text(), 'user data')
+        self.assertEqual(json.loads(path.read_text())['target'], 'headset-head-unit-msbc')
+        self.assertFalse(path.with_name(path.name + '.tmp').is_symlink())
+
+    def test_stuck_record_never_replays_after_quit_once_a_retirement_is_marked(self):
+        self.skip_root()
+        devices, path = self.intent_devices()
+        devices, marker = self.marked_devices(path)
+        logs = self.stuck_after_restore(devices, path)
+        self.assertEqual(sum('intent.stuck' in line for line in logs.output), 1)
+        self.assertTrue(marker.is_file())
+        self.assertFalse(devices.warn_unretired())  # The marker saved it: no exit ERROR.
+        # After quitting, the user picks hands-free; storage is repaired; relaunch.
+        self.card['active_profile'] = 'headset-head-unit-msbc'
+        path.parent.chmod(0o700)
+        self.calls.clear()
+        later, _ = self.marked_devices(path, marker)
+        self.assertFalse(later.recover())
+        self.assertEqual([c for c in self.calls if c[0] == 'set-card-profile'], [])
+        self.assertEqual(self.card['active_profile'], 'headset-head-unit-msbc')
+        self.assertIsNone(later.lease)
+        self.assertFalse(later.cleanup_pending)
+        self.assertFalse(path.exists())
+        self.assertFalse(marker.exists())  # Cleared once the record is gone.
+
+    def test_marker_survives_a_relaunch_that_still_cannot_remove_the_record(self):
+        self.skip_root()
+        devices, path = self.intent_devices()
+        devices, marker = self.marked_devices(path)
+        self.stuck_after_restore(devices, path)
+        self.card['active_profile'] = 'headset-head-unit-msbc'
+        later, _ = self.marked_devices(path, marker)
+        self.assertFalse(later.recover())  # Storage still broken at the next launch.
+        self.assertTrue(later.cleanup_pending)
+        self.assertIsNone(later.lease)
+        self.assertTrue(marker.is_file())
+        path.parent.chmod(0o700)
+        self.assertTrue(later.restore())  # The retry finishes the cleanup only.
+        self.assertFalse(later.cleanup_pending)
+        self.assertFalse(path.exists() or marker.exists())
+        self.assertEqual([c for c in self.calls if c[0] == 'set-card-profile'][-1][2],
+                         'a2dp-sink')  # The original restore; nothing after it.
+        self.assertEqual(self.card['active_profile'], 'headset-head-unit-msbc')
+
+    def test_marker_only_matches_its_own_intent(self):
+        self.skip_root()
+        devices, path = self.intent_devices()
+        devices, marker = self.marked_devices(path)
+        self.stuck_after_restore(devices, path)
+        path.parent.chmod(0o700)
+        path.chmod(0o600)
+        # A later take's record for the same pair (another switch) still restores.
+        record = json.loads(path.read_text())
+        path.write_text(json.dumps(dict(record, time=record['time'] + 60, id='later-take')))
+        self.card['active_profile'] = 'headset-head-unit-msbc'
+        later, _ = self.marked_devices(path, marker)
+        self.assertTrue(later.recover())
+        self.assertEqual(self.card['active_profile'], 'a2dp-sink')
+
+    def test_unwritable_marker_too_logs_one_error_at_exit(self):
+        self.skip_root()
+        devices, path = self.intent_devices()
+        devices, marker = self.marked_devices(path)
+        marker.parent.mkdir(parents=True)
+        self.addCleanup(marker.parent.chmod, 0o700)
+        marker.parent.chmod(0o500)
+        self.stuck_after_restore(devices, path)
+        self.assertFalse(marker.exists())
+        with self.assertLogs('recit.audio', 'ERROR') as logs:
+            self.assertTrue(devices.warn_unretired())
+            self.assertTrue(devices.warn_unretired())
+        self.assertEqual(len(logs.output), 1)
+        self.assertIn('intent.unretired', logs.output[0])
+        path.parent.chmod(0o700)
+        marker.parent.chmod(0o700)
+        devices.restore()
+        self.assertFalse(devices.cleanup_pending)
+        with patch('untangle.audio_debug.logger.log') as log:
+            self.assertFalse(devices.warn_unretired())
+        log.assert_not_called()
+
+    def test_untraced_cleanup_retry_logs_intent_cleared(self):
+        self.skip_root()
+        devices, path = self.stale_intent()
+        self.addCleanup(path.parent.chmod, 0o700)
+        path.chmod(0o400)
+        path.parent.chmod(0o500)
+        with self.assertLogs('recit.audio', 'ERROR'):
+            self.assertTrue(devices.recover())
+        self.assertTrue(devices.cleanup_pending)
+        self.assertIsNone(devices.audio_trace)
+        path.parent.chmod(0o700)
+        with self.assertLogs('recit.audio') as logs:
+            self.assertTrue(devices.restore())
+        self.assertFalse(devices.cleanup_pending)
+        self.assertFalse(path.exists())
+        self.assertIn('intent.cleared', ' '.join(logs.output))
+
+    def test_release_capture_never_waits_on_a_parked_restore(self):
+        devices, path = self.intent_devices()
+        devices.prepare(self.earbuds)
+        owner = devices.hold_capture(None)  # A DJI take: it never fences this pair.
+        entered, resume = threading.Event(), threading.Event()
+        def park(*args):
+            if args[0] == 'set-card-profile' and args[2] == 'a2dp-sink':
+                entered.set()
+                resume.wait(3)
+            return self.command(*args)
+        devices.command = park
+        restore = threading.Thread(target=devices.restore, daemon=True)
+        restore.start()
+        timer = threading.Timer(1, resume.set)
+        self.addCleanup(timer.cancel)
+        self.addCleanup(resume.set)
+        try:
+            self.assertTrue(entered.wait(1))
+            started = time.monotonic()
+            devices.release_capture(owner)
+            self.assertLess(time.monotonic() - started, .2)
+            timer.start()
+        finally:
+            resume.set()
+            restore.join(3)
+        self.assertFalse(restore.is_alive())
+        self.assertIsNone(devices._capture_owner)  # The restore applied the release.
+        self.assertIsNone(devices.lease)
+        self.assertEqual(self.card['active_profile'], 'a2dp-sink')
+        # A newer capture held after a deferred release is never cleared by it.
+        owner = devices.hold_capture(None)
+        devices.release_capture(object())
+        devices.restore()
+        self.assertIs(devices._capture_owner, owner)
+
+    def test_unsaved_record_uses_earbuds_already_usable_in_handsfree(self):
+        devices, path = self.intent_devices()
+        self.card['active_profile'] = 'headset-head-unit-cvsd'  # mSBC would be a switch.
+        self.data['sources'].append(self.mic)
+        with patch('untangle.audio_devices.os.replace', side_effect=denied(path)):
+            self.assertEqual(devices.prepare(self.earbuds), self.mic['name'])
+            self.assertFalse(any(c[0] == 'set-card-profile' for c in self.calls))
+            self.assertIsNone(devices.lease)
+            self.assertFalse(path.exists())
+            self.card['active_profile'] = 'a2dp-sink'  # A real switch is still refused.
+            with self.assertRaisesRegex(AudioDeviceError, 'did not switch'):
+                devices.prepare(self.earbuds)
+        self.assertFalse(any(c[0] == 'set-card-profile' for c in self.calls))
+        self.assertIsNone(devices.lease)
 
     def load_recorded_headset(self):
         # pactl snapshot taken read-only on PipeWire 1.0.3; address sanitized.
