@@ -26,7 +26,16 @@ On X11, drag the floating camera to position it; its context menu offers recordi
 
 ## Check audio
 
-Bluetooth earbuds have two modes: high-quality playback with no microphone, or hands-free, which adds the microphone but lowers playback quality. **Automatic microphone** uses the system default input, such as a wireless receiver, and never switches the earbuds. (Earlier versions used the earbuds' microphone whenever they were the sound output.) To record with the earbuds' microphone, choose *<earbuds> microphone (switches on when recording starts)*. Untangle then switches the earbuds to hands-free only when a recording starts, and restores the earlier mode as soon as the take stops, is discarded or fails, or Untangle quits. Music or video playing on the earbuds does not delay that restore; another app still using the earbud microphone does. If Untangle crashes or is killed mid-take, its next launch restores them if they are still connected, still in the hands-free mode Untangle chose, and no app is using their microphone. With the earbud microphone selected, or a Bluetooth microphone as the system default input, live levels pause and show *Earbud mic switches on when recording starts*, and Quick audio check explains that it cannot test that microphone without lowering playback quality. Other microphones keep live levels and Quick audio check. Turn levels off to release idle monitoring. Quick audio check captures four seconds only after **Record sample**, and plays only after **Play sample**.
+Bluetooth earbuds have two modes: high-quality playback with no microphone, or hands-free, which adds the microphone but lowers playback quality.
+
+- **Automatic microphone** uses the system default input as it is when the take starts, such as a wireless receiver, and never switches the earbuds. (Earlier versions used the earbuds' microphone whenever they were the sound output.)
+- To record with the earbuds' microphone, choose *<earbuds> microphone (switches on when recording starts)*. Untangle switches them to hands-free only when a recording starts.
+- It restores the earlier mode as soon as the take stops, is discarded or fails, or Untangle quits. Music or video on the earbuds does not delay that; another app still using the earbud microphone does.
+- If Untangle crashes or is killed mid-take, its next launch takes over that restore. It finishes once the earbuds are connected and no app uses their microphone, unless their mode was changed outside Untangle.
+- If Untangle cannot save its restore record, it does not switch the earbuds and says why.
+- With the earbud microphone selected, or a Bluetooth microphone as the system default input, live levels pause and show *Earbud mic switches on when recording starts*. Quick audio check explains that it cannot test that microphone without lowering playback quality.
+- Other microphones keep live levels and Quick audio check. Turn levels off to release idle monitoring.
+- Quick audio check captures four seconds only after **Record sample**, and plays only after **Play sample**.
 
 Untangle checks connection, mute and volume without changing system gain or mute, then requests fresh nonzero microphone samples. Microphone Off bypasses this check. Clean microphone suppression may hide very quiet speech; try disabling it when diagnosing. Computer sound cannot satisfy the microphone check.
 

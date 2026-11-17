@@ -2,7 +2,7 @@
 import threading
 import time
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
 
 import test_app
 import test_audio
@@ -61,17 +61,46 @@ class IdleAudioTests(unittest.TestCase):
         self.assertEqual(self.w.engine.configure.call_args.kwargs['microphone'], 'bluez.exact')
         self.w.engine.begin_audio_monitor.assert_called_once()
 
-    def test_recording_transfers_owner_without_release_or_prepare(self):
+    def test_recording_transfers_owner_without_release_when_the_default_is_unchanged(self):
         self.monitor()
         owner = self.w.idle_audio.owner
         self.w.counting = True
         with patch.object(self.w, 'audio_prepared') as prepared:
             self.w.start()
+            self.drain()
         prepared.assert_called_once_with('bluez.exact', '')
         self.assertIs(self.w._capture_owner, owner)
         self.w.audio_devices.release_capture.assert_not_called()
         self.w.engine.release_audio.assert_not_called()
-        self.w.audio_devices.prepare.assert_called_once()
+        self.w.audio_devices.hold_capture.assert_called_once_with(None)
+        # Take start re-resolves the default with the recording's own call.
+        self.assertEqual(self.w.audio_devices.prepare.call_args_list,
+                         [call('default', switch_profile=False), call('default')])
+
+    def test_recording_with_automatic_follows_a_default_changed_while_live(self):
+        pulse = self.real_pulse()
+        w = self.w
+        pulse.data['sources'].append(dict(name='dji_receiver', index=5))
+        w.engine.verify_audio_route.return_value = 'brio'
+        w.engine.audio_status.return_value = dict(source='brio', packets=10, nonzero_packets=10,
+            packet_age=.01, state='signal', peak_db=-18.)
+        self.monitor_source('brio')
+        # The user switches the system input to the DJI receiver, then records.
+        pulse.data['info']['default_source_name'] = 'dji_receiver'
+        w.engine.audio_status.side_effect = lambda: dict(source=w.selected_source, packets=10,
+            nonzero_packets=10, packet_age=.01, state='signal', peak_db=-18.)
+        w.engine.verify_audio_route.side_effect = lambda *a, **k: w.selected_source
+        w.counting = True
+        w.start()
+        self.drain()
+        self.assertEqual(w.selected_source, 'dji_receiver')
+        self.assertIsNone(w.idle_audio.source)
+        w.engine.release_audio.assert_called()  # The stale brio monitor was closed first.
+        self.assertEqual(w.engine.configure.call_args.kwargs['microphone'], 'dji_receiver')
+        w.recording = False
+        w.release_audio()
+        self.drain()
+        self.assertEqual(self.switches(pulse), [])
 
     def real_pulse(self):
         import test_audio_devices

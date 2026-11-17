@@ -8,7 +8,7 @@ import tempfile
 import time
 import wave
 from .audio_debug import AudioTrace, emit
-from .audio_devices import EarbudMicDeferred
+from .audio_devices import AudioDeviceError, EarbudMicDeferred
 from .microphone_meter import MicrophoneMeter
 
 from PySide6.QtCore import Qt, QThread, QTimer, QUrl, Signal
@@ -341,7 +341,12 @@ class AudioCheck(QDialog):
             self.engine.end_audio_check()
             self.devices.release_capture(self.capture_owner)
             self.capture_owner = None
-            restored = self.devices.restore()
+            # The check never switches earbuds. An earlier earbud take's
+            # restore is best effort here; the app's retry owns it.
+            try:
+                self.devices.restore()
+            except AudioDeviceError as exc:
+                emit(self, 'check.restore_deferred', level='warning', exception_type=type(exc).__name__)
             peak, sample_error = None, route_error
             if self.sample and not error and not route_error and not self.closing:
                 try:
@@ -353,7 +358,7 @@ class AudioCheck(QDialog):
                          exception_type=type(exc).__name__, reason='sample_save_failed')
                     sample_error = str(exc)
             self.sample = None
-            return restored, peak, sample_error
+            return peak, sample_error
         def finished(result, failure):
             if failure:
                 # Do not permit another capture after an uncertain teardown.
@@ -365,7 +370,7 @@ class AudioCheck(QDialog):
             if self.closing:
                 self.complete_close()
                 return
-            restored, peak, sample_error = result
+            peak, sample_error = result
             if error == EarbudMicDeferred.message:
                 self.device.setText('Microphone: Bluetooth earbuds')
                 self.status.setText(error + ' Quick audio check leaves them in high-quality playback, '
@@ -380,8 +385,6 @@ class AudioCheck(QDialog):
                 self.status.setText('Only silence detected. The sample contains zero-valued audio. Check mute, input volume and selected device, then retry. This does not identify the Bluetooth cause.')
             elif peak is None or peak < .0001:
                 self.status.setText('Very quiet sample. Check mute, input volume and selected device, then retry or choose Play sample to listen.')
-            elif not restored:
-                self.status.setText('Sample ready. Another app is using the headset. Close its audio stream, then choose Play sample to restore playback safely.')
             else:
                 self.status.setText('Sample contains sound. Choose Play sample to review it. Signal does not prove clear speech.')
         self.run_action(finish, finished)
@@ -389,14 +392,17 @@ class AudioCheck(QDialog):
     def prepare_playback(self):
         if self.worker or self.capturing:
             return
+        def restore():
+            try:
+                self.devices.restore()  # Best effort; never gates the sample.
+            except AudioDeviceError as exc:
+                emit(self, 'check.restore_deferred', level='warning', exception_type=type(exc).__name__)
         def restored(value, error):
             if self.closing:
                 self.complete_close()
-            elif error or not value:
-                self.status.setText('Playback is waiting for the headset to be released by other apps. Close their audio streams and retry Play sample.')
             else:
                 self.play_sample()
-        self.run_action(self.devices.restore, restored)
+        self.run_action(restore, restored)
 
     def play_sample(self):
         self.player.setSource(QUrl.fromLocalFile(str(self.path)))

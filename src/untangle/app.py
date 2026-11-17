@@ -1885,9 +1885,26 @@ class Window(QMainWindow):
              desktop_audio=self.desktop_audio.isChecked())
         self._audio_generation += 1
         generation = self._audio_generation
-        if self.idle_audio.source:
+        if self.idle_audio.source and selection != 'default':
             source = self.idle_audio.transfer()
             self.audio_prepared(source, '')
+            return
+        if self.idle_audio.source:
+            # Automatic follows the system input as it is now. Reuse the live
+            # stream only when it is exactly that source.
+            live = self.idle_audio.source
+            def resolved(source, error):
+                if generation != self._audio_generation:
+                    return
+                if not error and source == live and self.idle_audio.source == live:
+                    self.audio_prepared(self.idle_audio.transfer(), '')
+                    return
+                emit(self, 'idle.handoff', source=live, actual_source=source, outcome='replaced',
+                     reason='default_changed' if not error else 'resolve_failed')
+                self.idle_audio.stop()  # Closes the stale monitor before opening the new input.
+                self._capture_owner = self.audio_devices.hold_capture(earbud_card(selection))
+                self.audio_prepared(source, error)
+            self.run_audio(lambda: self.audio_devices.prepare(selection), resolved)
             return
         # Only the earbud entry can switch a card; other inputs never fence restores.
         self._capture_owner = self.audio_devices.hold_capture(earbud_card(selection))

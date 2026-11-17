@@ -413,32 +413,95 @@ class AudioDevicesTests(unittest.TestCase):
         self.assertIn('recovery.restored', ' '.join(logs.output))
         self.assertFalse(devices.recover())  # Nothing left to do.
 
-    def test_launch_recovery_skips_and_drops_unsafe_intents(self):
-        cases = (('owner_alive', True, lambda: None),
-                 ('profile_changed', False, lambda: self.card.update(active_profile='off')),
-                 ('card_missing', False, lambda: self.data.update(cards=[])),
-                 ('earbud_mic_capturing', False,
-                  lambda: self.data.update({'source-outputs': [dict(source=42)]})))
-        for reason, alive, arrange in cases:
+    def test_launch_recovery_adopts_pending_restore_until_it_is_safe(self):
+        import os
+        def server_down(devices):
+            def command(*args):
+                raise AudioDeviceError('Cannot contact audio server')
+            devices.command = command
+        def busctl_fails(devices):
+            self.card.setdefault('properties', {})['api.bluez5.path'] = '/org/bluez/hci0/dev_X'
+        cases = (('card_missing', lambda devices: self.data.update(cards=[])),
+                 ('earbud_mic_capturing',
+                  lambda devices: self.data.update({'source-outputs': [dict(source=42)]})),
+                 ('server_error', server_down), ('busctl_error', busctl_fails))
+        for reason, arrange in cases:
             with self.subTest(reason=reason):
                 devices, path = self.stale_intent()
                 self.data.update({'cards': [self.card], 'source-outputs': []})
-                arrange()
-                before = self.card['active_profile']
+                self.card.pop('properties', None)
+                arrange(devices)
                 self.calls.clear()
-                kill = patch('untangle.audio_devices.os.kill',
-                             side_effect=None if alive else ProcessLookupError)
-                with kill, self.assertLogs('recit.audio') as logs:
-                    self.assertFalse(devices.recover())
-                self.assertIn(f'"reason":"{reason}"', ' '.join(logs.output))
-                self.assertFalse(path.exists())
-                self.assertEqual(self.card['active_profile'], before)
+                with patch('untangle.audio_devices.subprocess.run') as run:
+                    run.return_value.returncode = 1
+                    try:
+                        self.assertFalse(devices.recover())
+                    except AudioDeviceError:
+                        self.assertIn(reason, ('server_error', 'busctl_error'))
+                # Kept and adopted by this process; nothing switched yet.
+                self.assertEqual(json.loads(path.read_text())['pid'], os.getpid())
+                self.assertEqual(devices.lease, ('bluez_card.test', 'a2dp-sink', 'headset-head-unit-msbc'))
                 self.assertFalse(any(c[0] == 'set-card-profile' for c in self.calls))
+                # The card returns, still hands-free and released: the app's retry restores it.
+                self.card.pop('properties', None)
+                devices.command = self.command
+                self.data.update({'cards': [self.card], 'source-outputs': []})
+                with self.assertLogs('recit.audio') as logs:
+                    self.assertTrue(devices.restore())
+                self.assertIn('recovery.restored', ' '.join(logs.output))
+                self.assertEqual(self.card['active_profile'], 'a2dp-sink')
+                self.assertFalse(path.exists())
+                self.assertIsNone(devices.lease)
 
-    def test_launch_recovery_treats_another_boot_as_dead_and_bad_records_as_unreadable(self):
-        devices, path = self.stale_intent(pid=1, boot='an-earlier-boot')
-        self.assertTrue(devices.recover())
+    def test_launch_recovery_drops_a_profile_changed_outside_untangle(self):
+        devices, path = self.stale_intent()
+        self.card['active_profile'] = 'off'
+        with self.assertLogs('recit.audio') as logs:
+            self.assertFalse(devices.recover())
+        self.assertIn('"reason":"external_change"', ' '.join(logs.output))
+        self.assertFalse(path.exists())
+        self.assertIsNone(devices.lease)
+        self.assertEqual(self.card['active_profile'], 'off')
+        self.assertFalse(any(c[0] == 'set-card-profile' for c in self.calls))
+
+    def test_launch_recovery_carries_the_late_switch_grace_across_restart(self):
+        import time
+        # Killed 5 s after requesting the switch; the server applies it late.
+        devices, path = self.stale_intent(time=time.time() - 5)
+        self.card['active_profile'] = 'a2dp-sink'
+        self.assertFalse(devices.recover())
+        self.assertTrue(path.exists())
+        self.command('set-card-profile', self.card['name'], 'headset-head-unit-msbc')
+        self.assertTrue(devices.restore())
         self.assertEqual(self.card['active_profile'], 'a2dp-sink')
+        self.assertFalse(path.exists())
+        # With the grace spent, a switch that never landed is dropped.
+        devices, path = self.stale_intent(time=time.time() - 60)
+        self.card['active_profile'] = 'a2dp-sink'
+        self.assertFalse(devices.recover())
+        self.assertFalse(path.exists())
+        self.assertIsNone(devices.lease)
+
+    def test_launch_recovery_treats_any_recorded_pid_as_stale_and_bad_records_as_unreadable(self):
+        import os
+        # Under the instance lock no other Untangle is alive, even if the pid was reused.
+        for pid in (1, os.getpid(), os.getppid()):
+            with self.subTest(pid=pid):
+                devices, path = self.stale_intent(pid=pid, boot='original-boot')
+                with patch('untangle.audio_devices.boot_id', return_value=None):
+                    self.assertTrue(devices.recover())
+                self.assertEqual(self.card['active_profile'], 'a2dp-sink')
+                self.assertFalse(path.exists())
+        for pid in (10**30, True, '12', 0, -5, None, 1.5):
+            with self.subTest(pid=pid):
+                devices, path = self.stale_intent(pid=pid)
+                self.calls.clear()
+                with self.assertLogs('recit.audio') as logs:
+                    self.assertFalse(devices.recover())
+                self.assertIn('"reason":"unreadable"', ' '.join(logs.output))
+                self.assertFalse(path.exists())
+                self.assertEqual(self.card['active_profile'], 'headset-head-unit-msbc')
+                self.assertFalse(any(c[0] == 'set-card-profile' for c in self.calls))
         devices, path = self.stale_intent()
         path.write_text('{not json')
         with self.assertLogs('recit.audio') as logs:
@@ -450,6 +513,83 @@ class AudioDevicesTests(unittest.TestCase):
         devices.lease = ('bluez_card.test', 'a2dp-sink', 'headset-head-unit-msbc')
         self.assertFalse(devices.recover())
         self.assertTrue(path.exists())
+
+    def test_launch_recovery_logs_restored_only_after_a_real_write(self):
+        devices, path = self.stale_intent()
+        reads = []
+        def command(*args):
+            if args[-1] == 'cards':
+                reads.append(1)
+                if len(reads) == 2:  # Changed between the check and the write.
+                    self.card['active_profile'] = 'off'
+            return self.command(*args)
+        devices.command = command
+        with self.assertLogs('recit.audio') as logs:
+            self.assertFalse(devices.recover())
+        output = ' '.join(logs.output)
+        self.assertIn('restore.skipped', output)
+        self.assertNotIn('recovery.restored', output)
+        self.assertFalse(path.exists())
+        self.assertEqual(self.card['active_profile'], 'off')
+
+    def test_failed_intent_write_refuses_the_switch(self):
+        devices, path = self.intent_devices()
+        with patch('untangle.audio_devices.os.replace', side_effect=PermissionError('denied')):
+            with self.assertRaisesRegex(AudioDeviceError, 'did not switch'):
+                devices.prepare(self.earbuds)
+        self.assertEqual(self.card['active_profile'], 'a2dp-sink')
+        self.assertFalse(path.exists())
+        self.assertIsNone(devices.lease)
+        self.assertFalse(any(c[0] == 'set-card-profile' for c in self.calls))
+        # Other microphones are unaffected, and the earbuds work once the write does.
+        self.assertEqual(devices.prepare('brio'), 'brio')
+        self.assertEqual(devices.prepare(self.earbuds), self.mic['name'])
+        self.assertTrue(devices.restore())
+
+    def test_automatic_classifies_the_exact_default_it_resolves(self):
+        from untangle.audio_devices import EarbudMicDeferred
+        self.data['sources'].append(self.mic)
+        self.card['active_profile'] = 'headset-head-unit-msbc'
+        reads = []
+        def default_flips(*args):
+            result = self.command(*args)
+            if args[-1] == 'info':
+                reads.append(1)
+                self.data['info']['default_source_name'] = self.mic['name']
+            return result
+        self.devices.command = default_flips
+        self.assertEqual(self.devices.prepare('default', switch_profile=False), 'brio')
+        self.assertEqual(len(reads), 1)
+        with self.assertRaises(EarbudMicDeferred):
+            self.devices.prepare('default', switch_profile=False)
+        # No system default input is an error, never a silent "microphone off".
+        self.devices.command = self.command
+        for missing in (None, ''):
+            self.data['info']['default_source_name'] = missing
+            for switch in (True, False):
+                with self.subTest(missing=missing, switch=switch), \
+                        self.assertRaisesRegex(AudioDeviceError, 'unavailable'):
+                    self.devices.prepare('default', switch_profile=switch)
+
+    def test_pending_restore_of_one_pair_allows_a_second_pair_without_a_switch(self):
+        self.devices.prepare(self.earbuds)
+        lease = self.devices.lease
+        other = dict(self.card, name='bluez_card.other', index=19, active_profile='headset-head-unit-msbc')
+        self.data['cards'] = [other]  # First pair gone; second already hands-free.
+        self.data['sources'] = [dict(name='bluez_input.other.0', index=55, card=19)]
+        self.assertFalse(self.devices.restore())
+        self.assertEqual(self.devices.prepare('earbuds:bluez_card.other'), 'bluez_input.other.0')
+        self.assertEqual(self.devices.lease, lease)
+        # A second pair that needs a switch is refused accurately, without touching it.
+        other['active_profile'] = 'a2dp-sink'
+        self.calls.clear()
+        with self.assertRaises(AudioDeviceError) as raised:
+            self.devices.prepare('earbuds:bluez_card.other')
+        self.assertNotIn('explicitly', str(raised.exception))
+        self.assertIn('other earbuds', str(raised.exception))
+        self.assertEqual(other['active_profile'], 'a2dp-sink')
+        self.assertFalse(any(c[0] == 'set-card-profile' for c in self.calls))
+        self.assertEqual(self.devices.lease, lease)
 
     def load_recorded_headset(self):
         # pactl snapshot taken read-only on PipeWire 1.0.3; address sanitized.

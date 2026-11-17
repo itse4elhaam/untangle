@@ -143,15 +143,46 @@ class DialogChecks(unittest.TestCase):
         self.capture()
         self.assertNotEqual(self.dialog.audio_trace.session, trace.session)
 
-    def test_deferred_restore_blocks_playback_until_safe(self):
-        self.devices.restore.return_value = False
+    def test_earlier_earbud_restore_never_blocks_the_sample(self):
+        # A previous earbud take is still waiting (card gone or busy). The
+        # app's retry owns that restore; the DJI sample is complete and plays.
+        from untangle.audio_devices import AudioDeviceError
+        for outcome in (False, AudioDeviceError('Cannot verify Bluetooth headset connection.')):
+            with self.subTest(outcome=outcome):
+                self.dialog.player.play.reset_mock()
+                sample = AudioSample(MagicMock(), 123)
+                feed(sample)
+                self.engine.begin_audio_check.return_value = sample
+                if isinstance(outcome, Exception):
+                    self.devices.restore.side_effect = outcome
+                else:
+                    self.devices.restore.side_effect = None
+                    self.devices.restore.return_value = outcome
+                self.capture()
+                self.assertFalse(self.dialog.failed_capture)
+                self.assertTrue(self.dialog.path.is_file())
+                self.assertNotIn('Another app', self.dialog.status.text())
+                self.assertIn('Play sample', self.dialog.status.text())
+                self.dialog.prepare_playback()
+                self.wait()
+                self.dialog.player.play.assert_called_once()
+
+    def test_dji_sample_plays_when_a_prior_earbud_take_left_its_card_disconnected(self):
+        import test_audio_devices
+        pulse = test_audio_devices.AudioDevicesTests()
+        pulse.setUp()
+        pulse.devices.prepare(pulse.earbuds)
+        pulse.data['cards'] = []
+        pulse.data['sources'] = [dict(name='dji_receiver', index=5)]
+        pulse.data['info']['default_source_name'] = 'dji_receiver'
+        self.dialog.devices = pulse.devices
         self.capture()
-        self.dialog.player.play.assert_not_called()
-        self.assertIn('Another app', self.dialog.status.text())
-        self.devices.restore.return_value = True
+        self.assertTrue(self.dialog.path.is_file())
+        self.assertNotIn('Another app', self.dialog.status.text())
         self.dialog.prepare_playback()
         self.wait()
         self.dialog.player.play.assert_called_once()
+        self.assertIsNotNone(pulse.devices.lease)  # Still owed; the app retries it.
 
     def test_silence_guidance_without_automatic_playback(self):
         self.sample.blocks.clear()

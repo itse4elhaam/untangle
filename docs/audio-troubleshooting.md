@@ -50,10 +50,13 @@ never applied. `restore.requested` proves only server acceptance, not completed
 hardware restoration.
 
 Before switching, Untangle records its intent in
-`~/.local/state/glint/bluetooth-profile.json` and removes it after restoring or
-skipping. On launch, `recovery.restored` means a crashed take's earbuds were put
-back; `recovery.skipped` gives why not (`owner_alive`, `card_missing`,
-`profile_changed`, `earbud_mic_capturing` or `unreadable`) and drops the record. `saved_validation.result`
+`~/.local/state/glint/bluetooth-profile.json`; if that write fails it refuses
+the switch (`intent.failed`). It removes the record after restoring or skipping.
+On launch, `recovery.adopted` means a crashed take's restore was taken over and
+follows the same `restore.*` rules and 3-second retry; `recovery.restored`
+means its earbuds were put back. Only `recovery.skipped` (`unreadable`) or
+`restore.skipped` drops the record. If earbuds that are still owed a restore are
+gone for good, delete that file to stop the retries. `saved_validation.result`
 distinguishes missing track, exact digital silence and nonzero decoded audio;
 `failed` means validation could not finish. Recording validation decodes stopped
 MKV before remux; Quick check validates its temporary sample.
