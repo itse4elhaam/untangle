@@ -18,7 +18,7 @@ class StreamIdentityTests(unittest.TestCase):
         self.pulse = test_audio_devices.AudioDevicesTests()
         self.pulse.setUp()
         self.devices = self.pulse.devices
-        self.source = self.devices.prepare()
+        self.source = self.devices.prepare(self.pulse.earbuds)
         self.stream = dict(index=7356, source=42, properties={
             'application.name': 'OBS', 'application.process.id': str(os.getpid()),
             'application.process.binary': 'python3.10', 'media.name': 'RecIt microphone check'})
@@ -168,8 +168,14 @@ class StreamIdentityTests(unittest.TestCase):
         engine = MagicMock()
         engine.begin_audio_check.return_value = sample
         engine.verify_audio_route.side_effect = self.engine.verify_audio_route
+        # Quick check never opens a Bluetooth mic, so check a wired receiver
+        # whose stream falls back to the laptop mic.
+        receiver = 'alsa_input.usb_receiver'
+        self.pulse.data['sources'].append(dict(index=67, name=receiver))
+        self.stream['source'] = 67
+        self.engine._microphone_route = (receiver, 'RecIt microphone check', None)
         with patch('untangle.audio_check.QMediaPlayer'):
-            dialog = AudioCheck(engine, self.devices, self.source, True, 'OnePlus')
+            dialog = AudioCheck(engine, self.devices, receiver, True, 'USB receiver')
         def wait():
             deadline = time.monotonic() + 3
             while dialog.worker and time.monotonic() < deadline:
@@ -181,8 +187,7 @@ class StreamIdentityTests(unittest.TestCase):
             dialog.start_check()
             wait()
             self.assertTrue(dialog.capturing)
-            # Reproduce the actual A2DP/source-66 fallback during the check.
-            self.pulse.card['active_profile'] = 'a2dp-sink'
+            # Reproduce a source-66 fallback during the check.
             self.pulse.data['sources'] = [dict(index=66, name='alsa_input.laptop')]
             self.stream['source'] = 66
             dialog.verify_route()

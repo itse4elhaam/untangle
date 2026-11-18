@@ -24,6 +24,8 @@ class ClearlineClickthrough(unittest.TestCase):
         self.root = Path(self.temp.name)
         devices = MagicMock()
         devices.lease = None
+        devices.record_unread = False
+        devices.cleanup_pending = False
         devices.prepare.return_value = 'test-microphone'
         devices.resolve.return_value = 'test-microphone'
         for replacement in (
@@ -636,14 +638,13 @@ class ClearlineClickthrough(unittest.TestCase):
                       'Synthetic audio check did not start')
         entered, released = Event(), Event()
         self.addCleanup(released.set)
-        def restore(*, exiting=False):
+        def release():
             entered.set()
             if not released.wait(3):
                 raise RuntimeError('Test cleanup gate timed out')
-            return True
-        w.audio_devices.restore.side_effect = restore
+        w.engine.end_audio_check.side_effect = release
         self.click(dialog.change_input_button)
-        self.wait_for(entered.is_set, 'Cleanup never reached the hardware restore boundary')
+        self.wait_for(entered.is_set, 'Cleanup never reached the microphone release boundary')
         self.assertIs(w.audio_check_dialog, dialog)
         self.assertTrue(w.busy)
         self.assertFalse(w.microphone.isEnabled())

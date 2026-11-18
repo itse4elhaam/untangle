@@ -24,7 +24,7 @@ _FIELDS = set('selection source card label prior_profile target_profile changed 
               'connection_signal connected stale_connection requested_source actual_source stream_index muted gain sample_specification '
               'obs_rate backend processing filter method threshold release_time packets '
               'nonzero_packets packet_age state peak_db input_peak_db signal clipping '
-              'frames exception_type duration_ms phase auto_headset desktop_audio'.split())
+              'frames exception_type duration_ms phase switch_profile desktop_audio'.split())
 
 
 class AudioTrace:
@@ -52,7 +52,7 @@ class AudioTrace:
                     value = None
                 if value is None or isinstance(value, (str, bool, int, float)):
                     record[key] = value[:256] if isinstance(value, str) else value
-            logger.log(logging.WARNING if level == 'warning' else logging.INFO,
+            logger.log({'warning': logging.WARNING, 'error': logging.ERROR}.get(level, logging.INFO),
                        'recit.audio %s', json.dumps(record, separators=(',', ':'), allow_nan=False))
 
     def telemetry(self, phase, status, *, outcome=None):
@@ -77,7 +77,9 @@ def traced(phase, every=0):
             try:
                 result = function(self, *args, **kwargs)
             except Exception as exc:
-                trace.event(f'{phase}.failed', level='warning', phase=phase,
+                # Expected deferrals (earbuds waiting for recording) are not faults.
+                trace.event(f'{phase}.failed', level='info' if getattr(exc, 'expected', False) else 'warning',
+                            phase=phase,
                             exception_type=type(exc).__name__,
                             reason=type(exc.__cause__).__name__ if exc.__cause__ else None,
                             duration_ms=round((trace.clock() - started) * 1000))

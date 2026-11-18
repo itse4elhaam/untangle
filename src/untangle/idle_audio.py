@@ -1,6 +1,13 @@
-"""Recorder-page microphone ownership. All device work uses the app's one worker."""
+"""Recorder-page microphone ownership. All device work uses the app's one worker.
+
+Idle monitoring never switches Bluetooth earbuds to hands-free or opens a
+Bluetooth mic. For the earbud entry, monitoring waits (deferred) until
+recording with no device work at all. A Bluetooth system default is rechecked
+quietly every 10 s, logging only state changes.
+"""
 import time
 from .audio_debug import AudioTrace, emit
+from .audio_devices import EarbudMicDeferred, earbud_card
 
 
 class IdleAudio:
@@ -12,6 +19,7 @@ class IdleAudio:
         self.pending = False
         self.generation = 0
         self.error = ''
+        self.deferred = False
         self.retry_at = 0
         self.verify_at = 0
         self.verified = False
@@ -31,6 +39,7 @@ class IdleAudio:
         self.generation += 1
         self.key = self.source = None
         self.verified = False
+        self.deferred = False
         w = self.window
         if w.engine and self.owner is not None:
             w.engine.release_audio()
@@ -66,10 +75,19 @@ class IdleAudio:
             return
         key = (w.microphone.currentData(), w.clean_microphone.isChecked())
         if self.key != key:
+            if self.deferred:
+                emit(self, 'idle.resumed', reason='selection_changed')
             self.stop()
             self.key = key
             self.error = ''
+            self.deferred = False
             self.retry_at = 0
+        if earbud_card(key[0]):
+            # The selection alone decides; no device work until recording.
+            if not self.deferred:
+                self.audio_trace = AudioTrace('idle')
+                self.defer()
+            return
         if self.pending or (w.audio_worker and w.audio_worker.isRunning()):
             return
         if self.source:
@@ -90,13 +108,16 @@ class IdleAudio:
                     self.verified = True
             w.run_audio(w.engine.verify_audio_route, verified)
             return
+        if self.deferred:
+            self.recheck(key)
+            return
         if time.monotonic() < self.retry_at:
             return
         self.audio_trace = w.audio_trace = w.engine.audio_trace = w.audio_devices.audio_trace = AudioTrace('idle')
         emit(self, 'session.start', selection=key[0], processing=key[1])
         emit(self, 'idle.preparing', selection=key[0])
         self.pending = True
-        self.owner = w.audio_devices.hold_capture()
+        self.owner = w.audio_devices.hold_capture(None)  # Never switches a card.
         generation = self.generation
         def prepared(source, error):
             self.pending = False
@@ -108,6 +129,10 @@ class IdleAudio:
             if error:
                 self.fail(error)
                 return
+            if source is EarbudMicDeferred:
+                self.defer()
+                return
+            self.deferred = False
             try:
                 w.engine.begin_audio_monitor(source, key[1])
                 self.source = source
@@ -116,7 +141,38 @@ class IdleAudio:
             except Exception as exc:
                 emit(self, 'idle.open_failed', level='warning', exception_type=type(exc).__name__)
                 self.fail(str(exc))
-        w.run_audio(lambda: w.audio_devices.prepare(key[0]), prepared)
+        def prepare():
+            try:
+                return w.audio_devices.prepare(key[0], switch_profile=False)
+            except EarbudMicDeferred:
+                return EarbudMicDeferred  # Expected; not a worker failure.
+        w.run_audio(prepare, prepared)
+
+    def recheck(self, key):
+        """Quietly poll whether the system input is still a Bluetooth mic."""
+        w = self.window
+        if time.monotonic() < self.retry_at:
+            return
+        self.retry_at = time.monotonic() + 10
+        generation = self.generation
+        def checked(still, error):
+            if generation != self.generation or not self.wanted() or still:
+                return
+            emit(self, 'idle.resumed', reason='input_changed')
+            self.deferred = False
+            self.retry_at = 0
+        w.run_audio(lambda: w.audio_devices.bluetooth_input(key[0]), checked)
+
+    def defer(self):
+        """The earbud mic stays off until recording; recheck for input changes."""
+        if not self.deferred:
+            emit(self, 'idle.deferred', reason='switch_on_record')
+        self.stop()
+        self.deferred = True
+        self.error = ''
+        self.retry_at = time.monotonic() + 10
+        w = self.window
+        self.key = (w.microphone.currentData(), w.clean_microphone.isChecked())
 
     def fail(self, error):
         emit(self, 'idle.failed', level='warning', reason='monitor_unavailable', source=self.source)

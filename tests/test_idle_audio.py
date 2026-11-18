@@ -2,7 +2,7 @@
 import threading
 import time
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
 
 import test_app
 import test_audio
@@ -16,6 +16,8 @@ class IdleAudioTests(unittest.TestCase):
         w.timer.stop()
         w.audio_devices = MagicMock()
         w.audio_devices.lease = None
+        w.audio_devices.record_unread = False
+        w.audio_devices.cleanup_pending = False
         w.audio_devices.prepare.return_value = 'bluez.exact'
         w.audio_devices.source_label = 'OnePlus Buds 4'
         w.engine.verify_audio_route.side_effect = None
@@ -45,7 +47,7 @@ class IdleAudioTests(unittest.TestCase):
     def test_default_live_actual_source_and_friendly_name(self):
         self.assertTrue(self.w.live_microphone.isChecked())
         self.monitor()
-        self.w.audio_devices.prepare.assert_called_once_with('default')
+        self.w.audio_devices.prepare.assert_called_once_with('default', switch_profile=False)
         self.w.engine.begin_audio_monitor.assert_called_once_with('bluez.exact', True)
         self.w.update_microphone_meter()
         self.assertEqual(self.w.microphone_meter.name.text(), 'OnePlus Buds 4')
@@ -61,26 +63,123 @@ class IdleAudioTests(unittest.TestCase):
         self.assertEqual(self.w.engine.configure.call_args.kwargs['microphone'], 'bluez.exact')
         self.w.engine.begin_audio_monitor.assert_called_once()
 
-    def test_recording_transfers_owner_without_release_or_prepare(self):
+    def test_recording_transfers_owner_without_release_when_the_default_is_unchanged(self):
         self.monitor()
         owner = self.w.idle_audio.owner
         self.w.counting = True
         with patch.object(self.w, 'audio_prepared') as prepared:
             self.w.start()
+            self.drain()
         prepared.assert_called_once_with('bluez.exact', '')
         self.assertIs(self.w._capture_owner, owner)
         self.w.audio_devices.release_capture.assert_not_called()
         self.w.engine.release_audio.assert_not_called()
-        self.w.audio_devices.prepare.assert_called_once()
+        self.w.audio_devices.hold_capture.assert_called_once_with(None)
+        # Take start re-resolves the default with the recording's own call.
+        self.assertEqual(self.w.audio_devices.prepare.call_args_list,
+                         [call('default', switch_profile=False), call('default')])
 
-    def test_real_prepare_handoff_record_and_restore_share_idle_session(self):
+    def test_recording_with_automatic_follows_a_default_changed_while_live(self):
+        pulse = self.real_pulse()
+        w = self.w
+        pulse.data['sources'].append(dict(name='dji_receiver', index=5))
+        w.engine.verify_audio_route.return_value = 'brio'
+        w.engine.audio_status.return_value = dict(source='brio', packets=10, nonzero_packets=10,
+            packet_age=.01, state='signal', peak_db=-18.)
+        self.monitor_source('brio')
+        # The user switches the system input to the DJI receiver, then records.
+        pulse.data['info']['default_source_name'] = 'dji_receiver'
+        w.engine.audio_status.side_effect = lambda: dict(source=w.selected_source, packets=10,
+            nonzero_packets=10, packet_age=.01, state='signal', peak_db=-18.)
+        w.engine.verify_audio_route.side_effect = lambda *a, **k: w.selected_source
+        w.counting = True
+        w.start()
+        self.drain()
+        self.assertEqual(w.selected_source, 'dji_receiver')
+        self.assertIsNone(w.idle_audio.source)
+        w.engine.release_audio.assert_called()  # The stale brio monitor was closed first.
+        self.assertEqual(w.engine.configure.call_args.kwargs['microphone'], 'dji_receiver')
+        w.recording = False
+        w.release_audio()
+        self.drain()
+        self.assertEqual(self.switches(pulse), [])
+
+    def real_pulse(self):
         import test_audio_devices
-        from test_audio_debug import records
         pulse = test_audio_devices.AudioDevicesTests()
         pulse.setUp()
+        self.w.audio_devices = pulse.devices
+        return pulse
+
+    @staticmethod
+    def switches(pulse):
+        return [c[2] for c in pulse.calls if c[0] == 'set-card-profile']
+
+    def test_launch_recovery_keeps_a_missing_card_and_the_ui_tick_restores_it(self):
+        pulse = self.real_pulse()
+        devices, path = pulse.stale_intent()
         w = self.w
-        w.audio_devices = pulse.devices
-        source = pulse.mic['name']
+        w.audio_devices = devices
+        pulse.data['cards'] = []  # The earbuds are off at launch.
+        initialize = next(p for p in self.fixture.patches
+                          if getattr(p, 'attribute', None) == 'initialize').temp_original
+        w._audio_recovered = False
+        initialize(w)  # The real launch hook; the fixture engine makes it stop after recovery.
+        self.drain()
+        self.assertEqual(devices.lease, ('bluez_card.test', 'a2dp-sink', 'headset-head-unit-msbc'))
+        self.assertTrue(path.exists())
+        self.assertEqual(self.switches(pulse), [])
+        # They return still hands-free; the next restore retry puts them back.
+        pulse.data['cards'] = [pulse.card]
+        w._audio_retry_at = time.monotonic() - 1
+        for _ in range(3):  # Live levels may take a tick's audio worker first.
+            w.tick()
+            self.drain()
+        self.assertEqual(pulse.card['active_profile'], 'a2dp-sink')
+        self.assertEqual(self.switches(pulse), ['a2dp-sink'])
+        self.assertIsNone(devices.lease)
+        self.assertFalse(path.exists())
+
+    def test_adopted_restore_waits_for_an_unrelated_dji_take_to_end(self):
+        # Changing a profile mid-take risks the take and its desktop audio.
+        pulse = self.real_pulse()
+        devices, path = pulse.stale_intent()
+        w = self.w
+        w.audio_devices = devices
+        pulse.data['cards'] = []
+        self.assertFalse(devices.recover())
+        pulse.data['sources'].append(dict(name='dji_receiver', index=5))
+        pulse.data['info']['default_source_name'] = 'dji_receiver'
+        w.engine.audio_status.side_effect = lambda: dict(source=w.selected_source, packets=10,
+            nonzero_packets=10, packet_age=.01, state='signal', peak_db=-18.)
+        w.engine.verify_audio_route.return_value = 'dji_receiver'
+        w.counting = True
+        w.start()
+        self.drain()
+        try:
+            self.assertTrue(w.recording)
+            self.assertEqual(w.selected_source, 'dji_receiver')
+            pulse.data['cards'] = [pulse.card]
+            w._audio_retry_at = time.monotonic() - 1
+            w._recording_route_at = time.monotonic() + 1
+            w.tick()
+            self.drain()
+            self.assertEqual(pulse.card['active_profile'], 'headset-head-unit-msbc')
+            self.assertEqual(self.switches(pulse), [])
+        finally:
+            w.recording = False
+            w.release_audio()
+            self.drain()
+        self.assertEqual(pulse.card['active_profile'], 'a2dp-sink')
+        self.assertFalse(path.exists())
+
+    def test_real_prepare_handoff_record_and_restore_share_idle_session(self):
+        from test_audio_debug import records
+        pulse = self.real_pulse()
+        # A wired output: Automatic follows the system microphone, no profile.
+        pulse.data['sinks'] = [dict(name='buds', index=43)]
+        w = self.w
+        source = 'brio'
         w.engine.verify_audio_route.return_value = source
         w.engine.audio_status.return_value = dict(source=source, packets=10, nonzero_packets=10,
             packet_age=.01, state='signal', peak_db=-18.)
@@ -109,16 +208,342 @@ class IdleAudioTests(unittest.TestCase):
         rows = records(logs)
         names = [r['event'] for r in rows]
         expected = ['session.start', 'idle.preparing', 'prepare.start', 'selection.chosen',
-                    'profile.requested', 'source.resolved', 'idle.opened', 'idle.verified',
-                    'record.requested', 'idle.handoff', 'readiness.accepted', 'restore.requested']
+                    'source.resolved', 'idle.opened', 'idle.verified',
+                    'record.requested', 'idle.handoff', 'readiness.accepted']
         self.assertEqual([names.index(name) for name in expected],
                          sorted(names.index(name) for name in expected))
         self.assertEqual(names.count('session.start'), 1)
         self.assertEqual({r['session'] for r in rows}, {trace.session})
         self.assertEqual({r['purpose'] for r in rows}, {'idle'})
-        self.assertEqual([c for c in pulse.calls if c[0] == 'set-card-profile'], [
-            ('set-card-profile', 'bluez_card.test', 'headset-head-unit-msbc'),
-            ('set-card-profile', 'bluez_card.test', 'a2dp-sink')])
+        self.assertEqual(self.switches(pulse), [])
+
+    def test_other_microphone_keeps_earbuds_high_quality_and_live_levels(self):
+        # Earbuds are the output; a separate receiver (DJI) is the chosen mic.
+        pulse = self.real_pulse()
+        pulse.data['sources'].append(dict(name='dji_receiver', index=5))
+        w = self.w
+        w.microphone.addItem('DJI receiver', 'dji_receiver')
+        w.microphone.setCurrentIndex(w.microphone.count() - 1)
+        w.configure_timer.stop()
+        w.configure()
+        w.engine.verify_audio_route.return_value = 'dji_receiver'
+        w.engine.audio_status.return_value = dict(source='dji_receiver', packets=10, nonzero_packets=10,
+            packet_age=.01, state='signal', peak_db=-18.)
+        self.monitor_source('dji_receiver')
+        w.engine.begin_audio_monitor.assert_called_once_with('dji_receiver', True)
+        w.update_microphone_meter()
+        self.assertFalse(w.idle_audio.deferred)
+        self.assertTrue(w.audio_check_button.isEnabled())
+        self.assertTrue(w.microphone_meter.message.text().startswith('Live'))
+        w.counting = True
+        w.start()
+        self.drain()
+        self.assertTrue(w.recording)
+        self.assertEqual(w.selected_source, 'dji_receiver')
+        w.recording = False
+        w.release_audio()
+        self.drain()
+        self.assertEqual(self.switches(pulse), [])
+        self.assertEqual(pulse.card['active_profile'], 'a2dp-sink')
+        self.assertIsNone(pulse.devices.lease)
+
+    def monitor_source(self, source):
+        self.w.idle_audio.reconcile()
+        self.drain()
+        self.assertEqual(self.w.idle_audio.source, source)
+        self.w.idle_audio.reconcile()
+        self.drain()
+
+
+    def select(self, label, data):
+        w = self.w
+        w.microphone.addItem(label, data)
+        w.microphone.setCurrentIndex(w.microphone.count() - 1)
+        w.configure_timer.stop()
+        w.configure()
+
+    def select_earbuds(self):
+        self.select('Buds microphone (switches on when recording starts)', 'earbuds:bluez_card.test')
+
+    def record_earbuds(self, pulse):
+        w = self.w
+        source = pulse.mic['name']
+        w.engine.verify_audio_route.return_value = source
+        w.engine.audio_status.return_value = dict(source=source, packets=10, nonzero_packets=10,
+            packet_age=.01, state='signal', peak_db=-18.)
+        w.counting = True
+        w.start()
+        self.drain()
+        self.assertTrue(w.recording)
+        self.assertEqual(pulse.card['active_profile'], 'headset-head-unit-msbc')
+
+    def test_idle_earbud_mic_waits_for_recording_with_explanation(self):
+        from test_audio_debug import records
+        pulse = self.real_pulse()
+        w = self.w
+        self.select_earbuds()
+        with self.assertLogs('recit.audio') as logs:
+            w.idle_audio.reconcile()
+            self.assertIsNone(w.audio_worker)  # Selection alone decides; no device work.
+            # Later ticks and rechecks stay quiet and never probe or switch.
+            for _ in range(3):
+                w.idle_audio.retry_at = 0
+                w.idle_audio.reconcile()
+                self.assertIsNone(w.audio_worker)
+        self.assertEqual([r['event'] for r in records(logs)], ['idle.deferred'])
+        self.assertTrue(w.idle_audio.deferred)
+        self.assertIsNone(w.idle_audio.source)
+        self.assertIsNone(w.idle_audio.owner)
+        self.assertEqual(w.idle_audio.error, '')
+        w.engine.begin_audio_monitor.assert_not_called()
+        w.update_microphone_meter()
+        self.assertEqual(w.microphone_meter.message.text(), 'Earbud mic switches on when recording starts.')
+        self.assertTrue(w.monitor_warning.isHidden())
+        self.assertEqual(w.microphone_meter.level.value(), 0)
+        self.assertEqual(pulse.calls, [])
+        # Recording is the only switch; stopping restores the exact prior profile.
+        self.record_earbuds(pulse)
+        w.recording = False
+        w.release_audio()
+        self.drain()
+        self.assertEqual(self.switches(pulse), ['headset-head-unit-msbc', 'a2dp-sink'])
+        # Back to idle: monitoring defers again instead of reopening hands-free.
+        w.idle_audio.reconcile()
+        self.drain()
+        self.assertTrue(w.idle_audio.deferred)
+        self.assertEqual(self.switches(pulse), ['headset-head-unit-msbc', 'a2dp-sink'])
+
+    def test_bluetooth_system_default_defers_with_quiet_rechecks(self):
+        from test_audio_debug import records
+        pulse = self.real_pulse()
+        w = self.w
+        pulse.card['active_profile'] = 'headset-head-unit-msbc'
+        pulse.data['sources'].append(pulse.mic)
+        pulse.data['info']['default_source_name'] = pulse.mic['name']
+        w.idle_audio.reconcile()
+        self.drain()
+        self.assertTrue(w.idle_audio.deferred)
+        w.engine.begin_audio_monitor.assert_not_called()
+        trace = w.idle_audio.audio_trace
+        with self.assertLogs('recit.audio') as logs:
+            for _ in range(2):
+                w.idle_audio.retry_at = 0
+                w.idle_audio.reconcile()
+                self.drain()
+            trace.event('marker')
+        self.assertIs(w.idle_audio.audio_trace, trace)
+        self.assertEqual([r['event'] for r in records(logs)], ['marker'])
+        # The system input changes to a wired mic: resume once and open it.
+        pulse.data['info']['default_source_name'] = 'brio'
+        w.engine.verify_audio_route.return_value = 'brio'
+        with self.assertLogs('recit.audio') as logs:
+            w.idle_audio.retry_at = 0
+            w.idle_audio.reconcile()
+            self.drain()
+        self.assertEqual([r['event'] for r in records(logs)], ['idle.resumed'])
+        self.monitor_source('brio')
+        self.assertFalse(w.idle_audio.deferred)
+        self.assertEqual(self.switches(pulse), [])
+
+    def test_automatic_uses_system_default_dji_while_earbuds_play(self):
+        # Earbuds are the default output; the DJI receiver is the system input.
+        pulse = self.real_pulse()
+        w = self.w
+        pulse.data['sources'].append(dict(name='dji_receiver', index=5))
+        pulse.data['info']['default_source_name'] = 'dji_receiver'
+        w.engine.verify_audio_route.return_value = 'dji_receiver'
+        w.engine.audio_status.return_value = dict(source='dji_receiver', packets=10, nonzero_packets=10,
+            packet_age=.01, state='signal', peak_db=-18.)
+        self.assertEqual(w.microphone.currentData(), 'default')
+        self.monitor_source('dji_receiver')
+        self.assertFalse(w.idle_audio.deferred)
+        w.counting = True
+        w.start()
+        self.drain()
+        self.assertEqual(w.selected_source, 'dji_receiver')
+        w.recording = False
+        w.release_audio()
+        self.drain()
+        self.assertEqual(self.switches(pulse), [])
+        self.assertEqual(pulse.card['active_profile'], 'a2dp-sink')
+
+
+    def test_idle_never_extends_a_pending_restore(self):
+        pulse = self.real_pulse()
+        w = self.w
+        self.select_earbuds()
+        self.record_earbuds(pulse)
+        pulse.data['source-outputs'] = [dict(source=42)]  # Another app uses the earbud mic.
+        w.recording = False
+        w.release_audio()
+        self.drain()
+        self.assertEqual(pulse.card['active_profile'], 'headset-head-unit-msbc')
+        w.idle_audio.reconcile()
+        self.drain()
+        self.assertTrue(w.idle_audio.deferred)
+        self.assertIsNone(w.idle_audio.owner)
+        w.engine.begin_audio_monitor.assert_not_called()
+        pulse.data['source-outputs'] = []
+        w._audio_retry_at = 0
+        w.retry_audio_restore()
+        self.drain()
+        self.assertEqual(pulse.card['active_profile'], 'a2dp-sink')
+        self.assertIsNone(pulse.devices.lease)
+
+    def test_playback_on_earbuds_never_delays_restore_after_stop(self):
+        pulse = self.real_pulse()
+        w = self.w
+        self.select_earbuds()
+        self.record_earbuds(pulse)
+        pulse.data['sink-inputs'] = [dict(sink=43)]  # Music resumed on the earbuds.
+        w.recording = False
+        w.release_audio()
+        self.drain()
+        self.assertEqual(pulse.card['active_profile'], 'a2dp-sink')
+        self.assertIsNone(pulse.devices.lease)
+
+    def test_dji_live_meter_does_not_block_restore_of_previous_earbud_take(self):
+        pulse = self.real_pulse()
+        w = self.w
+        self.select_earbuds()
+        self.record_earbuds(pulse)
+        pulse.data['source-outputs'] = [dict(source=42)]
+        w.recording = False
+        w.release_audio()
+        self.drain()
+        self.assertIsNotNone(pulse.devices.lease)
+        pulse.data['sources'].append(dict(name='dji_receiver', index=5))
+        self.select('DJI receiver', 'dji_receiver')
+        w.engine.verify_audio_route.return_value = 'dji_receiver'
+        self.monitor_source('dji_receiver')
+        self.assertIsNotNone(w.idle_audio.owner)
+        pulse.data['source-outputs'] = []  # The other app lets go of the earbud mic.
+        w._audio_retry_at = 0
+        w.retry_audio_restore()
+        self.drain()
+        self.assertEqual(pulse.card['active_profile'], 'a2dp-sink')
+        self.assertIsNone(pulse.devices.lease)
+        self.assertEqual(w.idle_audio.source, 'dji_receiver')
+
+
+    def parked_dji_restore(self, pulse):
+        """A recovered earbud restore parked in its profile write; DJI selected."""
+        from untangle.audio_devices import AudioDeviceError
+        w = self.w
+        w.live_microphone.setChecked(False)
+        pulse.data['sources'].append(dict(name='dji_receiver', index=5))
+        w.microphone.addItem('DJI receiver', 'dji_receiver')
+        w.microphone.setCurrentIndex(w.microphone.findData('dji_receiver'))
+        devices, _ = pulse.stale_intent()
+        w.audio_devices = devices
+        pulse.data['source-outputs'] = [dict(source=42)]
+        self.assertFalse(devices.recover())
+        pulse.data['source-outputs'] = []
+        entered, resume = threading.Event(), threading.Event()
+        def park(*args):
+            if args[0] == 'set-card-profile':
+                entered.set()
+                if not resume.wait(3):
+                    raise AudioDeviceError('test restore timed out')
+            return pulse.command(*args)
+        devices.command = park
+        self.addCleanup(resume.set)
+        w.retry_audio_restore()
+        self.assertTrue(entered.wait(1))
+        return resume
+
+    def test_quick_check_clicked_during_a_restore_opens_when_it_ends(self):
+        pulse = self.real_pulse()
+        w = self.w
+        w.notice('Ready to record')
+        resume = self.parked_dji_restore(pulse)
+        self.assertTrue(w.audio_check_button.isEnabled())
+        with patch('untangle.audio_check.QMediaPlayer'):
+            w.audio_check_button.click()
+            self.assertIsNone(getattr(w, 'audio_check_dialog', None))
+            self.assertEqual(w.status.text(), 'Finishing earbud restore…')
+            w.audio_check_button.click()  # A second click queues nothing more.
+            resume.set()
+            self.drain()
+            self.assertIsNotNone(w.audio_check_dialog)
+            self.assertEqual(pulse.card['active_profile'], 'a2dp-sink')
+            w.audio_check_dialog.reject()
+        self.assertEqual(w.status.text(), 'Ready to record')
+        self.drain()
+
+    def test_queued_quick_check_that_cannot_open_says_so(self):
+        pulse = self.real_pulse()
+        w = self.w
+        resume = self.parked_dji_restore(pulse)
+        with patch('untangle.audio_check.AudioCheck') as dialog_type:
+            w.audio_check_button.click()
+            w.open_recordings()  # The library cannot host the check.
+            resume.set()
+            self.drain()
+            dialog_type.assert_not_called()
+        self.assertIn('Quick audio check did not open', w.status.text())
+
+    def test_quick_check_clicked_during_a_live_level_step_opens_after_it(self):
+        gate = threading.Event()
+        self.addCleanup(gate.set)
+        self.w.audio_devices.prepare.side_effect = lambda *_, **__: gate.wait(2) and 'bluez.exact'
+        self.w.notice('Ready to record')
+        self.w.idle_audio.reconcile()  # The live monitor's prepare is running.
+        with patch('untangle.audio_check.QMediaPlayer'):
+            self.w.audio_check_button.click()
+            self.assertIsNone(getattr(self.w, 'audio_check_dialog', None))
+            self.assertEqual(self.w.status.text(), 'Opening Quick audio check…')
+            gate.set()
+            self.drain()
+            self.assertIsNotNone(self.w.audio_check_dialog)
+            self.w.audio_check_dialog.reject()
+        self.assertEqual(self.w.status.text(), 'Ready to record')
+        self.drain()
+
+    def test_close_drops_a_queued_quick_check(self):
+        pulse = self.real_pulse()
+        w = self.w
+        resume = self.parked_dji_restore(pulse)
+        with patch('untangle.audio_check.AudioCheck') as dialog_type:
+            w.audio_check_button.click()
+            resume.set()
+            w.close()
+            test_app.qt.processEvents()
+            dialog_type.assert_not_called()
+
+    def test_window_keeps_the_retirement_marker_outside_the_state_directory(self):
+        kwargs = test_app.glint.AudioDevices.call_args.kwargs
+        self.assertEqual(kwargs['intent_path'], self.fixture.root / 'bluetooth-profile.json')
+        marker = kwargs['retired_path']
+        self.assertNotEqual(marker.parent, kwargs['intent_path'].parent)
+        self.assertEqual(marker, test_app.glint.Path.home() / '.config/TrueDevs/glint-bluetooth-retired.json')
+
+    def test_close_reports_an_unretired_record(self):
+        self.w.close()
+        self.w.audio_devices.warn_unretired.assert_called_once_with()
+        restore = self.w.audio_devices.method_calls.index(call.restore(exiting=True))
+        self.assertLess(restore, self.w.audio_devices.method_calls.index(call.warn_unretired()))
+
+    def test_open_quick_check_does_not_block_restore_of_previous_earbud_take(self):
+        pulse = self.real_pulse()
+        w = self.w
+        self.select_earbuds()
+        self.record_earbuds(pulse)
+        pulse.data['source-outputs'] = [dict(source=42)]
+        w.recording = False
+        w.release_audio()
+        self.drain()
+        self.assertIsNotNone(pulse.devices.lease)
+        with patch('untangle.audio_check.QMediaPlayer'):
+            w.open_audio_check()
+            self.assertIsNotNone(w.audio_check_dialog)
+            pulse.data['source-outputs'] = []
+            w.retry_audio_restore()
+            self.drain()
+            self.assertEqual(pulse.card['active_profile'], 'a2dp-sink')
+            self.assertIsNone(pulse.devices.lease)
+            w.audio_check_dialog.reject()
+        self.drain()
 
     def test_idle_health_is_throttled_and_new_capture_gets_fresh_trace(self):
         from untangle.audio_debug import AudioTrace
@@ -180,7 +605,7 @@ class IdleAudioTests(unittest.TestCase):
 
     def test_close_during_pending_prepare_never_opens_chain_and_restores(self):
         gate = threading.Event()
-        self.w.audio_devices.prepare.side_effect = lambda _: gate.wait(2) and 'bluez.exact'
+        self.w.audio_devices.prepare.side_effect = lambda *_, **__: gate.wait(2) and 'bluez.exact'
         self.w.idle_audio.reconcile()
         engine = self.w.engine
         gate.set()
@@ -192,7 +617,7 @@ class IdleAudioTests(unittest.TestCase):
 
     def test_pending_selection_change_discards_old_preparation(self):
         gate = threading.Event()
-        self.w.audio_devices.prepare.side_effect = lambda _: gate.wait(2) and 'old-source'
+        self.w.audio_devices.prepare.side_effect = lambda *_, **__: gate.wait(2) and 'old-source'
         self.w.idle_audio.reconcile()
         self.w.microphone.setCurrentIndex(1)
         self.w.idle_audio.reconcile()
