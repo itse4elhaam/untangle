@@ -32,6 +32,17 @@ from .audio_debug import AudioTrace, emit, traced
 from .audio_devices import AudioDevices, AudioStreamPending
 
 
+# Quality-based recording (the default). Fixed 25 Mbps CBR spends the same
+# bytes on a still screen as on motion. On real 4K screen takes, VAAPI QP 24
+# with 5 s keyframes was about 9-11x smaller with mean SSIM 0.997 and no
+# visible change in small text; only fine camera texture softened at 1:1 zoom
+# (measured 16 Nov 2026, Intel iHD, re-encoding saved CBR takes).
+# Loom re-encodes uploads, so longer keyframe spacing does not affect viewers.
+COMPACT_QP = 24
+COMPACT_CRF = 23
+COMPACT_KEYINT_SEC = 5
+
+
 def camera_settings(device, width, height, fps=30):
     """Choose advertised MJPEG capture rather than a driver's inherited format."""
     settings = {"device_id": device, "buffering": False}
@@ -1528,15 +1539,16 @@ class Engine:
         o = self._obs
         bitrate = max(6000, round(self.width*self.height*self.fps / 10000))
         settings = {"bitrate": bitrate, "keyint_sec": 2, "rate_control": "CBR"}
+        compact = getattr(self, "_compact_recording", False)
         if encoder_id == "ffmpeg_vaapi":
             settings.update(vaapi_device="/dev/dri/renderD128", vaapi_codec=27,
                             profile=100, level=52, bf=0)
-            if getattr(self, "_compact_recording", False) and not constant_bitrate:
-                settings.update(rate_control="CQP", qp=18)
+            if compact and not constant_bitrate:
+                settings.update(rate_control="CQP", qp=COMPACT_QP, keyint_sec=COMPACT_KEYINT_SEC)
         else:
             settings.update(preset="veryfast", profile="high")
-            if getattr(self, "_compact_recording", False):
-                settings.update(rate_control="CRF", crf=18)
+            if compact:
+                settings.update(rate_control="CRF", crf=COMPACT_CRF, keyint_sec=COMPACT_KEYINT_SEC)
         # Encode once, at the original resolution/rate. MP4 preparation remains
         # a lossless stream copy. OBS 27 uses qp for VAAPI and crf for x264.
         data = self._data(settings)

@@ -22,7 +22,7 @@ Camera Zoom crops from 100–300%; Reset returns to 100%. Overlay Size changes i
 
 On X11, drag the floating camera to position it; its context menu offers recording controls. Custom masks use transparent PNG areas to hide the camera and opaque areas to show it. In entire-screen capture the camera is part of the desktop and can move out of frame during zoom; selected-window capture anchors it separately.
 
-**Smaller camera recording files**, off by default, trades fine detail for size. It affects future camera takes only and prevents switching to screen presentation. Existing files stay unchanged.
+**Smaller recording files**, on by default, records with quality-based compression instead of a fixed bitrate, so still screens cost few bytes and Loom uploads finish sooner. Text stays sharp; fine camera texture can soften slightly at full zoom. Turn it off to record at the original fixed bitrate. It affects future takes only; existing files stay unchanged. Measurements and settings live in [engine.py](../src/untangle/engine.py).
 
 ## Check audio
 

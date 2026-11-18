@@ -339,6 +339,13 @@ class Window(QMainWindow):
         self._upload_errors = ''
         self._upload_active = False
         self._upload_process = None
+        self._title_process = None
+        self._title_timer = None
+        self._upload_pending = set()
+        self._upload_visibility_failure = ''
+        self._upload_visibility_applied = False
+        self._title_waiting = self._title_help_running = self._title_help_failed = False
+        self._title_help_text = None
         self._loom_help_cache = CliHelpCache()
         self._title_job = None
         self._take_auto_upload = False
@@ -694,10 +701,10 @@ class Window(QMainWindow):
         self.quality.addItem('1080p · 30 fps', (1920, 1080))
         quality_row.addWidget(self.quality)
         controls.addLayout(quality_row)
-        self.compact_recordings = QCheckBox('Smaller camera recording files')
-        self.compact_recordings.setChecked(self.prefs.value('compact_camera_recordings', False, type=bool))
-        self.compact_recordings.setToolTip('Optional compression for camera-only recordings. Fine detail may change. Turn off to include your screen. Screen recordings always use the original recording settings.')
-        self.compact_recordings.toggled.connect(lambda value: self.prefs.setValue('compact_camera_recordings', value))
+        self.compact_recordings = QCheckBox('Smaller recording files')
+        self.compact_recordings.setChecked(self.prefs.value('compact_recordings', True, type=bool))
+        self.compact_recordings.setToolTip('Quality-based compression for faster Loom uploads, usually several times smaller. Text stays sharp; fine camera texture can soften slightly. Turn off to record at the original fixed bitrate.')
+        self.compact_recordings.toggled.connect(lambda value: self.prefs.setValue('compact_recordings', value))
         controls.addWidget(self.compact_recordings)
         content.addWidget(self.controls_panel, 0, 0)
 
@@ -1645,9 +1652,6 @@ class Window(QMainWindow):
     def toggle_presentation(self):
         if self.wayland_session():
             return
-        if self.recording and getattr(self, '_recording_compact', False):
-            self.notice('Screen presentation requires the original recording mode. Turn off Smaller camera recording files before starting a new recording.')
-            return
         if not self.recording or self.busy or not self.camera.currentData():
             return
         self.presentation_target = 0. if self.presentation_target else 1.
@@ -2037,7 +2041,7 @@ class Window(QMainWindow):
             self.recording_error = ''
             self.recording_error_baseline = len(self.engine.errors)
             self.presentation_amount = self.presentation_target = self.presentation_committed = 1. if self.mode == 'camera' else 0.
-            self._recording_compact = self.mode == 'camera' and self.compact_recordings.isChecked()
+            self._recording_compact = self.compact_recordings.isChecked()
             if self.live_controls_safe():
                 self.recording_controls.update_state(state='starting', elapsed='--:--',
                     target=self.capture_target_label(), microphone='Starting this take', hide_allowed=False)
@@ -2056,8 +2060,8 @@ class Window(QMainWindow):
             self.library_button.setEnabled(True)
             self.sharing_button.setEnabled(True)
             self.upload_library.setEnabled(True)
-            self.presentation_button.setEnabled(not self.wayland_session() and bool(self.camera.currentData()) and not self._recording_compact)
-            self.tray_presentation.setEnabled(not self.wayland_session() and bool(self.camera.currentData()) and not self._recording_compact)
+            self.presentation_button.setEnabled(not self.wayland_session() and bool(self.camera.currentData()))
+            self.tray_presentation.setEnabled(not self.wayland_session() and bool(self.camera.currentData()))
             self._audio_warning_since = None
             self.bubble.recording = True
             self.zoom_button.setEnabled(not self.wayland_session() and self.mode == 'screen')
@@ -3294,6 +3298,7 @@ class Window(QMainWindow):
                 return
             self._upload_process.kill()
             self._upload_process.waitForFinished(1000)
+            self.stop_title_process()
             if self._upload_active:
                 self.upload_end('Upload canceled. Check Loom before retrying; your local recording is safe.', state='uncertain')
             return
@@ -3363,6 +3368,11 @@ class Window(QMainWindow):
         self._upload_title = self._upload_file.stem
         self._upload_title_warning = ''
         self._upload_setting_title = False
+        self._upload_pending = set()
+        self._upload_visibility_failure = ''
+        self._upload_visibility_applied = False
+        self._title_waiting = self._title_help_running = self._title_help_failed = False
+        self._title_help_text = None
         self._upload_cli_identity = CliHelpCache.identity(cli)
         self._upload_url = None
         self._upload_metadata_warning = ''
@@ -3381,6 +3391,12 @@ class Window(QMainWindow):
             self.begin_loom_transfer(help_text)
         else:
             self.start_upload_process(['loom', 'video', 'upload', '--help'], self.upload_help)
+        if (self._upload_active and not self._upload_auto_title
+                and self._loom_help_cache.get(self._upload_cli_identity, 'rename') is None):
+            # Read rename help while the video transfers, so a title fix can
+            # start the moment Loom returns the link.
+            self._title_help_running = True
+            self.start_title_process(['loom', 'video', 'rename', '--help'], self.title_help_finished, 'title_help')
 
     def start_upload_process(self, args, finished, *, stream=False):
         previous = self._upload_process
@@ -3393,7 +3409,6 @@ class Window(QMainWindow):
         # The CLI's transfer command includes any processing it waits for.
         # Fixed labels keep filenames, links, CLI output and credentials out.
         stage = {self.upload_help: 'upload_help', self.upload_done: 'transfer_command',
-                 self.upload_title_help: 'title_help', self.upload_title_done: 'title',
                  self.visibility_done: 'visibility'}.get(finished, 'other')
         started = time.monotonic()
         reported = False
@@ -3413,7 +3428,7 @@ class Window(QMainWindow):
         process.errorOccurred.connect(lambda error: self.upload_process_error(error)
             if self._upload_process is process and self._upload_active else None)
         if not stream:
-            timer = QTimer(self)
+            timer = QTimer(process)
             timer.setSingleShot(True)
             def expired():
                 if self._upload_process is process and self._upload_active:
@@ -3421,11 +3436,8 @@ class Window(QMainWindow):
                     process.kill()
                     if self._upload_process is not process or not self._upload_active:
                         return
-                    if finished in (self.upload_title_help, self.upload_title_done):
-                        self.upload_title_failed()
-                        return
                     if getattr(self, '_upload_url', None):
-                        self.upload_end('Uploaded, but the sharing check timed out. Review permissions in Loom before sharing.', state=self._upload_result.get('status', 'uploaded'), visibility_warning='Sharing permissions were not confirmed.')
+                        self.visibility_failed('Uploaded, but the sharing check timed out. Review permissions in Loom before sharing.')
                     else:
                         self.upload_end('The Loom CLI check timed out. Your local recording is safe.', state='failed')
             timer.timeout.connect(expired)
@@ -3447,11 +3459,8 @@ class Window(QMainWindow):
 
     def upload_process_error(self, error):
         if error == QProcess.FailedToStart:
-            if getattr(self, '_upload_setting_title', False):
-                self.upload_title_failed()
-                return
             if getattr(self, '_upload_url', None):
-                self.upload_end('Uploaded, but the sharing command could not start. Review permissions in Loom before sharing. Your local file is saved.', state=getattr(self, '_upload_result', {}).get('status', 'uploaded'), visibility_warning='Sharing permissions were not confirmed.')
+                self.visibility_failed('Uploaded, but the sharing command could not start. Review permissions in Loom before sharing. Your local file is saved.')
             else:
                 self.upload_end('Could not start the Loom CLI. Your local file is saved.', state='failed')
 
@@ -3519,16 +3528,7 @@ class Window(QMainWindow):
         if self._upload_url or result.get('remote_id'):
             self.save_upload_metadata(self._upload_file, expected_identity=self._upload_identity, **result)
         if code == 0 and status == QProcess.NormalExit and self._upload_url:
-            if not self._upload_auto_title and result.get('title') != self._upload_title:
-                self._upload_setting_title = True
-                self.update_upload_panel('Setting your Loom title', 'Using the recording name without its extension.', active=True)
-                help_text = self._loom_help_cache.get(CliHelpCache.identity(self._upload_cli), 'rename')
-                if help_text is not None:
-                    self.set_uploaded_title(help_text)
-                else:
-                    self.start_upload_process(['loom', 'video', 'rename', '--help'], self.upload_title_help)
-            else:
-                self.finish_loom_upload()
+            self.finish_upload_metadata(result)
         elif code == 0 and status == QProcess.NormalExit:
             self.upload_end('The upload command finished without a Loom link. Check your Loom library before retrying.', state='uncertain')
         else:
@@ -3543,13 +3543,99 @@ class Window(QMainWindow):
                 advice = 'Check your connection and Loom library before retrying. A failed command may leave a remote video.'
             self.upload_end('Loom upload failed. Your local recording is safe. ' + advice, state=result['status'])
 
-    def upload_title_help(self, code, status):
-        help_text = bytes(self._upload_process.readAllStandardOutput()).decode(errors='replace')
-        help_text += bytes(self._upload_process.readAllStandardError()).decode(errors='replace')
-        if code != 0 or status != QProcess.NormalExit:
+    def finish_upload_metadata(self, result):
+        """Title and sharing run side by side; the link is copied once sharing is settled."""
+        needs_title = not self._upload_auto_title and result.get('title') != self._upload_title
+        needs_sharing = not self._upload_sets_visibility
+        self._upload_pending = {name for name, needed in (('title', needs_title), ('sharing', needs_sharing)) if needed}
+        if needs_sharing:
+            self.update_upload_panel('Applying Loom sharing permissions', 'The video was received. Confirming who can watch it…', active=True)
+            if not (self.busy or self.recording or self.counting):
+                self.notice('Uploaded. Applying your Loom sharing setting…')
+            self.start_upload_process(['loom', 'video', 'visibility', 'set', self._upload_url,
+                '--visibility', self._upload_visibility, '-o', 'json', '--output-summary', 'none'], self.visibility_done)
+        else:
+            QApplication.clipboard().setText(self._upload_url)
+            if needs_title:
+                self.update_upload_panel('Setting your Loom title', 'Link copied. Using the recording name without its extension.', active=True)
+        if needs_title:
+            self._upload_setting_title = True
+            self._title_waiting = True
+            self.continue_title()
+        self.maybe_finish_upload()
+
+    def start_title_process(self, args, finished, stage):
+        """A second CLI slot so title work never waits for sharing (or the reverse)."""
+        self.stop_title_process()
+        process = QProcess(self)
+        self._title_process = process
+        process.setProgram(self._upload_cli)
+        process.setArguments(args)
+        timer = QTimer(self)
+        timer.setSingleShot(True)
+        self._title_timer = timer
+        started = time.monotonic()
+        settled = False
+        def settle(outcome, code, status):
+            nonlocal settled
+            if settled:
+                return
+            settled = True
+            if self._title_timer is timer:
+                self._title_timer = None
+                timer.stop()
+                timer.deleteLater()
+            if self._title_process is not process or not self._upload_active:
+                return
+            diagnostic_event('upload.phase', stage=stage, outcome=outcome,
+                             elapsed_ms=max(0, round((time.monotonic() - started) * 1000)))
+            finished(process, code, status)
+        process.finished.connect(lambda code, status: settle(
+            'finished' if code == 0 and status == QProcess.NormalExit else 'failed', code, status))
+        process.errorOccurred.connect(lambda error: settle('failed_to_start', -1, QProcess.CrashExit)
+            if error == QProcess.FailedToStart else None)
+        def expired():
+            process.kill()
+            settle('timeout', -1, QProcess.CrashExit)
+        timer.timeout.connect(expired)
+        timer.start(20000)
+        process.start()
+
+    def stop_title_process(self):
+        timer, self._title_timer = getattr(self, '_title_timer', None), None
+        if timer is not None:
+            # A stopped command must never time out later against a deleted process.
+            timer.stop()
+            timer.deleteLater()
+        process, self._title_process = getattr(self, '_title_process', None), None
+        if process is not None:
+            if process.state() != QProcess.NotRunning:
+                process.kill()
+            process.deleteLater()
+
+    def title_help_finished(self, process, code, status):
+        self._title_help_running = False
+        help_text = bytes(process.readAllStandardOutput()).decode(errors='replace')
+        help_text += bytes(process.readAllStandardError()).decode(errors='replace')
+        if code == 0 and status == QProcess.NormalExit:
+            self._title_help_text = help_text
+            self.cache_loom_help('rename', help_text)
+        else:
+            self._title_help_failed = True
+        if self._title_waiting:
+            self.continue_title()
+
+    def continue_title(self):
+        help_text = self._loom_help_cache.get(self._upload_cli_identity, 'rename') or self._title_help_text
+        if help_text is not None:
+            self._title_waiting = False
+            self.set_uploaded_title(help_text)
+        elif self._title_help_failed:
+            self._title_waiting = False
             self.upload_title_failed()
-            return
-        self.set_uploaded_title(help_text)
+        elif not self._title_help_running:
+            self._title_help_running = True
+            self.start_title_process(['loom', 'video', 'rename', '--help'], self.title_help_finished, 'title_help')
 
     def set_uploaded_title(self, help_text):
         if not self.upload_source_matches():
@@ -3561,38 +3647,29 @@ class Window(QMainWindow):
             self.upload_title_failed()
             return
         self.cache_loom_help('rename', help_text)
-        self.start_upload_process(args, self.upload_title_done)
+        self.start_title_process(args, self.upload_title_done, 'title')
 
-    def upload_title_done(self, code, status):
+    def upload_title_done(self, process, code, status):
         if not self.upload_source_matches():
             self.upload_end('', state='uncertain')
             return
         if code != 0 or status != QProcess.NormalExit:
             self.upload_title_failed()
             return
-        self._upload_setting_title = False
         self._upload_result['title'] = self._upload_title
         self.save_upload_metadata(self._upload_file, expected_identity=self._upload_identity, title=self._upload_title)
-        self.finish_loom_upload()
+        self.title_settled()
 
     def upload_title_failed(self):
-        self._upload_setting_title = False
         self._upload_title_warning = 'Loom received the video, but its title could not be set. Rename it in Loom; do not upload another copy.'
-        self.finish_loom_upload()
+        self.title_settled()
 
-    def finish_loom_upload(self):
-        if not self.upload_source_matches():
-            self.upload_end('', state='uncertain')
-            return
-        if not self._upload_sets_visibility:
+    def title_settled(self):
+        self._upload_setting_title = False
+        self._upload_pending.discard('title')
+        if 'sharing' in self._upload_pending:
             self.update_upload_panel('Applying Loom sharing permissions', 'The video was received. Confirming who can watch it…', active=True)
-            if not (self.busy or self.recording or self.counting):
-                self.notice('Uploaded. Applying your Loom sharing setting…')
-            self.start_upload_process(['loom', 'video', 'visibility', 'set', self._upload_url,
-                '--visibility', self._upload_visibility, '-o', 'json', '--output-summary', 'none'], self.visibility_done)
-            return
-        QApplication.clipboard().setText(self._upload_url)
-        self.upload_end('Uploaded to Loom. Link copied. Loom may still be processing the video.', state=self._upload_result['status'])
+        self.maybe_finish_upload()
 
     @observed("app.visibility_done")
     def visibility_done(self, code, status):
@@ -3600,10 +3677,36 @@ class Window(QMainWindow):
             self.upload_end('', state='uncertain')
             return
         if code == 0 and status == QProcess.NormalExit:
+            self._upload_visibility_applied = True
             QApplication.clipboard().setText(self._upload_url)
-            self.upload_end('Uploaded to Loom. Sharing setting applied. Link copied.', state=getattr(self, '_upload_result', {}).get('status', 'uploaded'))
+            self._upload_pending.discard('sharing')
+            if self._upload_pending:
+                self.update_upload_panel('Setting your Loom title', 'Sharing applied and link copied. Finishing the title…', active=True)
+                if not (self.busy or self.recording or self.counting):
+                    self.notice('Uploaded. Sharing setting applied. Link copied.')
+            self.maybe_finish_upload()
         else:
-            self.upload_end('Uploaded, but Loom could not apply the sharing setting. Review permissions in Loom before sharing the link.', state=getattr(self, '_upload_result', {}).get('status', 'uploaded'), visibility_warning='Sharing permissions were not confirmed.')
+            self.visibility_failed('Uploaded, but Loom could not apply the sharing setting. Review permissions in Loom before sharing the link.')
+
+    def visibility_failed(self, text):
+        self._upload_visibility_failure = text
+        self._upload_pending.discard('sharing')
+        self.maybe_finish_upload()
+
+    def maybe_finish_upload(self):
+        if self._upload_pending or not self._upload_active:
+            return
+        if not self.upload_source_matches():
+            self.upload_end('', state='uncertain')
+            return
+        state = getattr(self, '_upload_result', {}).get('status', 'uploaded')
+        if self._upload_visibility_failure:
+            self.upload_end(self._upload_visibility_failure, state=state,
+                            visibility_warning='Sharing permissions were not confirmed.')
+        elif self._upload_visibility_applied:
+            self.upload_end('Uploaded to Loom. Sharing setting applied. Link copied.', state=state)
+        else:
+            self.upload_end('Uploaded to Loom. Link copied. Loom may still be processing the video.', state=state)
 
     @observed("app.upload_end")
     def upload_end(self, text, state='failed', visibility_warning=''):
@@ -3612,7 +3715,19 @@ class Window(QMainWindow):
             timing['elapsed_ms'] = max(0, round((time.monotonic() - self._upload_started) * 1000))
         diagnostic_event('upload.result', outcome=state, **timing)
         self._upload_active = False
+        # A title callback can end the workflow while sharing is still running.
+        process = self._upload_process
+        if process is not None:
+            for timer in process.findChildren(QTimer):
+                timer.stop()
+                timer.deleteLater()
+            if process.state() != QProcess.NotRunning:
+                process.kill()
+                process.waitForFinished(1000)
         self._upload_setting_title = False
+        self._upload_pending = set()
+        self._title_waiting = False
+        self.stop_title_process()
         self.upload_timer.stop()
         source_matches = self.upload_source_matches()
         if not source_matches:
