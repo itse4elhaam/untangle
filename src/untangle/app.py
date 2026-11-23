@@ -877,9 +877,13 @@ class Window(QMainWindow):
         self.upload_copy.clicked.connect(self.copy_uploaded_link)
         self.upload_retry = QPushButton('Retry upload')
         self.upload_retry.clicked.connect(self.retry_upload)
+        self.upload_reconnect = QPushButton('Reconnect Loom…')
+        self.upload_reconnect.setObjectName('primary')
+        self.upload_reconnect.clicked.connect(self.connect_loom)
+        self.upload_reconnect.hide()
         self.upload_library = QPushButton('Recordings')
         self.upload_library.clicked.connect(lambda: self.open_recordings(getattr(self, '_upload_file', None)))
-        for button in (self.upload_open, self.upload_copy, self.upload_retry, self.upload_library):
+        for button in (self.upload_reconnect, self.upload_open, self.upload_copy, self.upload_retry, self.upload_library):
             upload_actions.addWidget(button)
         upload_layout.addLayout(upload_actions)
         self.upload_panel.hide()
@@ -3227,6 +3231,7 @@ class Window(QMainWindow):
             button.setEnabled(bool(url) and not active)
         self.upload_retry.setVisible(active or retry)
         self.upload_retry.setText('Cancel upload…' if active else 'Retry upload…')
+        self.upload_reconnect.setVisible(not active and getattr(self, 'loom_account', {}).get('status') == 'disconnected')
         self.upload_library.setEnabled(not (self.busy or self.recording or self.counting))
 
     def update_audience_status(self):
@@ -3518,7 +3523,10 @@ class Window(QMainWindow):
         self._upload_url = result.get('url') or None
         if self._upload_url or result.get('remote_id'):
             self.save_upload_metadata(self._upload_file, expected_identity=self._upload_identity, **result)
-        if code == 0 and status == QProcess.NormalExit and self._upload_url:
+        if code in (0, 3) and status == QProcess.NormalExit and self._upload_url:
+            if code == 3:
+                # The video is live; apply sharing with the separate command.
+                self._upload_sets_visibility = False
             if not self._upload_auto_title and result.get('title') != self._upload_title:
                 self._upload_setting_title = True
                 self.update_upload_panel('Setting your Loom title', 'Using the recording name without its extension.', active=True)
@@ -3536,7 +3544,12 @@ class Window(QMainWindow):
             account = parse_account_status(output, code, errors)
             if account['status'] == 'disconnected' or any(word in detail for word in ('oauth', 'login', 'unauthorized', 'authentication', 'token')):
                 self.loom_account = {'status': 'disconnected'}
-                advice = 'Open Sharing and connect your Loom account again.'
+                self.upload_end('Your Loom sign-in expired. Your local recording is safe. '
+                                'Choose Reconnect Loom to sign in again and connect your Loom account, then retry.',
+                                state=result['status'])
+                self.upload_heading.setText('Loom sign-in expired')
+                self.upload_reconnect.setFocus()
+                return
             elif any(word in detail for word in ('plan', 'upgrade', 'subscription', 'trial')):
                 advice = 'Uploads require Business, Business + AI, or Enterprise, excluding trials.'
             else:

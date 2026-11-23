@@ -44,6 +44,21 @@ class LoomParserTests(unittest.TestCase):
         self.assertEqual(parse_account_status('', 77)['status'], 'disconnected')
         self.assertEqual(parse_account_status('{"error":{"code":"AUTH_INVALID"}}', 1)['status'], 'disconnected')
 
+    def test_expired_oauth_401_reads_as_disconnected_but_upload_stays_uncertain(self):
+        # Shape observed from TWG 1.3.6 once the stored OAuth session expired.
+        expired = json.dumps({'ok': False, 'error': {
+            'code': 'TWG_TOOL_EXECUTION_FAILED', 'message': 'GraphQL request failed: 401',
+            'statusCode': 401, 'traceId': 'trace1',
+            'downstreamError': {'message': 'GraphQL request failed: 401', 'statusCode': 401}}})
+        self.assertEqual(parse_account_status(expired, 1)['status'], 'disconnected')
+        self.assertEqual(parse_account_status('', 1, expired)['status'], 'disconnected')
+        downstream_only = json.dumps({'ok': False, 'error': {
+            'code': 'TWG_TOOL_EXECUTION_FAILED', 'downstreamError': {'statusCode': 401}}})
+        self.assertEqual(parse_account_status(downstream_only, 1)['status'], 'disconnected')
+        forbidden = expired.replace('401', '403')
+        self.assertEqual(parse_account_status(forbidden, 1)['status'], 'unknown')
+        self.assertEqual(parse_upload_result(expired, 1)['status'], 'uncertain')
+
     def test_installed_upload_and_get_shapes_use_name_as_title(self):
         video = {'id': 'abc123', 'name': 'A Loom title',
                  'url': 'https://www.loom.com/share/abc123', 'isComplete': True}
@@ -95,7 +110,7 @@ class LoomParserTests(unittest.TestCase):
                      'url': 'https://www.loom.com/share/abc123'}}, 'error': {'code': 'VISIBILITY_FAILED'}}
         row = parse_upload_result(published, 3)
         self.assertEqual(row['url'], 'https://www.loom.com/share/abc123')
-        self.assertEqual(row['status'], 'uncertain')
+        self.assertEqual(row['status'], 'uploaded')  # Exit 3 is documented as published.
 
     def test_remote_unknown_is_never_inferred_as_deleted(self):
         for payload, code in (({'error': {'code': 'NOT_FOUND'}}, 1),

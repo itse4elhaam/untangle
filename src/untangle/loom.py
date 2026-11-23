@@ -150,6 +150,26 @@ def _error_codes(records):
             and isinstance(record['error'].get('code'), str)}
 
 
+_AUTH_CODES = {'AUTH_REQUIRED', 'AUTH_INVALID', 'AUTH_EXPIRED'}
+
+
+def _auth_rejected(records):
+    """An expired OAuth session arrives as a generic tool error carrying HTTP 401."""
+    if _error_codes(records) & _AUTH_CODES:
+        return True
+    for record in records:
+        error = record.get('error')
+        if not isinstance(error, dict):
+            continue
+        downstream = error.get('downstreamError')
+        statuses = [error.get('statusCode')]
+        if isinstance(downstream, dict):
+            statuses.append(downstream.get('statusCode'))
+        if 401 in statuses:
+            return True
+    return False
+
+
 def _data(record):
     value = record.get('data', record)
     return value if isinstance(value, dict) else {}
@@ -164,8 +184,7 @@ def parse_account_status(stdout, exit_code=0, stderr=''):
     result = {'status': 'unknown', 'name': '', 'email': '', 'account_id': '',
               'auto_titles_entitled': None, 'auto_titles_enabled': None}
     records = _records(stdout)
-    codes = _error_codes(records + _records(stderr))
-    if exit_code == 77 or codes & {'AUTH_REQUIRED', 'AUTH_INVALID', 'AUTH_EXPIRED'}:
+    if exit_code == 77 or _auth_rejected(records + _records(stderr)):
         result['status'] = 'disconnected'
         return result
     if exit_code != 0:
@@ -253,12 +272,14 @@ def parse_upload_result(stdout, exit_code=0, stderr=''):
         fields = _video_fields(video)
         if fields['url'] or fields['remote_id']:
             result.update(fields)
-            if exit_code == 0 and record.get('ok') is not False and not record.get('error'):
+            # Exit 3: published, but the requested visibility was not applied.
+            if exit_code == 3 or (exit_code == 0 and record.get('ok') is not False and not record.get('error')):
                 result['status'] = 'processing' if video.get('isComplete') is False else 'uploaded'
             break
     if not result['url'] and not result['remote_id']:
+        # A bare 401 stays uncertain: long transfers have failed this way.
         codes = _error_codes(records + _records(stderr))
-        if exit_code == 77 or codes & {'AUTH_REQUIRED', 'AUTH_INVALID', 'AUTH_EXPIRED', 'VALIDATION_ERROR', 'INVALID_ARGUMENT'}:
+        if exit_code == 77 or codes & (_AUTH_CODES | {'VALIDATION_ERROR', 'INVALID_ARGUMENT'}):
             result['status'] = 'failed'
     return result
 

@@ -12,7 +12,12 @@ if [[ ! -x "$cli_path" ]]; then
 fi
 echo 'Connect Untangle to Loom'
 echo 'Review Atlassian consent below. Untangle does not accept it on your behalf.'
-if ! "$cli_path" consent || ! "$cli_path" login; then
+# An expired or revoked session keeps its profile, so plain login reuses it.
+login_args=(login)
+if ! "$cli_path" whoami -o json --output-summary none >/dev/null 2>&1; then
+    login_args+=(--force)
+fi
+if ! "$cli_path" consent || ! "$cli_path" "${login_args[@]}"; then
     echo 'Connection did not finish. No video was uploaded. Review the error above and try Connect Loom again.'
     read -r -p 'Press Enter to close.'
     exit 1
