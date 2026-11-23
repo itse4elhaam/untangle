@@ -1526,7 +1526,10 @@ class Engine:
 
     def _create_recording(self, path, encoder_id, *, constant_bitrate=False):
         o = self._obs
-        bitrate = max(6000, round(self.width*self.height*self.fps / 10000))
+        # Loom upload time is mostly file size. Cap at 400 kbps per fps: 4K30
+        # becomes 12 Mbps (half the bytes); 1440p and below stay under the cap.
+        bitrate = max(6000, min(round(self.width*self.height*self.fps / 10000),
+                                round(400 * self.fps)))
         settings = {"bitrate": bitrate, "keyint_sec": 2, "rate_control": "CBR"}
         if encoder_id == "ffmpeg_vaapi":
             settings.update(vaapi_device="/dev/dri/renderD128", vaapi_codec=27,

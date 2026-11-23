@@ -51,7 +51,7 @@ The library can open during recording or upload. Stop/Pause remain reachable dur
 
 ## Loom
 
-Use **Sharing → Connect Loom account** and complete browser consent yourself. The official CLI owns credentials; connecting does not upload. Select a video in Recordings and choose **Upload to Loom**, or opt in before a take. Automatic upload waits for naming; save errors, discarded/changed files, recovery and quitting do not trigger it.
+Use **Sharing → Connect Loom account** and complete browser consent yourself. The official CLI owns credentials; connecting does not upload. Select a video in Recordings and choose **Upload to Loom**, or opt in before a take. Automatic upload waits for naming; save errors, discarded/changed files, recovery and quitting do not trigger it. Upload time is mostly file size, so recordings are capped at 400 kbps per frame per second (12 Mbps at 4K30, half the earlier 4K rate); 1440p and below are unchanged.
 
 If the Loom sign-in has expired, the upload panel says so and offers **Reconnect Loom…**, which opens the sign-in terminal and forces a fresh login. CLIs without upload visibility apply sharing after upload, so account defaults apply initially. Failures preserve local files. Check Loom before retrying an interrupted upload to avoid duplicates. Permission/title failures can retain a working link with a warning. **Forget Loom link** only removes local metadata. Disconnect signs out the selected TWG profile across Atlassian products.
 
