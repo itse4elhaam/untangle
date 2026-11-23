@@ -12,11 +12,11 @@ from untangle.engine import Engine, EngineError
 
 
 class EncodingTests(unittest.TestCase):
-    def encoder_settings(self, encoder, *, compact=False, **kwargs):
+    def encoder_settings(self, encoder, *, compact=False, size=(1920, 1080, 30), **kwargs):
         engine = Engine.__new__(Engine)
         engine._obs = Mock()
         engine._compact_recording = compact
-        engine.width, engine.height, engine.fps = 1920, 1080, 30
+        engine.width, engine.height, engine.fps = size
         engine.encoders = ['ffmpeg_aac']
         engine._stop_event = Mock()
         engine._stop_callback = Mock()
@@ -35,6 +35,18 @@ class EncodingTests(unittest.TestCase):
                 self.assertEqual(settings['bitrate'], 6221)
                 self.assertNotIn('crf', settings)
                 self.assertNotIn('qp', settings)
+
+    def test_bitrate_caps_at_400_kbps_per_fps(self):
+        cases = {
+            (3840, 2160, 30): 12000,
+            (3840, 2160, 60): 24000,
+            (2560, 1440, 30): 11059,
+            (1920, 1080, 60): 12442,
+            (1280, 720, 30): 6000,
+        }
+        for size, bitrate in cases.items():
+            with self.subTest(size=size):
+                self.assertEqual(self.encoder_settings('obs_x264', size=size)['bitrate'], bitrate)
 
     def test_encoder_quality_modes_use_obs27_options_and_keep_aac(self):
         cpu = self.encoder_settings('obs_x264', compact=True)
