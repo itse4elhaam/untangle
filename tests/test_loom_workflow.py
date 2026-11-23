@@ -590,6 +590,16 @@ class LoomWorkflowChecks(unittest.TestCase):
         self.assertEqual(self.window.loom_account['status'], 'disconnected')
         self.assertIn('connect your Loom account', self.window.status.text())
 
+    def test_expired_oauth_401_asks_to_reconnect_and_keeps_upload_uncertain(self):
+        self.window.loom_account = {'status': 'connected', 'name': 'Synthetic User'}
+        process = self.begin_upload()
+        process.finish('{"ok":false,"error":{"code":"TWG_TOOL_EXECUTION_FAILED",'
+                       '"message":"GraphQL request failed: 401","statusCode":401}}', 1)
+        self.assert_unlocked()
+        self.assertEqual(self.window.loom_account['status'], 'disconnected')
+        self.assertIn('connect your Loom account', self.window.status.text())
+        self.assertEqual(self.window.upload_store.get(self.path)['status'], 'uncertain')
+
     def test_cancel_needs_confirmation_then_ignores_late_finished_signal(self):
         process = self.begin_upload()
         with patch.object(QMessageBox, 'question', return_value=QMessageBox.Cancel):
