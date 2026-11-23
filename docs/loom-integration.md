@@ -26,6 +26,14 @@ publication and applies sharing separately when needed. Failed rename/sharing
 must retain the link and warning. See the [changelog](https://developer.atlassian.com/cloud/twg-cli/changelog/)
 for publication-success/visibility-failure exit code 3.
 
+TWG 1.4.6 (installed 2026-11-23) accepts `--visibility` on upload. An expired
+OAuth session returns `AUTH_INVALID` with exit 77 there; 1.3.6 returned
+`TWG_TOOL_EXECUTION_FAILED` with `statusCode` 401 instead, so both read as
+disconnected. A 401 during upload stays uncertain because 1.3.6 failed this way
+after 40–66 s of transfer. Plain `login` keeps the expired profile; the connect
+script forces a fresh login when `whoami` fails. Exit 3 keeps the published
+link and retries sharing with `video visibility set`.
+
 The inspected CLI had no intermediate JSON transfer-progress contract. A final
 byte count cannot become invented progress. Local `upload.phase` durations include
 CLI processing waits, cannot isolate network throughput or Loom processing, and

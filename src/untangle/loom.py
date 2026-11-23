@@ -272,7 +272,8 @@ def parse_upload_result(stdout, exit_code=0, stderr=''):
         fields = _video_fields(video)
         if fields['url'] or fields['remote_id']:
             result.update(fields)
-            if exit_code == 0 and record.get('ok') is not False and not record.get('error'):
+            # Exit 3: published, but the requested visibility was not applied.
+            if exit_code == 3 or (exit_code == 0 and record.get('ok') is not False and not record.get('error')):
                 result['status'] = 'processing' if video.get('isComplete') is False else 'uploaded'
             break
     if not result['url'] and not result['remote_id']:

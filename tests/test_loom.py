@@ -110,7 +110,7 @@ class LoomParserTests(unittest.TestCase):
                      'url': 'https://www.loom.com/share/abc123'}}, 'error': {'code': 'VISIBILITY_FAILED'}}
         row = parse_upload_result(published, 3)
         self.assertEqual(row['url'], 'https://www.loom.com/share/abc123')
-        self.assertEqual(row['status'], 'uncertain')
+        self.assertEqual(row['status'], 'uploaded')  # Exit 3 is documented as published.
 
     def test_remote_unknown_is_never_inferred_as_deleted(self):
         for payload, code in (({'error': {'code': 'NOT_FOUND'}}, 1),

@@ -600,6 +600,33 @@ class LoomWorkflowChecks(unittest.TestCase):
         self.assertIn('connect your Loom account', self.window.status.text())
         self.assertEqual(self.window.upload_store.get(self.path)['status'], 'uncertain')
 
+    def test_expired_sign_in_offers_reconnect_in_upload_panel(self):
+        process = self.begin_upload()
+        process.finish('{"ok":false,"error":{"code":"AUTH_INVALID","statusCode":401}}', 77)
+        self.assertEqual(self.window.upload_heading.text(), 'Loom sign-in expired')
+        self.assertFalse(self.window.upload_reconnect.isHidden())
+        with patch.object(self.window, 'connect_loom') as connect:
+            self.window.upload_reconnect.clicked.disconnect()
+            self.window.upload_reconnect.clicked.connect(connect)
+            self.window.upload_reconnect.click()
+        connect.assert_called_once()
+        self.window.loom_account = {'status': 'connected'}
+        self.window.retry_upload()
+        self.assertTrue(self.window.upload_reconnect.isHidden())
+
+    def test_exit_3_keeps_published_link_and_retries_sharing_separately(self):
+        process = self.begin_upload()
+        published = json.loads(video_response(name=self.path.stem))
+        published.update(ok=False, error={'code': 'VISIBILITY_FAILED'})
+        process.finish(json.dumps(published), 3)
+        visibility = self.window._upload_process
+        self.assertIsNot(visibility, process)
+        self.assertEqual(visibility.arguments[:4], ['loom', 'video', 'visibility', 'set'])
+        self.assertTrue(self.window.upload_store.get(self.path)['url'])
+        visibility.finish(code=0)
+        self.assertEqual(self.window.upload_store.get(self.path)['status'], 'processing')
+        self.assert_unlocked()
+
     def test_cancel_needs_confirmation_then_ignores_late_finished_signal(self):
         process = self.begin_upload()
         with patch.object(QMessageBox, 'question', return_value=QMessageBox.Cancel):
