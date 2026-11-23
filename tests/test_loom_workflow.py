@@ -3,6 +3,7 @@
 Run only this file: UNTANGLE_TEST_PATTERN=test_loom_workflow.py ./scripts/test.sh
 No app entry point, media backend, account command, upload, or capture runs.
 """
+import configparser
 import importlib.util
 import json
 import os
@@ -16,6 +17,7 @@ for _name in ('DISPLAY', 'WAYLAND_DISPLAY', 'RECIT_TEST_MIC_HARDWARE',
 os.environ['QT_QPA_PLATFORM'] = 'offscreen'
 
 from PySide6.QtCore import QObject, QProcess, QTimer, Signal, QCoreApplication, QEvent
+from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import QCheckBox, QDialog, QLabel, QMessageBox, QPushButton
 from untangle import app as glint, recordings
 from untangle.loom import parse_upload_result, parse_video_info
@@ -193,9 +195,10 @@ class LoomWorkflowChecks(unittest.TestCase):
         with patch.object(glint.time, 'monotonic', return_value=100) as clock, \
                 patch.object(glint, 'diagnostic_event') as event:
             self.window.upload()
+            self.window._upload_stopped_at = 99
             for now, response in ((102, HELP), (112, video_response()),
-                                  (113, '  --title <title> New title'),
-                                  (115, '{}'), (118, '{}')):
+                                  (113, '{}'), (115, '  --title <title> New title'),
+                                  (118, '{}')):
                 clock.return_value = now
                 self.window._upload_process.finish(response)
         phases = [call.kwargs for call in event.call_args_list
@@ -203,8 +206,10 @@ class LoomWorkflowChecks(unittest.TestCase):
         self.assertEqual(phases, [
             {'stage': stage, 'outcome': 'finished', 'elapsed_ms': elapsed}
             for stage, elapsed in (('upload_help', 2000), ('transfer_command', 10000),
-                                   ('title_help', 1000), ('title', 2000), ('visibility', 3000))])
+                                   ('visibility', 1000), ('title_help', 2000), ('title', 3000))])
         event.assert_any_call('upload.result', outcome='processing', elapsed_ms=18000)
+        ready = [call.kwargs for call in event.call_args_list if call.args == ('upload.share_ready',)]
+        self.assertEqual(ready, [{'elapsed_ms': 14000}])
         self.assertEqual(qt.clipboard().text(), URL)
         self.assert_unlocked()
 
@@ -243,6 +248,104 @@ class LoomWorkflowChecks(unittest.TestCase):
         process.finish(video_response())
         self.assertTrue(self.window.in_library())
         self.assertTrue(page.upload.isEnabled())
+
+    def begin_upload_with_queued_take(self):
+        active = self.begin_upload()
+        queued = self.root / 'Next take.mp4'
+        queued.write_bytes(b'Synthetic queued recording')
+        self.window.upload_this_take.setChecked(True)
+        self.window._take_sharing = self.window.selected_loom_sharing()
+        self.window.finish_save(queued, '')
+        return active, queued
+
+    def test_countdown_freezes_audience_and_both_title_choices(self):
+        w = self.window
+        w.upload_this_take.setChecked(True)
+        w.prefs.setValue('visibility', 'workspace')
+        w.prefs.setValue('loom_auto_titles', True)
+        w.auto_titles.setChecked(True)
+        w.toggle_record()
+        self.assertTrue(w.counting)
+        w.count_timer.stop()
+        w.counting = False  # Complete the take with synthetic bytes.
+        w.prefs.setValue('visibility', 'public')
+        w.prefs.setValue('loom_auto_titles', False)
+        w.auto_titles.setChecked(False)
+        w.finish_save(self.path, '')
+        w._upload_process.finish(MODERN_HELP)
+        args = w._upload_process.arguments
+        self.assertEqual(args[args.index('--visibility') + 1], 'workspace')
+        self.assertNotIn('--title', args)
+        self.assertTrue(w._upload_generate_name)
+
+    def test_cancel_confirmation_for_finished_upload_cannot_cancel_next_take(self):
+        w = self.window
+        active, queued = self.begin_upload_with_queued_take()
+        def finish_first(*_):
+            active.finish(video_response(name=self.path.stem))
+            qt.processEvents()
+            self.assertEqual(w._upload_file, queued)
+            return QMessageBox.Yes
+        with patch.object(QMessageBox, 'question', side_effect=finish_first):
+            w.retry_upload()
+        self.assertTrue(w._upload_active)
+        self.assertFalse(w._upload_process.killed)
+
+    def test_queued_take_stays_available_for_upload_while_library_is_open(self):
+        active, queued = self.begin_upload_with_queued_take()
+        self.window.open_recordings(queued)
+        page = self.window.recordings
+        self.assertIn('Queued for Loom upload', page.loom_status.text())
+        for control in (page.edit, page.rename, page.delete):
+            self.assertFalse(control.isEnabled())
+        with patch.object(QMessageBox, 'question') as confirm:
+            page.delete_selected()
+            confirm.assert_not_called()
+        self.assertTrue(queued.is_file())
+        self.assertEqual(self.window.local_copy_busy_reason(queued), 'upload')
+        active.finish(video_response(name=self.path.stem))
+        qt.processEvents()
+        self.assertEqual(self.window._upload_file, queued)
+        self.assertTrue(self.window._upload_active)
+
+    def test_save_and_quit_keeps_current_recording_local_and_finishes_previous_queue(self):
+        w = self.window
+        active, queued = self.begin_upload_with_queued_take()
+        w.recording = True
+        w._take_sharing = w.selected_loom_sharing()
+        with patch.object(QMessageBox, 'question', return_value=QMessageBox.Save), patch.object(w, 'stop') as stop:
+            event = QCloseEvent()
+            w.closeEvent(event)
+        self.assertFalse(event.isAccepted())
+        stop.assert_called_once()
+        current = self.root / 'Current recording.mp4'
+        current.write_bytes(b'Synthetic final recording')
+        w.recording = False
+        with patch.object(w, 'close') as close:
+            w.finish_save(current, '')
+            active.finish(video_response(name=self.path.stem))
+            qt.processEvents()
+            close.assert_not_called()
+            self.assertEqual(w._upload_file, queued)
+            if '--help' in w._upload_process.arguments:
+                w._upload_process.finish(MODERN_HELP)
+            w._upload_process.finish(video_response(name=queued.stem))
+            close.assert_called_once()
+        self.assertFalse(w._auto_upload_queue)
+        self.assertEqual(w.upload_store.get(current), {})
+        self.assertTrue(current.is_file())
+
+    def test_quit_completes_when_queued_file_can_no_longer_upload(self):
+        w = self.window
+        active, queued = self.begin_upload_with_queued_take()
+        queued.unlink()
+        w.quit_after_save = True
+        with patch.object(w, 'close') as close:
+            active.finish(video_response(name=self.path.stem))
+            qt.processEvents()
+            close.assert_called_once()
+        self.assertFalse(w._auto_upload_queue)
+        self.assertFalse(w._upload_active)
 
     def test_upload_completion_and_cancel_preserve_concurrent_save(self):
         for cancel in (False, True):
@@ -411,6 +514,30 @@ class LoomWorkflowChecks(unittest.TestCase):
             self.assertEqual(choices[0].currentData(), 'public')
         self.inspect_sharing(inspect)
 
+    def test_sharing_changes_reach_disk_even_if_dialog_is_dismissed(self):
+        def saved():
+            values = configparser.ConfigParser()
+            values.read(self.window.prefs.fileName())
+            return values['General']
+
+        def change(dialog):
+            toggles = {box.text(): box for box in dialog.findChildren(QCheckBox)}
+            toggles['Upload new takes to Loom'].setChecked(True)
+            toggles['Let Loom generate titles when available'].setChecked(False)
+            audience = next(box for box in dialog.findChildren(glint.QComboBox)
+                            if box.findData('workspace') >= 0)
+            audience.setCurrentIndex(audience.findData('workspace'))
+            self.assertTrue(saved().getboolean('auto_upload'))
+            return QDialog.Rejected
+
+        with patch.object(self.window, 'loom_probe'), patch.object(QDialog, 'exec', new=change):
+            self.window.sharing_settings()
+        self.assertEqual(saved()['visibility'], 'workspace')
+        self.assertFalse(saved().getboolean('loom_auto_titles'))
+        self.assertTrue(self.window.upload_this_take.isChecked())
+        self.window.upload_this_take.setChecked(False)
+        self.assertFalse(saved().getboolean('auto_upload'))
+
     def test_optional_loom_title_preference_omits_supported_title_override(self):
         process = self.begin_upload()
         self.assertNotIn('--title', process.arguments)
@@ -431,6 +558,11 @@ class LoomWorkflowChecks(unittest.TestCase):
         process = self.begin_upload()
         self.assertEqual(process.arguments[-2:], ['--title', self.path.stem])
         process.finish(video_response(name=self.path.name))
+        self.assertEqual(qt.clipboard().text(), URL)
+        self.assertTrue(self.window.upload_copy.isEnabled())
+        self.assertTrue(self.window.upload_open.isEnabled())
+        self.assertTrue(self.window.upload_store.get(self.path)['visibility_verified'])
+        qt.clipboard().setText('copied something else')
         self.assertEqual(self.window._upload_process.arguments, ['loom', 'video', 'rename', '--help'])
         self.window._upload_process.finish('  --title <title> New title')
         self.assertEqual(self.window._upload_process.arguments[3:6], [URL, '--title', self.path.stem])
@@ -438,7 +570,7 @@ class LoomWorkflowChecks(unittest.TestCase):
         self.assert_unlocked()
         self.assertEqual(self.window.upload_store.get(self.path)['title'], self.path.stem)
         self.assertEqual(self.window.upload_store.get(self.path)['status'], 'processing')
-        self.assertEqual(qt.clipboard().text(), URL)
+        self.assertEqual(qt.clipboard().text(), 'copied something else')
 
     def test_matching_title_does_not_need_another_command(self):
         self.window.prefs.remove('loom_auto_titles')
@@ -447,6 +579,18 @@ class LoomWorkflowChecks(unittest.TestCase):
         self.assertIs(self.window._upload_process, process)
         self.assert_unlocked()
 
+    def test_skip_optional_rename_keeps_confirmed_link(self):
+        self.window.prefs.setValue('loom_auto_titles', False)
+        self.begin_upload().finish(video_response())
+        pending = self.window._upload_process
+        self.assertEqual(self.window.upload_retry.text(), 'Skip title update')
+        self.window.retry_upload()
+        self.assertTrue(pending.killed)
+        pending.finished.emit(0, QProcess.NormalExit)
+        self.assert_unlocked()
+        self.assertEqual(qt.clipboard().text(), URL)
+        self.assertTrue(self.window.upload_store.get(self.path)['visibility_verified'])
+
     def test_title_failure_keeps_link_and_finishes_permissions_without_retry(self):
         for phase in ('help', 'rename'):
             with self.subTest(phase=phase):
@@ -454,11 +598,11 @@ class LoomWorkflowChecks(unittest.TestCase):
                 self.window.prefs.setValue('loom_auto_titles', False)
                 process = self.begin_upload(HELP)
                 process.finish(video_response(name=self.path.name))
+                self.assertEqual(self.window._upload_process.arguments[2:4], ['visibility', 'set'])
+                self.window._upload_process.finish('{}')
                 if phase == 'rename':
                     self.window._upload_process.finish('  --title <title> New title')
                 self.window._upload_process.finish('secret diagnostic', code=1)
-                self.assertEqual(self.window._upload_process.arguments[2:4], ['visibility', 'set'])
-                self.window._upload_process.finish('{}')
                 self.assert_unlocked()
                 row = self.window.upload_store.get(self.path)
                 self.assertEqual(row['url'], URL)
@@ -469,10 +613,13 @@ class LoomWorkflowChecks(unittest.TestCase):
     def test_replaced_file_during_title_update_never_inherits_link(self):
         self.window.prefs.remove('loom_auto_titles')
         self.begin_upload().finish(video_response(name=self.path.name))
+        self.assertEqual(qt.clipboard().text(), URL)
+        qt.clipboard().setText('unchanged')
         self.window._upload_process.finish('  --title <title> New title')
         replacement = self.path.with_suffix('.new')
         replacement.write_bytes(b'replacement')
         replacement.replace(self.path)
+        self.window.copy_uploaded_link()
         self.window._upload_process.finish('{}')
         self.assertEqual(self.window.upload_store.get(self.path), {})
         self.assertEqual(qt.clipboard().text(), 'unchanged')
@@ -502,20 +649,30 @@ class LoomWorkflowChecks(unittest.TestCase):
             self.window.upload()
             self.assertEqual(self.window._upload_process.arguments, ['loom', 'video', 'upload', '--help'])
 
-    def test_title_timeout_continues_sharing_and_ignores_late_completion(self):
+    def test_warm_help_never_transfers_media_and_is_reused_at_stop(self):
+        cli = self.root / 'twg'
+        cli.write_bytes(b'synthetic CLI, never executed')
+        with patch.object(self.window, 'find_cli', return_value=str(cli)), patch.object(self.window, 'loom_probe') as probe:
+            self.window.warm_loom_upload_help()
+            self.window.warm_loom_upload_help()
+            probe.assert_called_once()
+            args, callback = probe.call_args.args
+            self.assertEqual(args, ['loom', 'video', 'upload', '--help'])
+            self.assertFalse(self.window._upload_active)
+            callback(MODERN_HELP, 0, '')
+            self.window.upload()
+            self.assertEqual(self.window._upload_process.arguments[:4], ['loom', 'video', 'upload', str(self.path)])
+
+    def test_title_timeout_preserves_sharing_and_ignores_late_completion(self):
         self.window.prefs.remove('loom_auto_titles')
         self.begin_upload(HELP).finish(video_response(name=self.path.name))
+        self.window._upload_process.finish('{}')
         helper = self.window._upload_process
         timers = [timer for timer in self.window.findChildren(QTimer)
                   if timer.isActive() and timer.interval() == 20000]
         self.assertEqual(len(timers), 1)
         timers[0].timeout.emit()
-        sharing = self.window._upload_process
-        self.assertIsNot(sharing, helper)
-        self.assertEqual(sharing.arguments[2:4], ['visibility', 'set'])
         helper.finished.emit(0, QProcess.NormalExit)
-        self.assertIs(self.window._upload_process, sharing)
-        sharing.finish('{}')
         self.assert_unlocked()
         self.assertTrue(self.window.upload_store.get(self.path)['title_warning'])
 
@@ -525,17 +682,18 @@ class LoomWorkflowChecks(unittest.TestCase):
         self.window.prefs.remove('loom_auto_titles')
         with patch.object(self.window, 'find_cli', return_value=str(cli)):
             self.begin_upload(HELP).finish(video_response(name=self.path.name))
-            self.window._upload_process.finish('  --title <title> New title')
             self.window._upload_process.finish('{}')
+            self.window._upload_process.finish('  --title <title> New title')
             self.window._upload_process.finish('{}')
             qt.clipboard().setText('unchanged')
             self.window.upload(confirmed=True)
             self.window._upload_process.finish(video_response(name=self.path.name))
+            self.assertEqual(self.window._upload_process.arguments[2:4], ['visibility', 'set'])
+            self.window._upload_process.finish(code=1)
             self.assertEqual(self.window._upload_process.arguments[2:6],
                              ['rename', URL, '--title', self.path.stem])
             self.window._upload_process.finish('{}')
             self.assertEqual(qt.clipboard().text(), 'unchanged')
-            self.window._upload_process.finish(code=1)
             self.assert_unlocked()
             self.assertEqual(qt.clipboard().text(), 'unchanged')
             row = self.window.upload_store.get(self.path)
@@ -549,11 +707,13 @@ class LoomWorkflowChecks(unittest.TestCase):
         helper.finish(HELP)
         self.assertIsNot(self.window._upload_process, helper)
         self.window._upload_process.finish(video_response())
+        self.assertEqual(self.window._upload_process.arguments[2:4], ['visibility', 'set'])
+        self.assertEqual(qt.clipboard().text(), 'unchanged')
+        self.window._upload_process.finish('{}')
+        self.assertEqual(qt.clipboard().text(), URL)
         self.window._upload_process.finish('  --title <title> New video title')
         self.assertEqual(self.window._upload_process.arguments[2:6],
                          ['rename', URL, '--title', 'Local walkthrough'])
-        self.window._upload_process.finish('{}')
-        self.assertEqual(self.window._upload_process.arguments[2:4], ['visibility', 'set'])
         self.window._upload_process.finish('{}')
         self.assert_unlocked()
         self.assertEqual(self.window.upload_store.get(self.path)['title'], 'Local walkthrough')
@@ -627,6 +787,28 @@ class LoomWorkflowChecks(unittest.TestCase):
         self.assertEqual(self.window.upload_store.get(self.path)['status'], 'processing')
         self.assert_unlocked()
 
+    def test_early_link_waits_for_requested_audience(self):
+        self.window.prefs.setValue('visibility', 'owner')
+        self.window.prefs.setValue('loom_auto_titles', False)
+        process = self.begin_upload()
+        response = json.loads(video_response())
+        response['data']['visibility'] = {'requested': 'public', 'status': 'updated'}
+        process.finish(json.dumps(response))
+        self.assertEqual(qt.clipboard().text(), 'unchanged')
+        self.assertFalse(self.window.upload_copy.isEnabled())
+        self.window.copy_uploaded_link()
+        page = self.open_library()
+        self.assertTrue(page.copy_loom.isHidden())
+        page.copy_selected_loom()
+        self.assertEqual(qt.clipboard().text(), 'unchanged')
+        sharing = self.window._upload_process
+        self.assertEqual(sharing.arguments[2:6], ['visibility', 'set', URL, '--visibility'])
+        self.assertEqual(sharing.arguments[6], 'owner')
+        sharing.finish('{}')
+        self.assertEqual(qt.clipboard().text(), URL)
+        self.assertFalse(page.copy_loom.isHidden())
+        self.assertTrue(page.copy_loom.isEnabled())
+
     def test_cancel_needs_confirmation_then_ignores_late_finished_signal(self):
         process = self.begin_upload()
         with patch.object(QMessageBox, 'question', return_value=QMessageBox.Cancel):
@@ -694,6 +876,18 @@ class LoomWorkflowChecks(unittest.TestCase):
         replacement = self.path.with_suffix('.replacement')
         replacement.write_bytes(b'Synthetic replacement recording')
         replacement.replace(self.path)
+
+    def test_replaced_source_while_checking_help_never_starts_transfer(self):
+        self.window.upload()
+        helper = self.window._upload_process
+        self.replace_source()
+        with patch.object(self.window, 'start_upload_process') as launch:
+            helper.finish(MODERN_HELP)
+        launch.assert_not_called()
+        self.assert_unlocked()
+        self.assertEqual(self.window.upload_store.get(self.path), {})
+        self.assertIn('Nothing was sent to Loom', self.window.upload_detail.text())
+        self.assertEqual(qt.clipboard().text(), 'unchanged')
 
     def test_replaced_source_during_transfer_never_gets_original_link(self):
         process = self.begin_upload()

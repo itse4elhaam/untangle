@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 import unittest
 
-from PySide6.QtCore import Qt, QPoint
+from PySide6.QtCore import Qt, QPoint, QSettings
 from PySide6.QtMultimedia import QMediaPlayer, QVideoSink
 from PySide6.QtWidgets import QApplication, QMessageBox, QStyle, QStyleOptionSlider
 from PySide6.QtTest import QTest
@@ -144,6 +144,10 @@ class RecordingActionsChecks(unittest.TestCase):
         self.addCleanup(remote.stop)
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
+        settings = patch('untangle.recordings.QSettings', return_value=QSettings(
+            str(self.root / 'prefs.ini'), QSettings.IniFormat))
+        settings.start()
+        self.addCleanup(settings.stop)
         self.old = self.root / 'Earlier take.mp4'
         self.new = self.root / 'Latest take.mkv'
         self.old.touch()
@@ -196,6 +200,28 @@ class RecordingActionsChecks(unittest.TestCase):
         QTest.mouseClick(self.dialog.mute, Qt.LeftButton)
         self.assertFalse(self.dialog.audio.isMuted())
         self.assertEqual(self.dialog.volume_label.text(), '40%')
+
+    def test_new_library_uses_playback_and_layout_choices_without_reopening_media(self):
+        self.dialog.volume.setValue(27)
+        self.dialog.mute.click()
+        self.dialog.body.moveSplitter(400, 1)
+        splitter_state = self.dialog.body.saveState()
+        self.dialog.hide()
+        self.dialog.show()
+        qt.processEvents()
+        self.dialog.search.setText('Earlier')
+        self.dialog.files.setCurrentRow(1)
+        library = Recordings(self.root)
+        try:
+            self.assertEqual(library.volume.value(), 27)
+            self.assertTrue(library.audio.isMuted())
+            self.assertEqual(library.body.saveState(), splitter_state)
+            self.assertEqual(library.search.text(), '')
+            self.assertTrue(library.player.source().isEmpty())
+        finally:
+            library.reject()
+            library.close()
+            library.deleteLater()
 
     def test_copy_selection_search_refresh_and_missing(self):
         self.assertFalse(self.dialog.copy.isEnabled())

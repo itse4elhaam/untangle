@@ -370,8 +370,8 @@ class HeadsetRoundtripTests(unittest.TestCase):
         self.assertEqual(self.switches(), ['headset-head-unit-msbc', 'a2dp-sink'])
 
     def test_saved_handsfree_source_id_migrates_to_earbud_entry(self):
-        self.window.prefs.setValue('microphone_id', self.pulse.mic['name'])
         self.window.microphone.setCurrentIndex(0)
+        self.window.prefs.setValue('microphone_id', self.pulse.mic['name'])
         self.window.restore_preferences()
         self.assertEqual(self.window.microphone.currentData(), self.earbuds)
         self.window.save_preferences()

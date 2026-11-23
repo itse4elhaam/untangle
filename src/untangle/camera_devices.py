@@ -1,7 +1,19 @@
 """Rank advertised colour camera modes without opening capture streams."""
 import re
+from pathlib import Path
 
 COLOUR_FORMATS = frozenset(('MJPG', 'YUYV', 'NV12', 'RGB3', 'H264'))
+
+
+def camera_ids(devices, directory=Path('/dev/v4l')):
+    """Prefer udev's stable identifiers over enumeration-dependent /dev/videoN."""
+    identities = {device: device for _, device in devices}
+    for subdir in ('by-path', 'by-id'):
+        for link in sorted((directory / subdir).glob('*')):
+            device = str(link.resolve())
+            if device in identities:
+                identities[device] = str(link)
+    return identities
 
 
 def camera_quality(formats):

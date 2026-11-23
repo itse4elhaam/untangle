@@ -3,6 +3,7 @@
 from __future__ import annotations
 from .widgets import ScrollComboBox
 
+from dataclasses import dataclass
 import json
 import math
 import os
@@ -14,7 +15,7 @@ import sys
 import threading
 import time
 
-from PySide6.QtCore import Qt, QTimer, Signal, QThread, QProcess, QUrl, QSettings, QEvent, QPropertyAnimation, QEasingCurve, QRect
+from PySide6.QtCore import QByteArray, Qt, QTimer, Signal, QThread, QProcess, QUrl, QSettings, QEvent, QPropertyAnimation, QEasingCurve, QRect
 from PySide6.QtGui import QColor, QDesktopServices, QIcon, QPainter, QPen, QPixmap, QShortcut, QKeySequence, QCursor
 from .diagnostics import event as diagnostic_event, failure as diagnostic_failure, observed, snapshot, install as install_diagnostics
 from .floating import CameraBubble, ZoomMotion, release_window_input
@@ -22,8 +23,9 @@ from .windows import WindowCatalog
 from .recordings import Recordings
 from .recording_controls import RecordingControls, CONTROL_STRIP_HEIGHT
 from .camera_image import CameraAdjustments, CameraControlError, restore_saved
+from .camera_devices import camera_ids
 from .naming import next_recording_path, recording_files
-from .naming import recording_title, rename_recording
+from .naming import clean_title, recording_title, rename_recording
 from .naming_dialog import prompt_recording_name
 from .local_titles import LocalTitleJob, local_title_capability
 from .upload_store import UploadStore
@@ -38,7 +40,7 @@ from .audio_devices import (AudioDevices, AudioDeviceError, EarbudMicDeferred,
 from .audio_debug import AudioTrace, emit
 from .engine import recording_audio_warning
 from .composition import canvas_dimensions, camera_composition
-from .camera_framing import CropPosition, load_framing
+from .camera_framing import CropPosition, load_framing, saved_coordinates
 from .microphone_meter import MicrophoneMeter
 from .idle_audio import IdleAudio
 from .review.server import running_url as review_url
@@ -188,6 +190,21 @@ class CanvasPreview(QFrame):
         painter.drawRect(self.preview.geometry().adjusted(-1, -1, 0, 0))
 
 
+@dataclass(frozen=True)
+class LoomSharing:
+    visibility: str
+    loom_titles: bool
+    generate_name: bool
+
+
+@dataclass(frozen=True)
+class LoomTake:
+    path: Path
+    identity: dict
+    sharing: LoomSharing
+    stopped_at: float | None
+
+
 class FinishWorker(QThread):
     finished_file = Signal(str, str)
     # OBS stopped; capture can be released before slow saved-audio validation.
@@ -244,7 +261,7 @@ class Window(QMainWindow):
         if not self.prefs.value('manual_titles_default_v1', False, type=bool):
             # Older versions enabled AI naming by default. Make it an explicit
             # opt-in once, then preserve any choice made after this migration.
-            self.prefs.setValue('auto_titles', False)
+            self.set_preference('auto_titles', False)
             self.prefs.setValue('loom_auto_titles', False)
             self.prefs.setValue('manual_titles_default_v1', True)
         self.engine = None
@@ -311,6 +328,7 @@ class Window(QMainWindow):
         self.bubble.zoom_requested.connect(self.toggle_zoom)
         self.bubble.open_requested.connect(self.reveal)
         self.bubble.moved.connect(self.move_camera_overlay)
+        self.bubble.placement_changed.connect(self.remember_camera_placement)
         self.bubble.resized.connect(self.resize_camera_overlay)
         self.recording_controls = RecordingControls()
         self.recording_controls.pause_requested.connect(self.toggle_pause)
@@ -340,9 +358,18 @@ class Window(QMainWindow):
         self._upload_active = False
         self._upload_process = None
         self._loom_help_cache = CliHelpCache()
+        self._loom_help_warming = None
+        self._upload_setting_title = False
+        self._upload_visibility_warning = ''
         self._title_job = None
-        self._take_auto_upload = False
+        self._take_sharing = None
         self._take_saved_identity = None
+        self._take_stopped_at = None
+        self._auto_upload_queue = []
+        self._upload_name_job = None
+        self._upload_generate_name = False
+        self._upload_stopped_at = None
+        self._restoring_preferences = True
         self.build()
         self.set_theme(self.prefs.value('theme', 'light'))
         self.setup_tray()
@@ -352,6 +379,19 @@ class Window(QMainWindow):
         QApplication.instance().screenAdded.connect(self.control_strip_display_changed)
         QApplication.instance().screenRemoved.connect(self.control_strip_display_changed)
         self.restore_preferences()
+        self.details_toggle.setChecked(self.prefs.value('recording_details_visible', False, type=bool))
+        geometry = self.prefs.value('window/geometry')
+        if isinstance(geometry, QByteArray):
+            self.restoreGeometry(geometry)  # Qt adjusts saved positions when the screen layout changes.
+        QApplication.instance().screenAdded.connect(self.displays_changed)
+        QApplication.instance().screenRemoved.connect(self.displays_changed)
+        for combo in (self.capture_kind, self.screen, self.camera, self.microphone, self.shape,
+                      self.position, self.quality, self.canvas, self.framing, self.zoom_amount):
+            combo.currentIndexChanged.connect(self.save_preferences)
+        for checkbox in (self.clean_microphone, self.desktop_audio, self.live_microphone,
+                         self.mirror, self.crop_drag_enabled):
+            checkbox.toggled.connect(self.save_preferences)
+        self.size.valueChanged.connect(self.save_preferences)
         self.hotkeys = Hotkeys(self)
         self.hotkeys.toggle.connect(self.toggle_record)
         self.hotkeys.pause.connect(self.toggle_pause)
@@ -459,7 +499,7 @@ class Window(QMainWindow):
         self.settings_layout.addWidget(label('Recording names', 'section'))
         self.auto_titles = QCheckBox('Generate a name from the recording')
         self.auto_titles.setChecked(self.prefs.value('auto_titles', False, type=bool))
-        self.auto_titles.toggled.connect(lambda value: self.prefs.setValue('auto_titles', value))
+        self.auto_titles.toggled.connect(lambda value: self.set_preference('auto_titles', value))
         self.settings_layout.addWidget(self.auto_titles)
         self.title_capability = label('', 'muted')
         self.title_capability.setWordWrap(True)
@@ -514,9 +554,9 @@ class Window(QMainWindow):
         layout.addLayout(header)
         self.upload_this_take = QCheckBox('Upload this take to Loom')
         self.upload_this_take.setChecked(self.prefs.value('auto_upload', False, type=bool))
-        self.upload_this_take.setToolTip('Upload after saving. Untangle remembers this choice for future takes. Uncheck to keep takes local.')
+        self.upload_this_take.setToolTip('Stop saves and starts the Loom upload immediately. This choice stays on for future takes and restarts until you uncheck it.')
         # Ticking once keeps uploading every later take, even after a restart.
-        self.upload_this_take.toggled.connect(lambda on: self.prefs.setValue('auto_upload', on))
+        self.upload_this_take.toggled.connect(lambda on: self.set_preference('auto_upload', on))
 
         content = QGridLayout()
         self.recorder_content = content
@@ -587,10 +627,7 @@ class Window(QMainWindow):
         self.portal_button.setVisible(self.wayland_session())
         controls.addWidget(self.portal_button)
         self.screen = ScrollComboBox()
-        for index, screen in enumerate(QApplication.screens()):
-            geo = screen.geometry()
-            ratio = screen.devicePixelRatio()
-            self.screen.addItem(f'{screen.name() or f"Screen {index + 1}"} · {round(geo.width() * ratio)} × {round(geo.height() * ratio)}', index)
+        self.populate_displays()
         controls.addWidget(self.screen)
         self.window_row = QWidget()
         window_layout = QHBoxLayout(self.window_row)
@@ -611,7 +648,9 @@ class Window(QMainWindow):
         controls = self.camera_setup = section('Camera')
         self.camera = ScrollComboBox()
         self.camera.addItem('Camera off', None)
-        for name, path in cameras():
+        devices = cameras()
+        self.camera_ids = camera_ids(devices)
+        for name, path in devices:
             self.camera.addItem(name, path)
         if self.camera.count() > 1:
             self.camera.setCurrentIndex(1)
@@ -697,7 +736,7 @@ class Window(QMainWindow):
         self.compact_recordings = QCheckBox('Smaller camera recording files')
         self.compact_recordings.setChecked(self.prefs.value('compact_camera_recordings', False, type=bool))
         self.compact_recordings.setToolTip('Optional compression for camera-only recordings. Fine detail may change. Turn off to include your screen. Screen recordings always use the original recording settings.')
-        self.compact_recordings.toggled.connect(lambda value: self.prefs.setValue('compact_camera_recordings', value))
+        self.compact_recordings.toggled.connect(lambda value: self.set_preference('compact_camera_recordings', value))
         controls.addWidget(self.compact_recordings)
         content.addWidget(self.controls_panel, 0, 0)
 
@@ -1003,7 +1042,7 @@ class Window(QMainWindow):
             self.controls_fade.start()
         else:
             self.controls_opacity.setOpacity(1.)
-        self.prefs.setValue('sidebar_visible', visible)
+        self.set_preference('sidebar_visible', visible)
 
     def open_camera_layout(self):
         self.open_settings()
@@ -1018,7 +1057,7 @@ class Window(QMainWindow):
         self.theme_choice.blockSignals(True)
         self.theme_choice.setCurrentIndex(self.theme_choice.findData(name))
         self.theme_choice.blockSignals(False)
-        self.prefs.setValue('theme', name)
+        self.set_preference('theme', name)
         if self.recordings and hasattr(self.recordings, 'theme_choice'):
             self.recordings.theme_choice.blockSignals(True)
             self.recordings.theme_choice.setCurrentIndex(self.recordings.theme_choice.findData(name))
@@ -1108,6 +1147,10 @@ class Window(QMainWindow):
         else:
             index = self.camera.findData(self._last_camera_device) if self._last_camera_device else -1
             if index <= 0:
+                if self.prefs.value('last_camera_name'):
+                    self.update_camera_controls()
+                    self.notice('The saved camera is unavailable. Select a connected camera.')
+                    return
                 index = 1 if self.camera.count() > 1 else 0
             self.camera.setCurrentIndex(index)
 
@@ -1195,6 +1238,8 @@ class Window(QMainWindow):
         self.apply_camera_framing(camera_offset=self.camera_offset())
 
     def save_mode_framing(self):
+        if self._restoring_preferences:
+            return
         self.prefs.setValue('camera_zoom_' + self.mode, self.camera_zoom.value())
         self.prefs.setValue('camera_offset_' + self.mode, list(self.camera_offset()))
         self.prefs.sync()
@@ -1217,11 +1262,11 @@ class Window(QMainWindow):
         if (self.mode != 'screen' or not self.bubble.isVisible() or not self.engine
                 or self.recording or self.busy or self.counting):
             return
-        screen = QApplication.screens()[self.screen.currentIndex()]
+        screen = self.screen_for_controls()
         self.bubble.arrange(screen, self.bubble_size_fraction(), self.position.currentData(),
             self.shape.currentData(), self.mask_path,
             mirror_mask=self.capture_kind.currentData() == 'window' and self.mirror.isChecked(),
-            bounds=self.camera_recording_bounds())
+            bounds=self.camera_recording_bounds(), saved_position=self.saved_camera_placement())
         ratio = self.bubble.devicePixelRatioF()
         self.engine.resize_camera_preview(round(self.bubble.width() * ratio), round(self.bubble.height() * ratio))
 
@@ -1234,8 +1279,21 @@ class Window(QMainWindow):
         self.arrange_camera_bubble()
 
     def camera_position_changed(self):
+        if not self._restoring_preferences:
+            self.prefs.remove('camera_widget_offset')
         self.apply_camera_framing(position=self.position.currentData())
         self.arrange_camera_bubble()
+
+    def saved_camera_placement(self):
+        try:
+            offset = saved_coordinates(self.prefs.value('camera_widget_offset'))
+        except ValueError:
+            return None
+        return offset if all(0 <= value <= 1 for value in offset) else None
+
+    def remember_camera_placement(self, x, y):
+        self.prefs.setValue('camera_widget_offset', [x, y])
+        self.prefs.sync()
 
     def camera_mirror_changed(self):
         self.apply_camera_framing(mirror=self.mirror.isChecked())
@@ -1348,8 +1406,60 @@ class Window(QMainWindow):
         else:
             QMessageBox.warning(self, 'Reviews', 'The review app did not start. Run untangle-review serve in a terminal to see why.')
 
+    def populate_displays(self):
+        saved = self.prefs.value('screen_name', '')
+        self.screen.blockSignals(True)
+        try:
+            self.screen.clear()
+            for index, display in enumerate(QApplication.screens()):
+                geo = display.geometry()
+                ratio = display.devicePixelRatio()
+                name = display.name() or f'Screen {index + 1}'
+                self.screen.addItem(f'{name} · {round(geo.width() * ratio)} × {round(geo.height() * ratio)}', index)
+                self.screen.setItemData(index, display.name(), Qt.UserRole + 1)
+            if saved:
+                self.screen.setPlaceholderText(f'Unavailable display: {saved}')
+                self.screen.setCurrentIndex(self.screen.findData(saved, Qt.UserRole + 1))
+        finally:
+            self.screen.blockSignals(False)
+
+    def displays_changed(self, *_):
+        self.populate_displays()
+        self.schedule_configure()
+
+    def restore_camera(self):
+        selected = self.prefs.value('camera')
+        if not selected:
+            return
+        last_name = self.prefs.value('last_camera_name') if selected == 'Camera off' else selected
+        identity = self.prefs.value('camera_device_id')
+        matches = [i for i in range(1, self.camera.count()) if self.camera.itemText(i) == last_name]
+        stable = isinstance(identity, str) and identity.startswith('/dev/v4l/')
+        if stable:
+            index = next((i for i in range(1, self.camera.count())
+                          if self.camera_ids.get(self.camera.itemData(i)) == identity), -1)
+        else:
+            # A unique label survives kernel device renumbering. Identical names
+            # without a stable udev ID require a new selection.
+            index = matches[0] if len(matches) == 1 else -1
+        self._last_camera_device = self.camera.itemData(index) if index >= 0 else None
+        self.camera.setPlaceholderText(f'Unavailable camera: {last_name or selected}')
+        self.camera.setCurrentIndex(0 if selected == 'Camera off' else index)
+
     def restore_preferences(self):
-        for name in ('camera', 'microphone', 'shape', 'position', 'quality'):
+        self._restoring_preferences = True
+        try:
+            self._restore_capture_preferences()
+        finally:
+            self._restoring_preferences = False
+
+    def _restore_capture_preferences(self):
+        self.restore_camera()
+        if not self.wayland_session():
+            self.capture_kind.setCurrentIndex(max(0, self.capture_kind.findData(
+                self.prefs.value('capture_kind', 'screen'))))
+        self.populate_displays()
+        for name in ('shape', 'position', 'quality', 'zoom_amount'):
             widget = getattr(self, name)
             saved = self.prefs.value(name)
             if saved is not None:
@@ -1366,11 +1476,16 @@ class Window(QMainWindow):
                     + ('Bluetooth earbuds' if earbud_card(source) else source), source)
                 index = self.microphone.count() - 1
             self.microphone.setCurrentIndex(index)
+        elif self.prefs.contains('microphone'):
+            name = self.prefs.value('microphone')
+            self.microphone.setPlaceholderText(f'Unavailable microphone: {name}')
+            self.microphone.setCurrentIndex(self.microphone.findText(name))
         self.size.setValue(int(self.prefs.value('size', 23)))
         self.mirror.setChecked(self.prefs.value('mirror', True, type=bool))
         self.clean_microphone.setChecked(self.prefs.value('clean_microphone', True, type=bool))
         self.desktop_audio.setChecked(self.prefs.value('desktop_audio', False, type=bool))
         self.live_microphone.setChecked(self.prefs.value('live_microphone', True, type=bool))
+        self.crop_drag_enabled.setChecked(self.prefs.value('crop_drag_enabled', False, type=bool))
         for name, default in (('canvas', 'landscape'), ('framing', 'fit')):
             widget = getattr(self, name)
             widget.blockSignals(True)
@@ -1392,10 +1507,25 @@ class Window(QMainWindow):
             self.set_last(files[0])
 
     def save_preferences(self):
+        if self._restoring_preferences:
+            return
+        if (self.camera.currentIndex() >= 0 and
+                (self.camera.count() > 1 or self.prefs.contains('camera'))):
+            self.prefs.setValue('camera', self.camera.currentText())
+            if self.camera.currentData():
+                self.prefs.setValue('camera_device_id', self.camera_ids.get(self.camera.currentData(), ''))
+                self.prefs.setValue('last_camera_name', self.camera.currentText())
+        if not self.wayland_session():
+            self.prefs.setValue('capture_kind', self.capture_kind.currentData())
+            if self.screen.currentIndex() >= 0:
+                self.prefs.setValue('screen_name', self.screen.currentData(Qt.UserRole + 1))
+        self.prefs.setValue('crop_drag_enabled', self.crop_drag_enabled.isChecked())
         self.prefs.setValue('live_microphone', self.live_microphone.isChecked())
-        for name in ('camera', 'microphone', 'shape', 'position', 'quality'):
+        for name in ('shape', 'position', 'quality', 'zoom_amount'):
             self.prefs.setValue(name, getattr(self, name).currentText())
-        self.prefs.setValue('microphone_id', self.microphone.currentData() or '')
+        if self.microphone.currentIndex() >= 0:
+            self.prefs.setValue('microphone', self.microphone.currentText())
+            self.prefs.setValue('microphone_id', self.microphone.currentData() or '')
         self.prefs.setValue('size', self.size.value())
         self.prefs.setValue('mirror', self.mirror.isChecked())
         self.prefs.setValue('clean_microphone', self.clean_microphone.isChecked())
@@ -1403,10 +1533,9 @@ class Window(QMainWindow):
         self.prefs.setValue('canvas', self.canvas.currentData())
         self.prefs.setValue('framing', self.framing.currentData())
         self.prefs.setValue('framing_explicit', self._framing_explicit)
-        self.save_mode_framing()
         self.prefs.setValue('mode', self.mode)
         self.prefs.setValue('mask', self.mask_path)
-        self.prefs.sync()
+        self.save_mode_framing()
 
     @observed("app.initialize")
     def initialize(self):
@@ -1499,6 +1628,7 @@ class Window(QMainWindow):
             self.shortcut_reference.setText('Wayland uses the system screen/window picker. Global shortcuts, pointer zoom, floating camera controls and camera presentation switching are unavailable. Use recorder or tray controls. Escape cancels preparation.')
         self.update_setup_summary()
         if configure:
+            self.save_preferences()
             self.schedule_configure()
 
     def focus_camera(self, expanded):
@@ -1516,10 +1646,10 @@ class Window(QMainWindow):
         self.screen.setVisible(not self.wayland_session() and self.mode == 'screen' and not window_mode)
         self.window_row.setVisible(self.mode == 'screen' and window_mode)
         if window_mode:
-            self.refresh_windows()
+            self.refresh_windows(choose_first=not self._restoring_preferences)
         self.schedule_configure()
 
-    def refresh_windows(self):
+    def refresh_windows(self, checked=False, *, choose_first=False):
         if self.wayland_session():
             return
         previous = self.capture_window.currentData()
@@ -1527,6 +1657,8 @@ class Window(QMainWindow):
         self.capture_window.clear()
         try:
             windows = self.window_catalog.list()
+            if windows and not choose_first:
+                self.capture_window.addItem('Select a window…', None)
             for title, wid in windows:
                 self.capture_window.addItem(title, wid)
             if not windows:
@@ -1555,6 +1687,7 @@ class Window(QMainWindow):
         if path:
             self.mask_path = path
             self.mask_button.setText(Path(path).name)
+            self.save_preferences()
             self.schedule_configure()
         elif not self.mask_path:
             self.shape.setCurrentIndex(0)
@@ -1586,6 +1719,14 @@ class Window(QMainWindow):
         try:
             self.hide_bubble()
             camera = self.camera.currentData()
+            if self.camera.currentIndex() < 0:
+                self.engine.clear_video()
+                raise ValueError('The selected camera is unavailable. Choose another camera or Camera off.')
+            if self.microphone.currentIndex() < 0:
+                raise ValueError('The selected microphone is unavailable. Choose another microphone or Microphone off.')
+            if (self.mode == 'screen' and not self.wayland_session()
+                    and self.capture_kind.currentData() == 'screen' and self.screen.currentIndex() < 0):
+                raise ValueError('The selected display is unavailable. Choose a connected display.')
             window_id = self.capture_window.currentData() if self.capture_kind.currentData() == 'window' and self.mode == 'screen' else None
             if self.mode == 'screen' and self.capture_kind.currentData() == 'window':
                 if not window_id or not self.window_catalog.geometry(window_id):
@@ -1619,7 +1760,7 @@ class Window(QMainWindow):
             self.configuration_valid = True
             self.engine_notice('Setup selected. Microphone readiness is checked before recording.', detail=True)
             self.encoder_label.setText('Recording engine ready')
-            screen = QApplication.screens()[self.screen.currentIndex()]
+            screen = self.screen_for_controls()
             geo = screen.geometry()
             ratio = screen.devicePixelRatio()
             width, height = self.output_dimensions()
@@ -1700,10 +1841,10 @@ class Window(QMainWindow):
 
     @observed('camera.show')
     def show_bubble(self):
-        screen = QApplication.screens()[self.screen.currentIndex()]
+        screen = self.screen_for_controls()
         self.bubble.arrange(screen, self.bubble_size_fraction(), self.position.currentData(), self.shape.currentData(), self.mask_path,
             mirror_mask=self.capture_kind.currentData() == 'window' and self.mirror.isChecked(),
-            bounds=self.camera_recording_bounds())
+            bounds=self.camera_recording_bounds(), saved_position=self.saved_camera_placement())
         self.bubble.recording = self.recording
         self.bubble.show()
         try:
@@ -1734,7 +1875,7 @@ class Window(QMainWindow):
 
     def move_camera_overlay(self):
         if self.engine and self.mode == 'screen' and self.capture_kind.currentData() == 'window':
-            bounds = QApplication.screens()[self.screen.currentIndex()].availableGeometry()
+            bounds = self.screen_for_controls().availableGeometry()
             dx = max(1, bounds.width() - self.bubble.width())
             dy = max(1, bounds.height() - self.bubble.height())
             self.engine.set_camera_position((self.bubble.x() - bounds.left()) / dx, (self.bubble.y() - bounds.top()) / dy)
@@ -1760,7 +1901,7 @@ class Window(QMainWindow):
         if self.paused:
             self.zoom_motion.last_time = time.monotonic()
             return
-        screen = QApplication.screens()[self.screen.currentIndex()]
+        screen = self.screen_for_controls()
         bounds = self.camera_recording_bounds() or screen.geometry()
         pointer = QCursor.pos()
         x, y = self.zoom_motion.x, self.zoom_motion.y
@@ -1808,7 +1949,10 @@ class Window(QMainWindow):
         elif self.counting:
             self.cancel_countdown()
         elif self.engine and not self.busy and self.record_button.isEnabled():
-            self._take_auto_upload = self.upload_this_take.isChecked()
+            self._take_sharing = self.selected_loom_sharing()
+            self._take_stopped_at = None
+            if self._take_sharing:
+                self.warm_loom_upload_help()
             self._take_saved_identity = None
             self.counting = True
             self.countdown = 3
@@ -1827,6 +1971,13 @@ class Window(QMainWindow):
                     self.cancel_countdown()
                     self.notice(f'Could not reserve recording controls: {exc}')
 
+    def selected_loom_sharing(self):
+        if not self.upload_this_take.isChecked():
+            return None
+        return LoomSharing(self.prefs.value('visibility', 'public'),
+                           self.prefs.value('loom_auto_titles', False, type=bool),
+                           self.auto_titles.isChecked())
+
     def preflight_summary(self):
         target = ('Camera only' if self.mode == 'camera' else
                   self.capture_kind.currentText() + ': ' +
@@ -1836,7 +1987,7 @@ class Window(QMainWindow):
         microphone = self.microphone.currentText() if self.microphone.currentData() else 'off'
         desktop = 'on' if self.desktop_audio.isChecked() else 'off'
         strip_note = 'Bottom control strip is excluded from the video.\n' if self._configured_control_strip else ''
-        if self.mode == 'camera' and self._take_auto_upload:
+        if self.mode == 'camera' and self._take_sharing:
             strip_note += 'Upload to Loom is on for this camera take. Esc, then untick it to keep this take local.\n'
         return (strip_note + f'{target} · Camera: {camera}\nMicrophone: {microphone} · Desktop audio: {desktop}\n'
                 'Audio readiness is checked before capture. A meter does not verify saved speech.')
@@ -1865,7 +2016,7 @@ class Window(QMainWindow):
             self.count_timer.stop()
             self.start_timer.stop()
             self.counting = False
-            self._take_auto_upload = False
+            self._take_sharing = None
             self.lock_controls(False)
             self.record_button.setText('●  Start recording')
             self.notice('Countdown cancelled. Ready when you are.')
@@ -1959,7 +2110,7 @@ class Window(QMainWindow):
     @observed("app.audio_start_failed")
     def audio_start_failed(self, error):
         self.recording_controls.finish()
-        self._take_auto_upload = False
+        self._take_sharing = None
         emit(self, 'preparation.aborted', level='warning', reason='preparation_failed_or_cancelled')
         self._audio_generation += 1
         self.busy = self.preparing_audio = False
@@ -2094,7 +2245,7 @@ class Window(QMainWindow):
             self.recording_controls.finish()
             diagnostic_failure('application.operation.failed', exc)
             emit(self, 'record_start.failed', level='warning', exception_type=type(exc).__name__)
-            self._take_auto_upload = False
+            self._take_sharing = None
             self.release_audio()
             self.lock_controls(False)
             self.record_button.setText('●  Start recording')
@@ -2123,6 +2274,8 @@ class Window(QMainWindow):
         self.tray_pause.setEnabled(False)
         self.tray_discard.setEnabled(False)
         self.notice('Discarding your recording…' if self._discarding else 'Saving your recording…')
+        if self._take_sharing and self._take_stopped_at is None:
+            self._take_stopped_at = time.monotonic()
         self.worker = FinishWorker(self.engine, self.record_path)
         self.worker.capture_stopped.connect(self.capture_stopped)
         self.worker.finished_file.connect(self.stopped)
@@ -2246,7 +2399,7 @@ class Window(QMainWindow):
         self.stop()
 
     def finish_discard(self, path):
-        self._take_auto_upload = False
+        self._take_sharing = None
         self._restarting = False
         emit(self, 'save.result', outcome='kept')
         self.ready_after_save()
@@ -2309,6 +2462,11 @@ class Window(QMainWindow):
         self._take_saved_identity = self.upload_store.file_identity(path) if path else None
         emit(self, 'save.result', outcome='warning' if error else 'saved')
         self.ready_after_save()
+        if (self._take_sharing and not error and not self.quit_after_save and not self._closing
+                and self._take_saved_identity is not None):
+            self.set_last(path)
+            self.complete_saved_video(path, error, prompt=False)
+            return
         if path and path.exists():
             self.set_last(path)
             if (not error and not self.quit_after_save and not self._closing
@@ -2359,8 +2517,8 @@ class Window(QMainWindow):
             self._title_job.cancel()
 
     def complete_saved_video(self, path, error, *, prompt=True):
-        auto_upload = self._take_auto_upload
-        self._take_auto_upload = False
+        sharing = self._take_sharing
+        self._take_sharing = None
         self._review_path = None
         self.review_saved_button.hide()
         self.cancel_title_button.setEnabled(True)
@@ -2390,13 +2548,85 @@ class Window(QMainWindow):
             self._review_path = Path(path)
             self.review_saved_button.show()
         self.notice(error or 'Saved. Play it back, or upload to Loom when you are ready.')
-        if (auto_upload and not error and not self.quit_after_save and not self._closing
+        if (sharing and not error and not self.quit_after_save and not self._closing
                 and path and self._take_saved_identity is not None
                 and self.upload_store.file_identity(path) == self._take_saved_identity):
-            self.set_last(path)
-            self.upload()
-        if self.quit_after_save and not self.busy:
+            take = LoomTake(Path(path).absolute(), self._take_saved_identity, sharing, self._take_stopped_at)
+            self._auto_upload_queue.append(take)
+            if self._upload_active:
+                self.notice('Saved. This take will upload when the current Loom upload finishes.')
+            self.drain_auto_uploads()
+        if self.quit_after_save and not (self.busy or self._upload_active or self._auto_upload_queue):
             self.close()
+
+    def drain_auto_uploads(self):
+        while self._auto_upload_queue and not (self._upload_active or self._closing):
+            take = self._auto_upload_queue.pop(0)
+            if self.upload_store.file_identity(take.path) != take.identity:
+                self.notice('A queued take changed. Review the local recording before sharing.')
+                continue
+            self.upload(take=take)
+        if self.recordings:
+            self.recordings.update_actions()
+        if self.quit_after_save and not (self._upload_active or self.busy or self.recording or self.counting or self._closing):
+            self.close()
+
+    def finish_auto_upload_naming(self, continue_title):
+        # TWG has finished reading the file and has already reported its sharing result.
+        if not self._upload_generate_name or not local_title_capability()[0]:
+            continue_title()
+            return
+        self._upload_generate_name = False
+        path = self._upload_file
+        job = self._upload_name_job = LocalTitleJob(self)
+        def named(title, error):
+            if self._upload_name_job is not job:
+                return
+            self._upload_name_job = None
+            job.deleteLater()
+            if not self.upload_source_matches():
+                self.upload_end('', state='uncertain')
+                return
+            if title:
+                self._upload_title = clean_title(title)
+                from .editing import RecordingProject
+                player_source = self.recordings.player.source() if self.recordings else None
+                if ((player_source and player_source.toLocalFile() == str(path))
+                        or RecordingProject(path).directory.exists() or loom_cleanup.review_reason(path)):
+                    self._upload_title_warning = 'The local filename was kept for playback or editing.'
+                    continue_title()
+                    return
+                try:
+                    renamed = rename_recording(path, title)
+                except (ValueError, OSError):
+                    self._upload_title_warning = 'Could not rename the local recording.'
+                else:
+                    self._upload_file = renamed
+                    self._upload_title = renamed.stem
+                    try:
+                        self.upload_store.rename(path, renamed)
+                    except OSError:
+                        self._upload_fallback_state = self.upload_store.get(renamed)
+                        self._upload_metadata_warning = 'Could not move the saved Loom details to the new filename.'
+                    self.recording_renamed(str(path), str(renamed))
+                    if self.recordings and player_source.isEmpty():
+                        selected = self.recordings.selected_path()
+                        self.recordings.refresh(renamed if selected == path else selected)
+            elif error:
+                self._upload_title_warning = 'The recording kept its original name.'
+            continue_title()
+        job.finished.connect(named)
+        job.start(path)
+
+    def skip_auto_upload_naming(self):
+        job = self._upload_name_job
+        if job is None:
+            return False
+        self._upload_name_job = None
+        job.cancel()
+        job.deleteLater()
+        self.upload_title_failed()
+        return True
 
     def review_saved_recording(self):
         path = getattr(self, '_review_path', None)
@@ -2721,21 +2951,32 @@ class Window(QMainWindow):
             saved = {}
         return saved if isinstance(saved, dict) else {}
 
+    def camera_image_key(self, device, name):
+        identity = self.camera_ids.get(device, '')
+        return identity if identity.startswith('/dev/v4l/') else name
+
+    def saved_camera_image(self, device, name):
+        saved = self.camera_image_settings()
+        key = self.camera_image_key(device, name)
+        if key in saved:
+            return saved[key]
+        if sum(self.camera.itemText(i) == name for i in range(1, self.camera.count())) == 1:
+            return saved.get(name)
+        return None
+
     def save_camera_image(self, camera_name, values):
         saved = self.camera_image_settings()
-        if values:
-            saved[camera_name] = values
+        key = self.camera_image_key(self.camera_adjustments.device, camera_name)
+        if values or (key != camera_name and camera_name in saved):
+            saved[key] = values  # An explicit reset takes precedence over legacy settings.
         else:
-            saved.pop(camera_name, None)
+            saved.pop(key, None)
         self.prefs.setValue('camera_image', json.dumps(saved, sort_keys=True))
+        self.prefs.sync()
 
     def restore_camera_image(self, device):
-        """Reapply remembered picture settings after every camera open.
-
-        Keyed by camera name: /dev/videoN moves on replug. Reopening can reset
-        controls, so this deliberately runs on every configure with a camera.
-        """
-        saved = self.camera_image_settings().get(self.camera.currentText()) if device else None
+        """Reopening a camera can reset controls, even if the camera hasn't changed."""
+        saved = self.saved_camera_image(device, self.camera.currentText()) if device else None
         if not isinstance(saved, dict) or not saved:
             return
         try:
@@ -2762,7 +3003,7 @@ class Window(QMainWindow):
             self.engine.detach_preview()
         self.preview.hide()
         name = self.camera.currentText()
-        self.camera_adjustments.load(device, name, self.camera_image_settings().get(name))
+        self.camera_adjustments.load(device, name, self.saved_camera_image(device, name))
         self.pages.setCurrentWidget(self.camera_adjustments)
         self.tray_record.setEnabled(False)
         QTimer.singleShot(0, lambda: self.attach_camera_adjustment_preview(generation))
@@ -2840,6 +3081,8 @@ class Window(QMainWindow):
             self.recordings = Recordings(VIDEOS, self,
                 deletion_blocked=self.recording_file_busy,
                 upload_store=self.upload_store,
+                loom_link_pending=self.loom_link_pending,
+                loom_queued=self.loom_upload_queued,
                 upload_blocked=lambda: self._upload_active)
             self.recordings.recording_deleted.connect(self.recording_deleted)
             self.recordings.recording_renamed.connect(self.recording_renamed)
@@ -2880,7 +3123,14 @@ class Window(QMainWindow):
 
     def recording_file_busy(self, path):
         return (self.recording or self.counting or self.busy
-                or (self._upload_active and Path(path).resolve() == self._upload_file.resolve()))
+                or (self._upload_active and Path(path).resolve() == self._upload_file.resolve())
+                or self.loom_upload_queued(path))
+
+    def loom_upload_queued(self, path):
+        if not self._auto_upload_queue:
+            return False
+        source = Path(path).resolve()
+        return any(take.path.resolve() == source for take in self._auto_upload_queue)
 
     def recording_renamed(self, old_path, new_path):
         if getattr(self, '_review_path', None) == Path(old_path):
@@ -2958,6 +3208,10 @@ class Window(QMainWindow):
         process.start()
         timer.start(timeout)
         return process
+
+    def set_preference(self, key, value):
+        self.prefs.setValue(key, value)
+        self.prefs.sync()
 
     def sharing_settings(self):
         if self.busy or self.counting or self._closing:
@@ -3117,12 +3371,13 @@ class Window(QMainWindow):
         layout.addWidget(done)
         if cli and not read_only:
             QTimer.singleShot(0, probe)
-        if dialog.exec() and not read_only:
-            self.prefs.setValue('auto_upload', auto.isChecked())
-            self.upload_this_take.setChecked(auto.isChecked())
-            self.prefs.setValue('visibility', visibility.currentData())
-            self.prefs.setValue('loom_auto_titles', titles.isChecked())
-            self.prefs.setValue(loom_cleanup.PREFERENCE, delete_local.isChecked())
+        if not read_only:
+            auto.toggled.connect(self.upload_this_take.setChecked)
+            visibility.currentIndexChanged.connect(
+                lambda _: self.set_preference('visibility', visibility.currentData()))
+            titles.toggled.connect(lambda on: self.set_preference('loom_auto_titles', on))
+            delete_local.toggled.connect(lambda on: self.set_preference(loom_cleanup.PREFERENCE, on))
+        dialog.exec()
         self._sharing_dialog = None
         dialog.deleteLater()
 
@@ -3222,15 +3477,18 @@ class Window(QMainWindow):
         self.upload_progress.setRange(0, 0 if percent is None else 100)
         if percent is not None:
             self.upload_progress.setValue(round(percent))
-        url = valid_share_url(getattr(self, '_upload_url', ''))
+        url = self.usable_loom_url()
         self.upload_link.setText(url)
         self.update_audience_status()
         self.upload_link.hide()
         for button in (self.upload_open, self.upload_copy):
             button.setVisible(bool(url))
-            button.setEnabled(bool(url) and not active)
+            button.setEnabled(bool(url))
         self.upload_retry.setVisible(active or retry)
-        self.upload_retry.setText('Cancel upload…' if active else 'Retry upload…')
+        if active and self._upload_setting_title:
+            self.upload_retry.setText('Skip title update')
+        else:
+            self.upload_retry.setText('Cancel upload…' if active else 'Retry upload…')
         self.upload_reconnect.setVisible(not active and getattr(self, 'loom_account', {}).get('status') == 'disconnected')
         self.upload_library.setEnabled(not (self.busy or self.recording or self.counting))
 
@@ -3241,7 +3499,8 @@ class Window(QMainWindow):
         audience = {'owner': 'Only me', 'workspace': 'Loom workspace', 'public': 'Anyone with the link'}.get(
             state.get('visibility'), 'Unknown audience')
         verified = (state.get('visibility_verified', False) and not state.get('visibility_warning')
-                    and not self._upload_active and not getattr(self, '_upload_metadata_warning', ''))
+                    and (not self._upload_active or self._upload_setting_title)
+                    and not getattr(self, '_upload_metadata_warning', ''))
         status = 'command accepted; review current permissions in Loom' if verified else 'UNVERIFIED: review permissions before sending'
         self.upload_audience.setText(f'Audience: {audience} · {status}')
         self.upload_audience.hide()
@@ -3255,21 +3514,30 @@ class Window(QMainWindow):
 
     def open_uploaded_video(self):
         self.refresh_upload_link()
-        url = valid_share_url(getattr(self, '_upload_url', ''))
+        url = self.usable_loom_url()
         if url:
             QDesktopServices.openUrl(QUrl(url))
 
     def copy_uploaded_link(self):
         self.refresh_upload_link()
-        url = valid_share_url(getattr(self, '_upload_url', ''))
+        url = self.usable_loom_url()
         if url:
             QApplication.clipboard().setText(url)
             self.update_audience_status()
             self.upload_heading.setText('Loom link copied')
 
+    def loom_link_pending(self, path):
+        return (self._upload_active and path is not None and path == getattr(self, '_upload_file', None)
+                and (not self._upload_setting_title or bool(self._upload_visibility_warning)))
+
+    def usable_loom_url(self):
+        if self.loom_link_pending(getattr(self, '_upload_file', None)):
+            return ''
+        return valid_share_url(getattr(self, '_upload_url', ''))
+
     def refresh_upload_link(self):
         path = getattr(self, '_upload_file', None)
-        if self._upload_active or not path:
+        if not path or (self._upload_active and not self._upload_setting_title):
             return
         if getattr(self, '_upload_local_deleted', False) and not path.exists():
             return  # The local copy was deleted after verification; the Loom link stays usable.
@@ -3292,14 +3560,24 @@ class Window(QMainWindow):
 
     def retry_upload(self):
         if self._upload_active:
+            if self._upload_setting_title:
+                if self.skip_auto_upload_naming():
+                    return
+                self._upload_setting_title = False
+                self._upload_process.kill()
+                if self._upload_active:
+                    self.upload_title_failed()
+                return
+            process = self._upload_process
             answer = QMessageBox.question(self, 'Cancel Loom upload?',
                 'Your local recording will stay safe. Loom may already have received the video. Check your Loom library before uploading again.',
                 QMessageBox.Yes | QMessageBox.Cancel, QMessageBox.Cancel)
-            if answer != QMessageBox.Yes or not self._upload_active:
+            if (answer != QMessageBox.Yes or not self._upload_active
+                    or self._upload_process is not process or self._upload_setting_title):
                 return
-            self._upload_process.kill()
-            self._upload_process.waitForFinished(1000)
-            if self._upload_active:
+            process.kill()
+            process.waitForFinished(1000)
+            if self._upload_active and self._upload_process is process:
                 self.upload_end('Upload canceled. Check Loom before retrying; your local recording is safe.', state='uncertain')
             return
         path = getattr(self, '_upload_file', None)
@@ -3308,17 +3586,19 @@ class Window(QMainWindow):
             self.upload()
 
     @observed("app.upload")
-    def upload(self, confirmed=False):
-        if not self.last_file or self.busy or self.recording or self.counting or self._closing:
+    def upload(self, confirmed=False, *, take=None):
+        path = take.path if take else self.last_file
+        if not path or self._closing or (take is None and (self.busy or self.recording or self.counting)):
             return
         if self._upload_active:
             self.notice('Another Loom upload is in progress. This recording is saved locally; upload it from Recordings when the current upload finishes.')
             return
-        self.discard_saved_button.hide()
-        self._discard_path = None
+        if self._discard_path == path:
+            self.discard_saved_button.hide()
+            self._discard_path = None
         try:
-            size = self.last_file.stat().st_size
-            if not self.last_file.is_file() or not os.access(self.last_file, os.R_OK):
+            size = path.stat().st_size
+            if not path.is_file() or not os.access(path, os.R_OK):
                 raise OSError('unreadable file')
         except OSError:
             self.notice('The local recording is missing or unreadable. Choose an existing video before uploading.')
@@ -3326,45 +3606,53 @@ class Window(QMainWindow):
         if size == 0:
             self.notice('This recording is empty. Nothing was uploaded.')
             return
-        if self.last_file.suffix == '.mkv':
-            if self.last_file.with_suffix('.mp4').exists():
+        if path.suffix == '.mkv':
+            if path.with_suffix('.mp4').exists():
                 self.notice('An MP4 with this name already exists. Review it in Recordings before preparing this MKV. Both files are preserved.')
                 return
             self.busy = True
             self.lock_controls(True)
             self.record_button.setEnabled(False)
             self.recording_error = 'Recovered the original recording. Play it back before uploading to Loom.'
-            self.remux(self.last_file)
+            self.remux(path)
             return
         cli = self.find_cli()
         if not cli:
-            self.sharing_settings()
+            if take:
+                self.notice('Saved locally. Install the Loom CLI before uploading this take.')
+            else:
+                self.sharing_settings()
             return
         if size >= 4 * 1024 ** 3:
             self.notice('This video exceeds Loom’s 4 GB upload limit. The local file is saved.')
             return
-        previous = self.upload_store.get(self.last_file)
+        previous = self.upload_store.get(path)
         if not confirmed and previous.get('status') in ('uploaded', 'processing', 'uncertain', 'uploading'):
+            if take:
+                self.notice('This recording already has a Loom upload attempt. Check its link in Recordings.')
+                return
             answer = QMessageBox.question(self, 'Upload this recording again?',
                 'This recording may already exist in Loom. Uploading again can create a duplicate. Check your Loom library before continuing.',
                 QMessageBox.Yes | QMessageBox.Cancel, QMessageBox.Cancel)
             if answer != QMessageBox.Yes:
                 return
-        if self.busy or self.recording or self.counting or self._closing or self._upload_active:
+        if self._closing or self._upload_active or (take is None and (self.busy or self.recording or self.counting)):
             return
-        identity = self.upload_store.file_identity(self.last_file)
-        if identity is None:
+        identity = self.upload_store.file_identity(path)
+        if identity is None or (take and identity != take.identity):
             self.notice('The local recording is missing or unreadable.')
             return
         self._upload_identity = identity
         self._upload_local_deleted = False
         self._upload_fallback_state = None
         self._upload_cli = cli
-        self._upload_file = self.last_file.absolute()
-        self._upload_visibility = self.prefs.value('visibility', 'public')
+        self._upload_file = path.absolute()
+        self._upload_visibility = take.sharing.visibility if take else self.prefs.value('visibility', 'public')
         if self._upload_visibility not in ('owner', 'workspace', 'public'):
             self._upload_visibility = 'owner'
-        self._upload_auto_title = self.prefs.value('loom_auto_titles', False, type=bool)
+        self._upload_auto_title = take.sharing.loom_titles if take else self.prefs.value('loom_auto_titles', False, type=bool)
+        self._upload_generate_name = bool(take and take.sharing.generate_name)
+        self._upload_stopped_at = take.stopped_at if take else None
         self._upload_title = self._upload_file.stem
         self._upload_title_warning = ''
         self._upload_setting_title = False
@@ -3467,6 +3755,20 @@ class Window(QMainWindow):
             return
         self.begin_loom_transfer(help_text)
 
+    def warm_loom_upload_help(self):
+        cli = self.find_cli()
+        identity = CliHelpCache.identity(cli) if cli else None
+        if not identity or self._loom_help_cache.get(identity, 'upload') or self._loom_help_warming == identity:
+            return
+        self._loom_help_warming = identity
+        def checked(output, code, errors):
+            if self._loom_help_warming != identity:
+                return
+            self._loom_help_warming = None
+            if code == 0 and CliHelpCache.identity(cli) == identity:
+                self._loom_help_cache.put(identity, 'upload', output + errors)
+        self.loom_probe(['loom', 'video', 'upload', '--help'], checked)
+
     def cache_loom_help(self, command, help_text):
         identity = CliHelpCache.identity(self._upload_cli)
         if identity == self._upload_cli_identity:
@@ -3483,10 +3785,13 @@ class Window(QMainWindow):
             return
         self.cache_loom_help('upload', help_text)
         self._upload_sets_visibility = supports_option(help_text, '--visibility')
-        self._upload_transfer_started = True
         self.update_upload_panel('Uploading to Loom', 'The CLI does not report byte progress. Your local recording stays safe.', active=True)
         if not (self.busy or self.recording or self.counting):
             self.notice('Uploading to Loom…')
+        if not self.upload_source_matches():
+            self.upload_end('', state='failed')
+            return
+        self._upload_transfer_started = True
         self.start_upload_process(args, self.upload_done, stream=True)
 
     def read_upload_output(self, errors=False):
@@ -3523,20 +3828,13 @@ class Window(QMainWindow):
         self._upload_url = result.get('url') or None
         if self._upload_url or result.get('remote_id'):
             self.save_upload_metadata(self._upload_file, expected_identity=self._upload_identity, **result)
-        if code in (0, 3) and status == QProcess.NormalExit and self._upload_url:
-            if code == 3:
+        if (status == QProcess.NormalExit and self._upload_url
+                and result['status'] in ('uploaded', 'processing')):
+            if (code == 3 or result.get('visibility_warning')
+                    or result.get('visibility') and result['visibility'] != self._upload_visibility):
                 # The video is live; apply sharing with the separate command.
                 self._upload_sets_visibility = False
-            if not self._upload_auto_title and result.get('title') != self._upload_title:
-                self._upload_setting_title = True
-                self.update_upload_panel('Setting your Loom title', 'Using the recording name without its extension.', active=True)
-                help_text = self._loom_help_cache.get(CliHelpCache.identity(self._upload_cli), 'rename')
-                if help_text is not None:
-                    self.set_uploaded_title(help_text)
-                else:
-                    self.start_upload_process(['loom', 'video', 'rename', '--help'], self.upload_title_help)
-            else:
-                self.finish_loom_upload()
+            self.finish_loom_upload()
         elif code == 0 and status == QProcess.NormalExit:
             self.upload_end('The upload command finished without a Loom link. Check your Loom library before retrying.', state='uncertain')
         else:
@@ -3586,12 +3884,16 @@ class Window(QMainWindow):
         self._upload_setting_title = False
         self._upload_result['title'] = self._upload_title
         self.save_upload_metadata(self._upload_file, expected_identity=self._upload_identity, title=self._upload_title)
-        self.finish_loom_upload()
+        self.finish_loom_title()
 
     def upload_title_failed(self):
         self._upload_setting_title = False
         self._upload_title_warning = 'Loom received the video, but its title could not be set. Rename it in Loom; do not upload another copy.'
-        self.finish_loom_upload()
+        self.finish_loom_title()
+
+    def finish_loom_title(self):
+        self.upload_end(self._upload_visibility_warning or 'Loom title update finished.',
+                        state=self._upload_result['status'], visibility_warning=self._upload_visibility_warning)
 
     def finish_loom_upload(self):
         if not self.upload_source_matches():
@@ -3604,19 +3906,46 @@ class Window(QMainWindow):
             self.start_upload_process(['loom', 'video', 'visibility', 'set', self._upload_url,
                 '--visibility', self._upload_visibility, '-o', 'json', '--output-summary', 'none'], self.visibility_done)
             return
-        QApplication.clipboard().setText(self._upload_url)
-        self.upload_end('Uploaded to Loom. Link copied. Loom may still be processing the video.', state=self._upload_result['status'])
+        self.loom_sharing_finished()
 
     @observed("app.visibility_done")
     def visibility_done(self, code, status):
         if not self.upload_source_matches():
             self.upload_end('', state='uncertain')
             return
-        if code == 0 and status == QProcess.NormalExit:
+        warning = '' if code == 0 and status == QProcess.NormalExit else 'Sharing permissions were not confirmed. Review them in Loom before sharing.'
+        self.loom_sharing_finished(warning)
+
+    def loom_sharing_finished(self, warning=''):
+        self._upload_visibility_warning = warning
+        if not warning:
             QApplication.clipboard().setText(self._upload_url)
-            self.upload_end('Uploaded to Loom. Sharing setting applied. Link copied.', state=getattr(self, '_upload_result', {}).get('status', 'uploaded'))
+            stopped_at = getattr(self, '_upload_stopped_at', None)
+            timing = {} if stopped_at is None else {'elapsed_ms': max(0, round((time.monotonic() - stopped_at) * 1000))}
+            diagnostic_event('upload.share_ready', **timing)
+        self._upload_setting_title = True
+        self.save_upload_metadata(self._upload_file, expected_identity=self._upload_identity,
+                                  visibility=getattr(self, '_upload_visibility', 'owner'),
+                                  visibility_verified=not warning, visibility_warning=warning)
+        self.update_upload_panel('Review Loom sharing' if warning else 'Loom link copied',
+                                 warning or 'Finishing the recording title.', active=True)
+        self.finish_auto_upload_naming(self.set_loom_title_after_sharing)
+
+    def set_loom_title_after_sharing(self):
+        if not self.upload_source_matches():
+            self.upload_end('', state='uncertain')
+            return
+        result = getattr(self, '_upload_result', {})
+        if getattr(self, '_upload_auto_title', True) or result.get('title') == self._upload_title:
+            warning = self._upload_visibility_warning
+            self.upload_end(warning or 'Uploaded to Loom. Link copied. Loom may still be processing the video.',
+                            state=result.get('status', 'uploaded'), visibility_warning=warning)
+            return
+        help_text = self._loom_help_cache.get(CliHelpCache.identity(self._upload_cli), 'rename')
+        if help_text is None:
+            self.start_upload_process(['loom', 'video', 'rename', '--help'], self.upload_title_help)
         else:
-            self.upload_end('Uploaded, but Loom could not apply the sharing setting. Review permissions in Loom before sharing the link.', state=getattr(self, '_upload_result', {}).get('status', 'uploaded'), visibility_warning='Sharing permissions were not confirmed.')
+            self.set_uploaded_title(help_text)
 
     @observed("app.upload_end")
     def upload_end(self, text, state='failed', visibility_warning=''):
@@ -3632,8 +3961,12 @@ class Window(QMainWindow):
             self._upload_url = None
             self._upload_metadata_warning = ''
             self._upload_fallback_state = None
-            text = 'The local recording changed during upload. Check Loom for the original video; no link was attached to this file.'
-            state = 'uncertain'
+            if self._upload_transfer_started:
+                text = 'The local recording changed during upload. Check Loom for the original video; no link was attached to this file.'
+                state = 'uncertain'
+            else:
+                text = 'The local recording changed before upload. Nothing was sent to Loom.'
+                state = 'failed'
         if getattr(self, '_upload_file', None) and source_matches:
             title_warning = getattr(self, '_upload_title_warning', '')
             if title_warning:
@@ -3666,7 +3999,9 @@ class Window(QMainWindow):
             self.recordings.update_actions()
         if getattr(self, '_sharing_dialog', None) is not None:
             self._show_loom_account()
-        if self.quit_after_save and not (self.busy or self.recording or self.counting):
+        if self._auto_upload_queue:
+            QTimer.singleShot(0, self.drain_auto_uploads)
+        elif self.quit_after_save and not (self.busy or self.recording or self.counting):
             self.close()
 
     def local_copy_busy_reason(self, path):
@@ -3674,7 +4009,7 @@ class Window(QMainWindow):
         path = Path(path)
         if self.recording or self.counting or self.busy:
             return 'recording'
-        if self._upload_active and Path(path).resolve() == self._upload_file.resolve():
+        if self.recording_file_busy(path):
             return 'upload'
         if self.recordings is not None:
             source = self.recordings.player.source()
@@ -3687,7 +4022,7 @@ class Window(QMainWindow):
         """After a Loom upload: delete the local file only when the copy is verified."""
         path = Path(path)
         enabled = self.prefs.value(loom_cleanup.PREFERENCE, True, type=bool)
-        local = loom_cleanup.local_duration(path) if remote is not None and path.is_file() else None
+        local = loom_cleanup.local_duration(path) if enabled and remote is not None and path.is_file() else None
         reason = loom_cleanup.decide(enabled=enabled, row=self.upload_store.get(path),
                                      upload_identity=identity,
                                      current_identity=self.upload_store.file_identity(path), remote=remote,
@@ -3825,6 +4160,7 @@ class Window(QMainWindow):
 
     def set_details_visible(self, visible):
         # Disclosure is visual only; audio ownership follows the recorder lifecycle.
+        self.set_preference('recording_details_visible', visible)
         self.recorder_details.setVisible(visible)
         self.details_toggle.setText(('▾' if visible else '▸') + ' Recording details')
         self.status.setVisible(visible or not self._status_detail)
@@ -4030,6 +4366,14 @@ class Window(QMainWindow):
         self.hide()
         snapshot(self, 'capture.hidden', native=True)
 
+    def event(self, event):
+        handled = super().event(event)
+        if (event.type() in (QEvent.Move, QEvent.Resize, QEvent.WindowStateChange)
+                and self.isVisible() and not self.isMinimized() and not self.isFullScreen()
+                and hasattr(self, 'prefs')):
+            self.prefs.setValue('window/geometry', self.saveGeometry())
+        return handled
+
     def showEvent(self, event):
         super().showEvent(event)
         if getattr(self, '_capture_preview_detached', False):
@@ -4132,6 +4476,11 @@ class Window(QMainWindow):
         if self._upload_active:
             self.notice('A Loom upload is still running. Cancel the upload to close sooner.')
             event.ignore()
+            return
+        if self._auto_upload_queue:
+            self.quit_after_save = True
+            event.ignore()
+            QTimer.singleShot(0, self.drain_auto_uploads)
             return
         if self._title_job is not None:
             self._closing = True

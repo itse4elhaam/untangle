@@ -23,9 +23,14 @@ uses the remote shown in the dialog, else `UNTANGLE_DRIVE_REMOTE`, else the
 first `drive` remote from `rclone listremotes --long` (preferring names starting
 with `gdrive`), the same discovery the [review tool](https://github.com/itse4elhaam/untangle/blob/main/docs/review.md) uses. **Find rclone
 remotes** lists every Drive remote. Folders are listed four levels deep and saved
-by Drive folder ID; **My Drive** is the root. Shared-with-me and deeper folders
-are not listed, but a saved folder ID keeps working and appears as **Saved destination**.
+by Drive folder ID; **My Drive** is the root. Untangle remembers the last remote
+and a folder for each remote. A saved remote that is no longer configured shows
+as *(unavailable)* and blocks upload until you pick another. Shared-with-me and
+deeper folders are not listed, but a saved folder ID appears as **Saved destination**.
+Earlier versions saved one folder without its remote; it is reused only when that
+remote's listing contains it, otherwise choose the destination again.
 
+Untangle remembers an unapplied checkbox change and marks it as awaiting Save.
 Save the destination and the optional **Archive automatically in the background**
 setting. Saving never enables a timer. Manual **Upload selected to Google Drive…**
 works with background archiving off. **Cancel current action** stops rclone.

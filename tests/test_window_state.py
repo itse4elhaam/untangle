@@ -61,6 +61,21 @@ class WindowStateTests(unittest.TestCase):
         self.window.reveal()
         self.assert_maximized()
 
+    def test_reopen_restores_geometry_and_details_before_first_window_closes(self):
+        self.window.details_toggle.click()
+        self.window.showMinimized()
+        qt.processEvents()
+        restored = app.Window()
+        try:
+            restored.show()
+            qt.processEvents()
+            self.assertTrue(restored.isMaximized())
+            self.assertFalse(restored.isMinimized())
+            self.assertTrue(restored.details_toggle.isChecked())
+            self.assertTrue(restored.recorder_details.isVisible())
+        finally:
+            restored.close()
+
     def test_cancel_preserves_camera_and_screen_window_state(self):
         for mode in ('camera', 'screen'):
             with self.subTest(mode=mode):
@@ -90,12 +105,17 @@ class WindowStateTests(unittest.TestCase):
         for maximized in (False, True):
             with self.subTest(maximized=maximized), patch.object(self.window, 'raise_') as raised, patch.object(self.window, 'activateWindow') as activated:
                 self.window.showMaximized() if maximized else self.window.showNormal()
+                qt.processEvents()
+                geometry = self.window.prefs.value('window/geometry')
+                self.assertEqual(geometry, self.window.saveGeometry())
                 self.countdown('screen')
                 self.window.counting = False
                 self.window.stopped('', 'synthetic save failure')
+                qt.processEvents()
                 self.assertTrue(self.window.isVisible())
                 self.assertEqual(bool(self.window.windowState() & Qt.WindowMaximized), maximized)
                 self.assertFalse(self.window.windowState() & Qt.WindowMinimized)
+                self.assertEqual(self.window.prefs.value('window/geometry'), geometry)
                 raised.assert_not_called()
                 activated.assert_not_called()
 

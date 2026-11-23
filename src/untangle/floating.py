@@ -107,6 +107,7 @@ class CameraBubble(QWidget):
     open_requested = Signal()
     resized = Signal(float)
     moved = Signal()
+    placement_changed = Signal(float, float)
     pixel_size_changed = Signal(int, int)
 
     def __init__(self):
@@ -134,6 +135,7 @@ class CameraBubble(QWidget):
         self._screen = None
         self._placement_key = None
         self._drag_position = None
+        self._placement_start = None
         self.recording = False
         self.paused = False
         self.zoomed = False
@@ -296,10 +298,11 @@ class CameraBubble(QWidget):
             connection.close()
         self._update_input_shape()
 
-    def arrange(self, screen, fraction, position, shape, mask_path=None, mirror_mask=False, bounds=None):
+    def arrange(self, screen, fraction, position, shape, mask_path=None, mirror_mask=False, bounds=None,
+                saved_position=None):
         key = screen, position, bounds
         if key != self._placement_key:
-            self._drag_position = None
+            self._drag_position = saved_position
         self._placement_key = key
         self._screen = screen
         self._bounds = QRect(bounds) if bounds is not None else None
@@ -384,6 +387,7 @@ class CameraBubble(QWidget):
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
+            self._placement_start = self.geometry()
             direction = self._resize_direction(event.position().toPoint())
             if direction:
                 self._resize_start = (event.globalPosition().toPoint(), self.geometry(), direction)
@@ -443,6 +447,10 @@ class CameraBubble(QWidget):
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.LeftButton:
             self._remember_position()
+            if (self._placement_start is not None and self._placement_start != self.geometry()
+                    and self._drag_position is not None):
+                self.placement_changed.emit(*self._drag_position)
+            self._placement_start = None
             self._resize_start = None
             self._drag_offset = None
             self.setCursor(Qt.OpenHandCursor)

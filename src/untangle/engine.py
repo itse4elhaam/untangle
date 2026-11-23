@@ -87,12 +87,26 @@ def recording_audio_warning(path, trace=None):
                         duration_ms=round((trace.clock() - started) * 1000))
             return 'The saved recording has no audio track. Check your microphone before recording again.'
         phase = 'saved_decode'
-        decoded = subprocess.run(['ffmpeg', '-hide_banner', '-nostdin', '-i', str(path),
-            '-map', '0:a:0', '-vn', '-af', 'astats=metadata=0:reset=0', '-f', 'null', '-'],
-            capture_output=True, text=True, timeout=30)
+
+        def decode(options):
+            return subprocess.run(['ffmpeg', '-hide_banner', '-nostdin', '-i', str(path),
+                '-map', '0:a:0', '-vn', *options, '-f', 'null', '-'],
+                capture_output=True, text=True, timeout=30)
+
+        # FFmpeg 4.4's astats runs all per-sample calculations if asked for a
+        # sample count. The null output receives only decoded audio packets, so
+        # empty_output proves samples exist while astats takes its peak-only path.
+        decoded = decode(['-abort_on', 'empty_output', '-af',
+                          'astats=measure_perchannel=none:measure_overall=Peak_level'])
+        if decoded.returncode and ("Option 'measure_perchannel' not found" in decoded.stderr
+                                   or "Unrecognized option 'abort_on'" in decoded.stderr):
+            # Older FFmpeg builds support the original cumulative filter.
+            decoded = decode(['-af', 'astats=metadata=0:reset=0'])
+            samples = re.findall(r'Number of samples: (\d+)', decoded.stderr)
+            if not samples or not int(samples[-1]):
+                raise ValueError('no decoded samples')
         peaks = re.findall(r'Peak level dB: (\S+)', decoded.stderr)
-        samples = re.findall(r'Number of samples: (\d+)', decoded.stderr)
-        if decoded.returncode or not peaks or not samples or not int(samples[-1]):
+        if decoded.returncode or not peaks:
             raise ValueError('decode failed')
         if all(float(peak) == -math.inf for peak in peaks):
             trace.event('saved_validation.result', level='warning', outcome='digital_silence',
