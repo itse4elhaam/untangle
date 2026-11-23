@@ -11,7 +11,7 @@ from .upload_store import UploadStore
 from .loom import valid_share_url
 from .loom_cleanup import unlink_unchanged
 
-from PySide6.QtCore import Qt, QUrl, Signal, QSize, QSignalBlocker, QProcess, QTimer, QEvent
+from PySide6.QtCore import QByteArray, Qt, QUrl, Signal, QSize, QSettings, QSignalBlocker, QProcess, QTimer, QEvent
 from PySide6.QtGui import QAction, QDesktopServices, QIcon, QPixmap, QShortcut, QKeySequence, QPalette
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtMultimediaWidgets import QVideoWidget
@@ -97,12 +97,15 @@ class Recordings(QWidget):
     active_transfer_requested = Signal(str)
 
     def __init__(self, directory, parent=None, deletion_blocked=None, upload_store=None, upload_blocked=None,
-                 drive_state=None):
+                 drive_state=None, loom_link_pending=None, loom_queued=None):
         super().__init__(parent)
         self.directory = Path(directory)
+        self.settings = QSettings('TrueDevs', 'Glint')
         self.deletion_blocked = deletion_blocked or (lambda path: False)
         self.upload_store = upload_store
         self.upload_blocked = upload_blocked or (lambda: False)
+        self.loom_link_pending = loom_link_pending or (lambda path: False)
+        self.loom_queued = loom_queued or (lambda path: False)
         self.drive_state = drive_state
         self.setObjectName('recordingsPage')
         self.thumbnail_cache = OrderedDict()
@@ -117,7 +120,12 @@ class Recordings(QWidget):
         self.ffmpeg = shutil.which('ffmpeg')
         self.player = QMediaPlayer(self)
         self.audio = QAudioOutput(self)
-        self.audio.setVolume(.5)
+        try:
+            volume = int(self.settings.value('library/volume', 50))
+        except (TypeError, ValueError, OverflowError):
+            volume = 50
+        self.audio.setVolume(max(0, min(volume, 100)) / 100)
+        self.audio.setMuted(self.settings.value('library/muted', False, type=bool))
         self.player.setAudioOutput(self.audio)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 20, 24, 12)
@@ -213,6 +221,10 @@ class Recordings(QWidget):
         body.setStretchFactor(0, 2)
         body.setStretchFactor(1, 3)
         body.setSizes([340, 620])
+        splitter_state = self.settings.value('library/splitter')
+        if isinstance(splitter_state, QByteArray):
+            body.restoreState(splitter_state)
+        body.splitterMoved.connect(lambda *_: self.save_library_setting('splitter', body.saveState()))
         layout.addWidget(body, 1)
         self.player.setVideoOutput(self.video)
         self.selected_title = QLabel('Choose a recording')
@@ -280,11 +292,11 @@ class Recordings(QWidget):
         self.mute = QPushButton('Mute')
         self.mute.setCheckable(True)
         self.mute.toggled.connect(self.audio.setMuted)
+        self.mute.toggled.connect(lambda muted: self.save_library_setting('muted', muted))
         sound = QHBoxLayout()
         sound.addWidget(self.mute)
         self.volume = PlaybackSlider(Qt.Horizontal)
         self.volume.setRange(0, 100)
-        self.volume.setValue(50)
         self.volume.setFixedWidth(110)
         self.volume.setAccessibleName('Volume')
         self.volume.valueChanged.connect(self.set_volume)
@@ -530,10 +542,16 @@ class Recordings(QWidget):
             self.stage.setCurrentWidget(self.video)
             self.message.setText(recording_title(self.player.source().toLocalFile()))
 
+    def save_library_setting(self, name, value):
+        self.settings.setValue('library/' + name, value)
+        self.settings.sync()
+
     def set_volume(self, value):
         self.audio.setVolume(value / 100)
         if value > 0:
             self.audio.setMuted(False)
+            self.settings.setValue('library/muted', False)
+        self.save_library_setting('volume', value)
 
     def sync_volume(self, *_):
         value = round(self.audio.volume() * 100)
@@ -617,9 +635,10 @@ class Recordings(QWidget):
             self.delete_unnamed_button.setText(f'Delete unnamed ({unnamed})…' if unnamed else 'Delete unnamed…')
             self.delete_unnamed_button.setEnabled(bool(unnamed))
         url = self.loom_url(state)
+        link_ready = bool(url) and not self.loom_link_pending(path)
         for button in (self.open_loom, self.copy_loom):
-            button.setVisible(bool(url))
-            button.setEnabled(bool(url))
+            button.setVisible(link_ready)
+            button.setEnabled(link_ready)
         self.check_loom.setVisible(bool(url))
         self.check_loom.setEnabled(bool(url) and not blocked)
         self.forget_loom.setVisible(bool(state))
@@ -643,11 +662,15 @@ class Recordings(QWidget):
         self.loom_title.setVisible(bool(title))
 
     def upload_metadata(self, path):
-        return self.upload_store.get(path) if self.upload_store is not None else {}
+        state = self.upload_store.get(path) if self.upload_store is not None else {}
+        if not state and self.loom_queued(path):
+            return {'status': 'queued'}
+        return state
 
     @staticmethod
     def upload_state_text(state):
         return {
+            'queued': 'Queued for Loom upload',
             'uploading': 'Uploading to Loom',
             'processing': 'Processing in Loom',
             'uploaded': 'Uploaded to Loom',
@@ -665,7 +688,9 @@ class Recordings(QWidget):
     def selected_loom_url(self):
         path = self.selected_path()
         self.update_actions()
-        return self.loom_url(self.upload_metadata(path)) if path is not None and path.is_file() else ''
+        if path is None or not path.is_file() or self.loom_link_pending(path):
+            return ''
+        return self.loom_url(self.upload_metadata(path))
 
     def open_selected_loom(self):
         url = self.selected_loom_url()

@@ -9,6 +9,17 @@ from PySide6.QtWidgets import QWidget
 from .composition import bounded_offset
 
 
+def saved_coordinates(value):
+    """QSettings returns INI list elements as strings after a process restart."""
+    if (not isinstance(value, (list, tuple)) or len(value) != 2
+            or any(isinstance(n, bool) for n in value)):
+        raise ValueError('Expected a pair of coordinates.')
+    try:
+        return tuple(float(n) for n in value)
+    except (TypeError, OverflowError) as exc:
+        raise ValueError('Invalid coordinates.') from exc
+
+
 def load_framing(prefs, mode):
     """Seed both setups from legacy zoom, without overwriting newer choices."""
     def zoom(value):
@@ -23,7 +34,7 @@ def load_framing(prefs, mode):
         if not prefs.contains(key):
             prefs.setValue(key, legacy)
     try:
-        offset = bounded_offset(prefs.value('camera_offset_' + mode, [0., 0.]))
+        offset = bounded_offset(saved_coordinates(prefs.value('camera_offset_' + mode, [0., 0.])))
     except ValueError:
         offset = (0., 0.)
     return zoom(prefs.value('camera_zoom_' + mode, legacy)), offset

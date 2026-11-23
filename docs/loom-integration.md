@@ -19,11 +19,15 @@ and [command catalog](https://developer.atlassian.com/cloud/twg-cli/commands/com
 or AI settings. `logout` revokes OAuth and removes the selected TWG profile,
 affecting other products on that profile; no Loom-only disconnect was found.
 
-Probe upload/rename help rather than assuming flags. The inspected uploader used
-a positional file, lacked upload visibility, and preserved the original extension
-even with a title override. The app therefore corrects differing titles after
-publication and applies sharing separately when needed. Failed rename/sharing
-must retain the link and warning. See the [changelog](https://developer.atlassian.com/cloud/twg-cli/changelog/)
+Probe upload/rename help rather than assuming flags. The inspected uploader took
+a positional path to a finished file, lacked upload visibility, and preserved the
+original extension even with a title override. Time to a link therefore grows with
+the whole recording and cannot be guaranteed for arbitrary lengths. The app applies
+sharing separately when needed, copies the link only once the audience is
+confirmed, then runs the optional local title and corrects a differing Loom title.
+Failed rename/sharing must retain the link and warning; an unconfirmed audience is
+never copied automatically, but stays available to copy by hand. Local renaming
+skips a file in playback, frame review or editing. See the [changelog](https://developer.atlassian.com/cloud/twg-cli/changelog/)
 for publication-success/visibility-failure exit code 3.
 
 TWG 1.4.6 (installed 2026-11-23) accepts `--visibility` on upload. An expired
@@ -37,7 +41,9 @@ link and retries sharing with `video visibility set`.
 The inspected CLI had no intermediate JSON transfer-progress contract. A final
 byte count cannot become invented progress. Local `upload.phase` durations include
 CLI processing waits, cannot isolate network throughput or Loom processing, and
-establish no speed improvement. Timings exclude filenames, links and output.
+establish no speed improvement; `upload.share_ready` (Stop to confirmed link)
+carries the same caveat. Countdown only caches CLI help and never transfers media.
+Timings exclude filenames, links and output.
 
 New uploads default to Anyone with the link. Saved private/workspace choices
 still apply; changing the preference does not alter existing Loom videos.
@@ -70,8 +76,9 @@ upload controller at explicit `STATE / 'uploads.json'`. It mutates metadata only
 never videos/Loom. Atomic private writes preserve unreadable/malformed/unsupported
 files and expose errors; failed reads must not erase links.
 
-Records bind to device, inode, size and modification time. Missing folders never
-prune history. Transfer completion must still match the original identity before
+Records bind to device, inode, size and modification time. Queued automatic takes
+recheck that identity before their upload starts. Missing folders never prune
+history. Transfer completion must still match the original identity before
 attaching metadata or copying links, including after sharing. Rename metadata only
 after successful local rename; remove it after manual local deletion or explicit Forget.
 Verified-upload cleanup ([loom_cleanup.py](../src/untangle/loom_cleanup.py)) instead

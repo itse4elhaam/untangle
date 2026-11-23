@@ -4,6 +4,7 @@ import tempfile
 import unittest
 from unittest.mock import Mock, patch
 
+from PySide6.QtCore import QSettings
 from PySide6.QtWidgets import QApplication
 
 from untangle.drive_dialog import DriveDialog
@@ -13,6 +14,87 @@ class DriveDialogTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
+
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        prefs_path = str(Path(directory.name) / 'preferences.ini')
+        settings = patch('untangle.drive_dialog.QSettings',
+                         side_effect=lambda *args: QSettings(prefs_path, QSettings.IniFormat))
+        settings.start()
+        self.addCleanup(settings.stop)
+        isolated_archive = patch('untangle.archive.config', return_value={})
+        isolated_archive.start()
+        self.addCleanup(isolated_archive.stop)
+
+    def test_unsaved_background_archive_choice_survives_reopening_until_applied(self):
+        archive = {'enabled': True, 'remote': 'work:', 'folder': 'chosen'}
+        with patch('untangle.archive.config', return_value=archive), \
+                patch('untangle.archive.configure') as configure, \
+                patch('untangle.drive_dialog.DriveClient') as client, \
+                patch('untangle.archive_status.archive_status', return_value='Status'):
+            client.return_value.legacy_sign_in.return_value = []
+            dialog = DriveDialog([])
+            self.addCleanup(dialog.close)
+            self.assertTrue(dialog.archive_pending.isHidden())
+            dialog.archive_enabled.click()
+            self.assertFalse(dialog.archive_pending.isHidden())
+            dialog.close()
+
+            reopened = DriveDialog([])
+            self.addCleanup(reopened.close)
+            self.assertFalse(reopened.archive_enabled.isChecked())
+            self.assertFalse(reopened.archive_pending.isHidden())
+            configure.assert_not_called()
+            configure.side_effect = OSError('Settings could not be saved.')
+            reopened.archive_save.click()
+            self.assertFalse(reopened.archive_pending.isHidden())
+            configure.side_effect = None
+            reopened.archive_save.click()
+            configure.assert_called_with(False, 'chosen', remote='work:')
+            self.assertTrue(reopened.archive_pending.isHidden())
+            reopened.close()
+
+            # A later independent configuration change wins once the draft was applied.
+            after_save = DriveDialog([])
+            self.addCleanup(after_save.close)
+            self.assertTrue(after_save.archive_enabled.isChecked())
+            self.assertTrue(after_save.archive_pending.isHidden())
+            client.return_value.folders.assert_not_called()
+
+    def test_manual_choices_restore_per_remote_without_applying_archive(self):
+        archive = {'enabled': True, 'remote': 'work:', 'folder': 'work-archive'}
+        with patch('untangle.archive.config', return_value=archive), \
+                patch('untangle.archive.configure') as configure, \
+                patch('untangle.drive_dialog.DriveClient') as client, \
+                patch('untangle.archive_status.archive_status', return_value='Status'):
+            client.return_value.legacy_sign_in.return_value = []
+            dialog = DriveDialog([])
+            self.addCleanup(dialog.close)
+            dialog.show_remotes(['work:', 'other:'])
+            dialog.show_folders([('My Drive', 'root'), ('Personal selection', 'work-manual')])
+            self.assertEqual(dialog.folders.currentData(), 'work-archive')
+            dialog.folders.setCurrentIndex(dialog.folders.findData('work-manual'))
+            dialog.remotes.setCurrentIndex(dialog.remotes.findData('other:'))
+            dialog.show_folders([('My Drive', 'root'), ('Another selection', 'other-manual')])
+            self.assertEqual(dialog.folders.currentData(), 'root')
+            self.assertEqual(dialog.folders.findData('work-archive'), -1)
+            dialog.folders.setCurrentIndex(dialog.folders.findData('other-manual'))
+            reopened = DriveDialog([])
+            self.addCleanup(reopened.close)
+            self.assertEqual(reopened.remotes.currentData(), 'other:')
+            self.assertEqual(reopened.folders.count(), 0)
+            configure.assert_not_called()
+            reopened.archive_enabled.setChecked(False)
+            reopened.save_archive()
+            configure.assert_called_once_with(False, 'work-archive', remote='work:')
+            reopened.show_remotes(['work:', 'other:'])
+            reopened.show_folders([('My Drive', 'root')])
+            self.assertEqual(reopened.folders.currentData(), 'other-manual')
+            reopened.remotes.setCurrentIndex(reopened.remotes.findData('work:'))
+            reopened.show_folders([('My Drive', 'root')])
+            self.assertEqual(reopened.folders.currentData(), 'work-manual')
+            client.return_value.folders.assert_not_called()
 
     def test_partial_results_keep_destination_success_and_retry_warning(self):
         with tempfile.TemporaryDirectory() as directory, \
@@ -34,6 +116,20 @@ class DriveDialogTests(unittest.TestCase):
                 client.return_value.folders.assert_not_called()
             finally:
                 dialog.close()
+
+    def test_unmatched_legacy_folder_needs_a_choice_before_manual_upload(self):
+        with patch('untangle.drive_dialog.DriveClient') as client, \
+                patch('untangle.archive_status.archive_status', return_value='Status'):
+            client.return_value.legacy_sign_in.return_value = []
+            dialog = DriveDialog([Path('test.mp4')])
+            self.addCleanup(dialog.close)
+            dialog.settings.setValue('drive/folder', 'legacy-id')
+            dialog.show_remotes(['work:'])
+            dialog.show_folders([('My Drive', 'root')])
+            self.assertIsNone(dialog.folders.currentData())
+            self.assertFalse(dialog.upload.isEnabled())
+            dialog.folders.setCurrentIndex(0)
+            self.assertTrue(dialog.upload.isEnabled())
 
     def test_read_only_refresh_uses_operation_specific_feedback(self):
         with tempfile.TemporaryDirectory() as directory, \

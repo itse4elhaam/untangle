@@ -2,7 +2,7 @@
 
 Untangle extracts a short audio sample and transcribes it locally with whisper.cpp, then sends only transcript text to Codex CLI. Video and audio are not uploaded for naming. Codex uses existing authentication, so the complete flow is not offline. Automatic naming is opt-in.
 
-The helper never renames files, changes recording identity or uploads. The caller owns those actions and any subsequent upload must use the resulting recording identity.
+The helper never renames files, changes recording identity or uploads. The caller owns those actions and any subsequent upload must use the resulting recording identity. For takes opted in to Loom upload, [app.py](../src/untangle/app.py) starts the upload first and runs the job only after the sharing result, then renames the file and moves its upload metadata. A file in playback, frame review or editing keeps its name.
 
 ## Prerequisites
 
@@ -19,7 +19,7 @@ Use `LocalTitleJob` on the Qt main thread with its event loop running. Connect `
 `finished(title, error)` fires once per started job under ordinary completion:
 
 - A title with an empty error goes through the caller's naming/identity flow and skips manual prompting.
-- An empty title with an error returns to manual naming, including missing prerequisites, insufficient speech, invalid output, model/access failure, timeout or cancellation.
+- An empty title with an error returns local-only takes to manual naming; an opted-in upload keeps its saved name with a warning. Causes include missing prerequisites, insufficient speech, invalid output, model/access failure, timeout or cancellation.
 
 Cancel is idempotent and a no-op before start. It kills the current process group and completes asynchronously after Qt reaps it. Cancellation before queued work starts launches no process. The caller must ignore shutdown cancellation and guard against stale recording identity.
 

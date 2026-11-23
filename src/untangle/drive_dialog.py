@@ -1,11 +1,17 @@
 """Selected-recording uploads and archive settings through the user's rclone Drive remote."""
+import os
+from urllib.parse import quote
+
 from .widgets import ScrollComboBox
 from .diagnostics import observed, failure as diagnostic_failure
 from PySide6.QtCore import QThread, Signal, QSettings, Qt
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
                                QMessageBox, QCheckBox, QScrollArea, QWidget)
-from .drive import DriveClient
-from .rclone import RcloneError, NoDriveRemote, preferred
+from .drive import DriveClient, REMOTE_ENV
+from .rclone import RcloneError, NoDriveRemote, normalize, preferred
+
+
+PENDING_ARCHIVE_ENABLED = 'drive/pending_archive_enabled'
 
 
 class DriveTask(QThread):
@@ -39,6 +45,7 @@ class DriveDialog(QDialog):
         self.client = DriveClient()
         self.task = None
         self.settings = QSettings('TrueDevs', 'Glint')
+        self.default_remote = None
         self.setWindowTitle('Google Drive')
         self.resize(600, 650)
         outer = QVBoxLayout(self)
@@ -62,9 +69,10 @@ class DriveDialog(QDialog):
         remote_row = QHBoxLayout()
         self.remotes = ScrollComboBox()
         from .archive import config
-        saved = config().get('remote')
+        archive = config()
+        saved = self.settings.value('drive/remote') or archive.get('remote')
         if saved:
-            self.remotes.addItem(saved, saved)
+            self.remotes.addItem(normalize(saved), normalize(saved))
         self.remotes.currentIndexChanged.connect(self.remote_changed)
         remote_row.addWidget(self.remotes, 1)
         self.find_remotes = QPushButton('Find rclone remotes')
@@ -75,11 +83,17 @@ class DriveDialog(QDialog):
         self.refresh.clicked.connect(self.load_folders)
         layout.addWidget(self.refresh)
         self.folders = ScrollComboBox()
+        self.folders.currentIndexChanged.connect(self.remember_folder)
         layout.addWidget(self.folders)
-        from .archive import config
         self.archive_enabled = QCheckBox('Archive automatically in the background')
-        self.archive_enabled.setChecked(bool(config().get('enabled')))
+        self.applied_archive_enabled = bool(archive.get('enabled'))
+        draft = self.settings.value(PENDING_ARCHIVE_ENABLED, self.applied_archive_enabled, type=bool)
+        self.archive_enabled.setChecked(draft)
         layout.addWidget(self.archive_enabled)
+        self.archive_pending = QLabel('Choose Save to apply this background archiving change.')
+        layout.addWidget(self.archive_pending)
+        self.archive_enabled.toggled.connect(self.remember_archive_choice)
+        self.remember_archive_choice(self.archive_enabled.isChecked())
         self.archive_save = QPushButton('Save archive destination and settings')
         self.archive_save.clicked.connect(self.save_archive)
         layout.addWidget(self.archive_save)
@@ -122,10 +136,33 @@ class DriveDialog(QDialog):
                          self.find_remotes, self.refresh, self.folders, self.upload]
         self.upload.setEnabled(False)
 
+    def remember_archive_choice(self, enabled):
+        pending = enabled != self.applied_archive_enabled
+        self.archive_pending.setVisible(pending)
+        if pending:
+            self.settings.setValue(PENDING_ARCHIVE_ENABLED, enabled)
+        elif self.settings.contains(PENDING_ARCHIVE_ENABLED):
+            self.settings.remove(PENDING_ARCHIVE_ENABLED)
+        else:
+            return
+        self.settings.sync()
+
     def remote_changed(self, _=None):
         if self.task is None:
             self.folders.clear()
             self.upload.setEnabled(False)
+            if self.remotes.currentData():
+                self.settings.setValue('drive/remote', self.remotes.currentData())
+                self.settings.sync()
+
+    def remember_folder(self, _=None):
+        remote = self.remotes.currentData()
+        folder = self.folders.currentData()
+        self.upload.setEnabled(bool(self.paths and remote and folder))
+        if remote and folder:
+            self.settings.setValue('drive/remote', remote)
+            self.settings.setValue('drive/folders/' + quote(remote, safe=''), folder)
+            self.settings.sync()
 
     @observed("drive_dialog.load_remotes")
     def load_remotes(self, _=None):
@@ -134,15 +171,23 @@ class DriveDialog(QDialog):
 
     def show_remotes(self, remotes, chosen=None):
         if not remotes:
+            self.folders.clear()
+            self.upload.setEnabled(False)
             self.status.setText(str(NoDriveRemote()))
             return
         current = chosen or self.remotes.currentData()
+        self.default_remote = preferred(remotes)
         self.remotes.blockSignals(True)
         self.remotes.clear()
         for name in remotes:
             self.remotes.addItem(name, name)
         index = self.remotes.findData(current)
-        self.remotes.setCurrentIndex(index if index >= 0 else self.remotes.findData(preferred(remotes)))
+        if current and index < 0:
+            self.remotes.addItem(f'{current} (unavailable)', current)
+            index = self.remotes.count() - 1
+            self.folders.clear()
+            self.upload.setEnabled(False)
+        self.remotes.setCurrentIndex(index if index >= 0 else self.remotes.findData(self.default_remote))
         self.remotes.blockSignals(False)
         if self.remotes.currentData() != current:
             self.remote_changed()
@@ -172,7 +217,7 @@ class DriveDialog(QDialog):
         for control in self.controls:
             control.setEnabled(True)
         self.cancel_button.setEnabled(False)
-        self.upload.setEnabled(bool(self.paths) and self.folders.count() > 0)
+        self.upload.setEnabled(bool(self.paths and self.remotes.currentData() and self.folders.currentData()))
         task.deleteLater()
         if success and done:
             done(task.result)
@@ -205,27 +250,48 @@ class DriveDialog(QDialog):
         self.show_folders(folders)
 
     def show_folders(self, folders):
+        from .archive import config
+        remote = self.remotes.currentData()
+        archive = config()
+        saved = self.settings.value('drive/folders/' + quote(remote, safe='')) if remote else None
+        archive_remote = archive.get('remote') or os.environ.get(REMOTE_ENV) or self.default_remote
+        if not saved and archive_remote and remote == normalize(archive_remote):
+            saved = archive.get('folder')
+        if not saved:
+            # Earlier releases stored a folder ID without its rclone remote.
+            # Only reuse it when this remote's listing confirms the ID.
+            saved = self.settings.value('drive/folder') or 'root'
+            if saved != 'root' and all(identifier != saved for _, identifier in folders):
+                saved = None
+        self.folders.blockSignals(True)
         self.folders.clear()
         top, rest = folders[:1], sorted(folders[1:], key=lambda item: item[0].lower())
         for name, identifier in top + rest:
             self.folders.addItem(f'{name} ({identifier})', identifier)
-        from .archive import config
-        saved = config().get('folder') or self.settings.value('drive/folder', 'root')
-        if saved and self.folders.findData(saved) < 0:
+        if folders and saved and self.folders.findData(saved) < 0:
             # Deep or shared-with-me folders are not listed; never fall back to My Drive silently.
             self.folders.addItem(f'Saved destination ({saved})', saved)
-        self.folders.setCurrentIndex(max(self.folders.findData(saved), 0))
-        self.upload.setEnabled(bool(self.paths) and bool(folders))
-        self.status.setText('Choose a folder for the selected recordings.')
+        self.folders.setCurrentIndex(self.folders.findData(saved))
+        self.folders.blockSignals(False)
+        self.upload.setEnabled(bool(self.paths and remote and self.folders.currentData()))
+        self.status.setText('Choose a folder for the selected recordings.' if saved else
+                            'Choose a destination. The previously saved folder could not be matched to this remote.')
 
     def save_archive(self):
-        from .archive import configure
+        from .archive import config, configure
         try:
-            if self.archive_enabled.isChecked() and not self.remotes.currentData():
-                raise ValueError('Choose an rclone remote and load its folders first.')
-            configure(self.archive_enabled.isChecked(), self.folders.currentData(),
-                      remote=self.remotes.currentData())
-            self.settings.setValue('drive/folder', self.folders.currentData())
+            enabled = self.archive_enabled.isChecked()
+            remote = self.remotes.currentData()
+            folder = self.folders.currentData()
+            if not folder:
+                saved = config()
+                archive_remote = normalize(saved['remote']) if saved.get('remote') else None
+                if enabled and (not saved.get('folder') or remote != archive_remote):
+                    raise ValueError('Choose an rclone remote and load its folders first.')
+                remote, folder = saved.get('remote'), saved.get('folder')
+            configure(enabled, folder, remote=remote)
+            self.applied_archive_enabled = enabled
+            self.remember_archive_choice(enabled)
             self.status.setText('Archive settings saved. This does not start or enable the scheduler. See the setup guide.')
             from .archive_status import archive_status
             self.archive_status.setText(archive_status())
@@ -243,7 +309,7 @@ class DriveDialog(QDialog):
             'original destination; new uploads use the chosen folder. Copies are verified after upload.')
         if answer != QMessageBox.Yes:
             return
-        self.settings.setValue('drive/folder', folder)
+        self.remember_folder()
         destination = self.folders.currentText()
         self.client.remote = self.remotes.currentData() or self.client.remote
         self.start(lambda progress: self.client.upload(self.paths, folder, progress),

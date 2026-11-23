@@ -545,48 +545,41 @@ class AppChecks(unittest.TestCase):
         self.assertTrue(self.window.library_button.isEnabled())
         self.assertTrue(self.window.recordings.upload.isEnabled())
 
-    def test_successful_save_auto_uploads_saved_file(self):
+    def test_opted_in_take_starts_upload_without_a_naming_prompt(self):
         path = self.root / 'saved.mp4'
         path.write_bytes(b'saved recording')
-        self.window._take_auto_upload = True  # Consent captured when this take started.
-        with patch.object(self.window, 'upload') as upload:
+        self.window.upload_this_take.setChecked(True)
+        self.window._take_sharing = self.window.selected_loom_sharing()
+        self.window._take_stopped_at = 123.
+        with patch.object(glint, 'prompt_recording_name') as prompt, patch.object(self.window, 'upload') as upload:
             self.window.finish_save(path, '')
-            upload.assert_called_once_with()
+        prompt.assert_not_called()
+        upload.assert_called_once()
+        take = upload.call_args.kwargs['take']
+        self.assertEqual(take.path, path)
+        self.assertEqual(take.identity, self.window.upload_store.file_identity(path))
+        self.assertEqual(take.stopped_at, 123.)
         self.assertEqual(self.window.last_file, path)
 
-    def test_saved_video_name_is_resolved_before_automatic_upload(self):
-        path = self.root / 'Screen recording - 2026-10-23 at 12.30.mp4'
-        path.write_bytes(b'saved synthetic recording')
-        self.window._take_auto_upload = True  # Consent captured when this take started.
-        def name(parent, original, rename, *, new_recording, discard):
-            self.assertTrue(new_recording)
-            self.assertTrue(callable(discard))
-            self.assertTrue(self.window.busy)
-            self.assertFalse(self.window.library_button.isEnabled())
-            self.window.toggle_record()
-            self.window.engine.start.assert_not_called()
-            upload.assert_not_called()
-            return rename('Project walkthrough')
-        with patch.object(glint, 'prompt_recording_name', side_effect=name), \
-                patch.object(self.window, 'upload') as upload:
-            self.window.finish_save(path, '')
-            upload.assert_called_once_with()
-        self.assertEqual(self.window.last_file, self.root / 'Project walkthrough.mp4')
-        self.assertEqual(self.window.last_file.read_bytes(), b'saved synthetic recording')
-        self.assertFalse(path.exists())
-        self.assertFalse(self.window.busy)
-
-    def test_skip_name_keeps_saved_video_and_allows_auto_upload(self):
-        path = self.root / 'saved.mp4'
-        path.write_bytes(b'synthetic recording')
-        self.window._take_auto_upload = True  # Consent captured when this take started.
-        with patch.object(glint, 'prompt_recording_name', return_value=None) as prompt, \
-                patch.object(self.window, 'upload') as upload:
-            self.window.finish_save(path, '')
-            prompt.assert_called_once()
-            upload.assert_called_once_with()
-        self.assertEqual(self.window.last_file, path)
-        self.assertTrue(path.is_file())
+    def test_consecutive_auto_upload_keeps_file_identity_and_original_audience(self):
+        w = self.window
+        w._upload_active = True
+        paths = [self.root / filename for filename in ('a.mp4', 'b.mp4')]
+        for path in paths:
+            path.write_bytes(b'saved recording')
+            w.upload_this_take.setChecked(True)
+            w.prefs.setValue('visibility', 'workspace')
+            w._take_sharing = w.selected_loom_sharing()
+            w.finish_save(path, '')
+        paths[0].write_bytes(b'changed')
+        w.prefs.setValue('visibility', 'public')
+        w._upload_active = False
+        with patch.object(w, 'upload') as upload:
+            w.drain_auto_uploads()
+        upload.assert_called_once()
+        take = upload.call_args.kwargs['take']
+        self.assertEqual((take.path, take.sharing.visibility), (paths[1], 'workspace'))
+        self.assertFalse(w._auto_upload_queue)
 
     def test_save_error_or_quit_does_not_open_naming_prompt(self):
         path = self.root / 'saved.mp4'
@@ -631,7 +624,8 @@ class AppChecks(unittest.TestCase):
     def test_recording_error_blocks_automatic_upload(self):
         path = self.root/'RecIt-error.mp4'
         path.write_bytes(b'partial recording')
-        self.window._take_auto_upload = True  # Consent captured when this take started.
+        self.window.upload_this_take.setChecked(True)
+        self.window._take_sharing = self.window.selected_loom_sharing()  # Consent captured when this take started.
         self.window.recording_error = 'Recording ended with an error. Review before sharing.'
         with patch.object(self.window, 'upload') as upload:
             self.window.finish_save(path, self.window.recording_error)
