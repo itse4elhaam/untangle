@@ -211,7 +211,7 @@ class LoomCleanupWorkflowChecks(unittest.TestCase):
         self.assertIn('local copy deleted', entry['title'])
         self.assertEqual(entry['url'], URL)
         balloon.assert_called_once()
-        self.assertEqual(self.window.notifications_button.text(), 'Notifications (1)')
+        self.assertEqual(self.window.notifications_button.text(), 'Notifications (2)')
         # The Loom link stays reachable from the recorder, the library and after restart.
         qt.clipboard().setText('unchanged')
         self.window.copy_uploaded_link()
@@ -264,7 +264,7 @@ class LoomCleanupWorkflowChecks(unittest.TestCase):
         self.publish(isComplete=True)
         self.cleanup_probe().finish(workflow.video_response(isComplete=None, playableDuration=None))
         self.assertTrue(self.path.is_file())
-        self.assertFalse(self.notifications())
+        self.assertEqual([entry['kind'] for entry in self.notifications()], ['uploaded'])
         self.assertIn(self.path.absolute(), self.window._loom_cleanup_pending)
         self.assertTrue(self.window._loom_cleanup_timer.isActive())
 

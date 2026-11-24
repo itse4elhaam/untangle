@@ -1,4 +1,4 @@
-"""Recorder notification panel: recent Loom cleanup outcomes with link actions."""
+"""Recorder notification panel for Loom uploads and local-copy cleanup."""
 from datetime import datetime
 
 from PySide6.QtCore import Qt, QUrl, Signal
