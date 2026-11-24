@@ -191,6 +191,8 @@ class LoomWorkflowChecks(unittest.TestCase):
         self.assertNotIn('copied', self.window.upload_detail.text())
 
     def test_phase_timings_distinguish_setup_transfer_and_metadata_without_content(self):
+        with self.path.open('ab') as recording:
+            recording.truncate(3 * 1024 ** 2)
         self.window.prefs.setValue('loom_auto_titles', False)
         with patch.object(glint.time, 'monotonic', return_value=100) as clock, \
                 patch.object(glint, 'diagnostic_event') as event:
@@ -204,7 +206,8 @@ class LoomWorkflowChecks(unittest.TestCase):
         phases = [call.kwargs for call in event.call_args_list
                   if call.args == ('upload.phase',)]
         self.assertEqual(phases, [
-            {'stage': stage, 'outcome': 'finished', 'elapsed_ms': elapsed}
+            {'stage': stage, 'outcome': 'finished', 'elapsed_ms': elapsed,
+             **({'file_mib': 3} if stage == 'transfer_command' else {})}
             for stage, elapsed in (('upload_help', 2000), ('transfer_command', 10000),
                                    ('visibility', 1000), ('title_help', 2000), ('title', 3000))])
         event.assert_any_call('upload.result', outcome='processing', elapsed_ms=18000)
@@ -719,6 +722,28 @@ class LoomWorkflowChecks(unittest.TestCase):
         self.assertEqual(self.window.upload_store.get(self.path)['title'], 'Local walkthrough')
         self.assertEqual(qt.clipboard().text(), URL)
 
+    def test_desktop_notification_at_confirmed_link_before_optional_naming(self):
+        w = self.window
+        w.prefs.setValue('loom_auto_titles', False)
+        with patch.object(glint.QSystemTrayIcon, 'supportsMessages', return_value=True), \
+                patch.object(w.tray, 'isVisible', return_value=True), patch.object(w.tray, 'showMessage') as popup:
+            self.begin_upload(HELP).finish(video_response())
+            popup.assert_not_called()
+            self.assertFalse(w.notification_log.entries())
+            w._upload_process.finish('{}')  # Confirm audience; optional title update starts.
+            popup.assert_called_once()
+            self.assertIn('Link copied', popup.call_args.args[1])
+            self.assertEqual(qt.clipboard().text(), URL)
+            entry, = w.notification_log.entries()
+            self.assertEqual((entry['kind'], entry['url']), ('uploaded', URL))
+            self.assertIn('processing', entry['detail'])
+            w._upload_process.finish('  --title <title> New video title')
+            w._upload_process.finish('{}')
+            self.assert_unlocked()
+            popup.assert_called_once()
+            w.tray.messageClicked.emit()
+            self.assertTrue(w.notification_panel.isVisible())
+
     def test_failed_and_crashed_transfers_unlock_and_keep_local_file(self):
         for code, status, output, expected in (
             (77, QProcess.NormalExit, '{"ok":false,"error":{"code":"AUTH_REQUIRED"}}', 'failed'),
@@ -731,6 +756,7 @@ class LoomWorkflowChecks(unittest.TestCase):
                 self.assert_unlocked()
                 self.assertEqual(self.window.upload_store.get(self.path)['status'], expected)
                 self.assertEqual(qt.clipboard().text(), 'unchanged')
+                self.assertFalse(self.window.notification_log.entries())
 
     def test_failed_upload_retry_uses_same_file_without_duplicate_prompt(self):
         process = self.begin_upload()
@@ -862,6 +888,10 @@ class LoomWorkflowChecks(unittest.TestCase):
                 self.assertTrue(state['visibility_warning'])
                 self.assertIn('processing', self.window.upload_heading.text())
                 self.assertEqual(qt.clipboard().text(), 'unchanged')
+                upload = next(entry for entry in self.window.notification_log.entries() if entry['kind'] == 'uploaded')
+                self.assertIn('Review sharing', upload['title'])
+                self.assertNotIn('copied', upload['title'])
+                self.assertEqual(upload['url'], URL)
 
     def test_launch_failure_disposes_check_timer_without_waiting_twenty_seconds(self):
         timers = set(self.window.findChildren(QTimer))

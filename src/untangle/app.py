@@ -1380,6 +1380,7 @@ class Window(QMainWindow):
         menu.addAction('Quit Untangle', self.close)
         self.tray.setContextMenu(menu)
         self.tray.activated.connect(lambda reason: self.reveal() if reason in (QSystemTrayIcon.Trigger, QSystemTrayIcon.DoubleClick) else None)
+        self.tray.messageClicked.connect(self.open_notifications)
         self.tray.show()
 
     def open_reviews(self):
@@ -3694,8 +3695,10 @@ class Window(QMainWindow):
             nonlocal reported
             if not reported:
                 reported = True
+                # Total input size, rounded to MiB. The CLI also spends time publishing.
+                size = {'file_mib': round(self._upload_identity['size'] / (1024 ** 2))} if stream else {}
                 diagnostic_event('upload.phase', stage=stage, outcome=outcome,
-                                 elapsed_ms=max(0, round((time.monotonic() - started) * 1000)))
+                                 elapsed_ms=max(0, round((time.monotonic() - started) * 1000)), **size)
         def completed(code, status):
             if self._upload_process is process and self._upload_active:
                 report_phase('finished' if code == 0 and status == QProcess.NormalExit else 'failed')
@@ -3923,6 +3926,10 @@ class Window(QMainWindow):
             stopped_at = getattr(self, '_upload_stopped_at', None)
             timing = {} if stopped_at is None else {'elapsed_ms': max(0, round((time.monotonic() - stopped_at) * 1000))}
             diagnostic_event('upload.share_ready', **timing)
+            detail = recording_title(self._upload_file)
+            if getattr(self, '_upload_result', {}).get('status') == 'processing':
+                detail += ' · Loom is processing the video.'
+            self.notify('uploaded', 'Loom upload complete. Link copied.', detail, self._upload_url)
         self._upload_setting_title = True
         self.save_upload_metadata(self._upload_file, expected_identity=self._upload_identity,
                                   visibility=getattr(self, '_upload_visibility', 'owner'),
@@ -3990,6 +3997,9 @@ class Window(QMainWindow):
         if not (self.busy or self.recording or self.counting):
             self.notice(text)
         if source_matches and state in ('uploaded', 'processing') and getattr(self, '_upload_url', None):
+            if visibility_warning:
+                self.notify('uploaded', 'Loom upload complete. Review sharing in Loom.',
+                            f'{recording_title(self._upload_file)}. {visibility_warning}', self._upload_url)
             if getattr(self, '_upload_metadata_warning', ''):
                 # The saved status may be stale, so the copy cannot be verified against it.
                 self.local_cleanup_kept(self._upload_file, 'metadata', self._upload_url)
@@ -4128,13 +4138,13 @@ class Window(QMainWindow):
         title = state.get('title') or recording_title(path)
         url = valid_share_url(url) or valid_share_url(state.get('url'))
         if reason == 'disabled':
-            self.notify('kept', f'Uploaded to Loom — {title}',
-                        'Local copy kept. Automatic deletion is off in Sharing.', url)
+            self.notify('kept', f'Local copy kept — {title}',
+                        'Automatic deletion is off in Sharing.', url, desktop=False)
             return
         self.notify('kept', f'Uploaded, local copy kept: {loom_cleanup.REASONS.get(reason, reason)}',
                     f'{title} stays on this computer.', url)
 
-    def notify(self, kind, title, detail='', url=''):
+    def notify(self, kind, title, detail='', url='', *, desktop=True):
         try:
             self.notification_log.add(kind, title, detail, url)
         except (OSError, ValueError) as exc:
@@ -4143,7 +4153,7 @@ class Window(QMainWindow):
         if self.notification_panel is not None and self.notification_panel.isVisible():
             self.notification_panel.rebuild()
         tray = getattr(self, 'tray', None)
-        if tray is not None and tray.isVisible() and QSystemTrayIcon.supportsMessages():
+        if desktop and tray is not None and tray.isVisible() and QSystemTrayIcon.supportsMessages():
             tray.showMessage('Untangle', title, QSystemTrayIcon.Information, 8000)
 
     def update_notifications_button(self):

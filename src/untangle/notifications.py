@@ -10,7 +10,7 @@ import tempfile
 import time
 
 LIMIT = 50
-KINDS = frozenset(('deleted', 'kept'))
+KINDS = frozenset(('uploaded', 'deleted', 'kept'))
 
 
 class NotificationLog:
